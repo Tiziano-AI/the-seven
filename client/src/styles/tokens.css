@@ -1,0 +1,255 @@
+/* ============================================================================
+   THE SEVEN - DESIGN SYSTEM
+   Single Source of Truth for All Visual Tokens
+
+   Theme: Dark Violet · Evergreen · Wood · Gold
+   Aesthetic: Organic, cohesive, subtle glow, radial gradients
+   ============================================================================ */
+
+@theme inline {
+  /* Radius scale */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Color mappings for Tailwind */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-border: var(--input-border);
+  --color-ring: var(--ring);
+}
+
+:root {
+  /* ========== CORE PALETTE ========== */
+
+  /* Backgrounds - Near-black with subtle green/violet hints */
+  --bg: oklch(0.12 0.01 240); /* #05080a - near-black field */
+  --bg-soft: oklch(0.14 0.01 240); /* #071013 - panel backdrop */
+  --surface: oklch(0.16 0.01 240); /* #0b1013 - main surfaces */
+  --surface-raised: oklch(0.2 0.015 280); /* #151218 - raised cards with wood/violet */
+
+  /* Violet Lane - Deep cool violet (no pink) */
+  --violet: oklch(0.28 0.15 290); /* #311469 - deep violet */
+  --violet-soft: oklch(0.65 0.2 285); /* #9b7cff - controlled violet glow */
+  --violet-dim: oklch(0.22 0.12 290); /* Dimmer violet for backgrounds */
+
+  /* Evergreen Lane - Denser, cooler metallic evergreen */
+  --evergreen: oklch(0.58 0.1 180); /* #0f9b82 - metallic evergreen */
+  --evergreen-soft: oklch(0.2 0.04 180); /* #042822 - deep evergreen base */
+  --evergreen-bright: oklch(0.62 0.12 175); /* Brighter evergreen for accents */
+
+  /* Wood Lane - Dark wood warmth */
+  --wood: oklch(0.22 0.04 40); /* #2b1a12 - dark wood */
+  --wood-soft: oklch(0.35 0.06 40); /* #5a3a24 - mid wood fills */
+  --wood-dim: oklch(0.18 0.03 40); /* Darker wood for deep backgrounds */
+
+  /* Gold Lane - Brushed gold highlights */
+  --gold: oklch(0.7 0.12 75); /* #d0a34b - brushed gold */
+  --gold-soft: oklch(0.52 0.1 70); /* #8c6a2a - muted brass anchor */
+  --gold-bright: oklch(0.75 0.14 75); /* Brighter gold for emphasis */
+
+  /* Text & Chrome */
+  --text: oklch(0.98 0.01 0); /* #f9fafb - primary text */
+  --text-muted: oklch(0.89 0.01 0); /* slightly brighter for readability */
+  --text-dim: oklch(0.72 0.01 0); /* dim but still readable on dark bg */
+
+  /* Border - Gold-tinted rail */
+  --border-base: oklch(0.7 0.12 75 / 0.55); /* subtler chrome border */
+  --border-input: oklch(0.78 0.14 75 / 0.98); /* high-contrast input border */
+
+  /* ========== SEMANTIC COLORS ========== */
+
+  --background: var(--bg);
+  --foreground: var(--text);
+
+  --card: var(--surface);
+  --card-foreground: var(--text);
+
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--text);
+
+  /* Primary: Violet → Gold gradient lane */
+  --primary: var(--violet);
+  --primary-foreground: var(--text);
+  --primary-glow: var(--violet-soft);
+
+  /* Secondary: Evergreen lane */
+  --secondary: var(--evergreen);
+  --secondary-foreground: var(--text);
+  --secondary-glow: var(--evergreen-bright);
+
+  /* Accent: Gold lane */
+  --accent: var(--gold);
+  --accent-foreground: var(--bg);
+  --accent-glow: var(--gold-bright);
+
+  /* Muted: Wood lane */
+  --muted: var(--wood-soft);
+  --muted-foreground: var(--text-muted);
+
+  /* Destructive: Rust/warning */
+  --destructive: oklch(0.55 0.18 35);
+  --destructive-foreground: var(--text);
+
+  --border: var(--border-base);
+  --input: var(--surface-raised);
+  --input-border: var(--border-input);
+  --ring: var(--violet-soft);
+
+  /* ========== SPACING SCALE ========== */
+
+  --space-0: 0;
+  --space-1: 0.25rem; /* 4px */
+  --space-2: 0.5rem; /* 8px */
+  --space-3: 0.75rem; /* 12px */
+  --space-4: 1rem; /* 16px */
+  --space-5: 1.25rem; /* 20px */
+  --space-6: 1.5rem; /* 24px */
+  --space-8: 2rem; /* 32px */
+  --space-10: 2.5rem; /* 40px */
+  --space-12: 3rem; /* 48px */
+  --space-16: 4rem; /* 64px */
+  --space-20: 5rem; /* 80px */
+  --space-24: 6rem; /* 96px */
+
+  /* ========== TYPOGRAPHY ========== */
+
+  --font-size-xs: 0.8125rem; /* 13px */
+  --font-size-sm: 0.9375rem; /* 15px */
+  --font-size-base: 1.0625rem; /* 17px */
+  --font-size-lg: 1.25rem; /* 20px */
+  --font-size-xl: 1.375rem; /* 22px */
+  --font-size-2xl: 1.75rem; /* 28px */
+  --font-size-3xl: 2.125rem; /* 34px */
+  --font-size-4xl: 2.5rem; /* 40px */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ========== FONTS ========== */
+
+  --font-display: "MedievalSharp", "Raleway", ui-serif, Georgia, serif;
+  --font-ui: "MedievalSharp", "Raleway", ui-serif, Georgia, serif;
+  --font-body: "Raleway", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Raleway", ui-serif, Georgia, serif;
+  --font-mono: "Victor Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* ========== RADIUS ========== */
+
+  --radius: 1rem; /* 16px - default (rounder + organic) */
+  --radius-sm: 0.75rem; /* 12px */
+  --radius-md: 1rem; /* 16px */
+  --radius-lg: 1.25rem; /* 20px */
+  --radius-xl: 1.5rem; /* 24px */
+  --radius-2xl: 1.75rem; /* 28px */
+  --radius-full: 9999px;
+
+  /* ========== SHADOWS WITH GLOW ========== */
+
+  --shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 0.05);
+  --shadow-base: 0 1px 3px 0 oklch(0 0 0 / 0.1),
+    0 1px 2px -1px oklch(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px oklch(0 0 0 / 0.1),
+    0 2px 4px -2px oklch(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px oklch(0 0 0 / 0.1),
+    0 4px 6px -4px oklch(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px oklch(0 0 0 / 0.1),
+    0 8px 10px -6px oklch(0 0 0 / 0.1);
+  --shadow-deep: 0 0 34px oklch(0 0 0 / 1);
+
+  /* Glow effects - subtle neon */
+  --glow-violet: 0 0 20px var(--violet-soft), 0 0 40px var(--violet);
+  --glow-evergreen: 0 0 20px var(--evergreen-bright), 0 0 40px var(--evergreen);
+  --glow-gold: 0 0 20px var(--gold-bright), 0 0 40px var(--gold);
+  --glow-subtle: 0 0 10px oklch(0 0 0 / 0.3);
+
+  /* ========== GRADIENTS ========== */
+
+  /* Radial gradients matching user's design */
+  --gradient-field: radial-gradient(
+      circle at top,
+      oklch(0.58 0.1 180 / 0.18),
+      transparent 55%
+    ),
+    radial-gradient(circle at bottom, oklch(0.22 0.04 40 / 0.45), transparent 70%),
+    var(--bg);
+
+  --gradient-panel: radial-gradient(
+      circle at top right,
+      oklch(0.65 0.2 285 / 0.24),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      oklch(0.7 0.12 75 / 0.25),
+      transparent 55%
+    ),
+    var(--bg-soft);
+
+  --gradient-card: radial-gradient(
+      circle at top left,
+      oklch(0.65 0.2 285 / 0.16),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      oklch(0.58 0.1 180 / 0.16),
+      transparent 55%
+    ),
+    radial-gradient(circle at bottom, oklch(0.35 0.06 40 / 0.22), transparent 65%);
+
+  /* Linear gradients for buttons */
+  --gradient-primary: linear-gradient(135deg, var(--violet), var(--gold));
+  --gradient-secondary: linear-gradient(
+    135deg,
+    var(--evergreen-soft),
+    var(--evergreen)
+  );
+  --gradient-tertiary: linear-gradient(135deg, var(--wood), var(--wood-soft));
+
+  /* ========== Z-INDEX SCALE ========== */
+
+  --z-base: 0;
+  --z-dropdown: 1000;
+  --z-sticky: 1100;
+  --z-fixed: 1200;
+  --z-modal-backdrop: 1300;
+  --z-modal: 1400;
+  --z-popover: 1500;
+  --z-tooltip: 1600;
+
+  /* ========== TRANSITIONS ========== */
+
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slower: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark theme is default and only theme */
+.dark {
+  /* Inherit all root variables - dark is the default */
+}
