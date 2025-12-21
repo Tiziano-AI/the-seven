@@ -23,7 +23,7 @@ The Seven is a privacy-first, BYOK multi-model orchestration app: 7 fixed **memb
   - Councils are saved 7-slot lineups (`A–G`) that define the 6 “members” + the final “verdict” model.
   - Prompts are editable only at the phase layer (Phase 1/2/3). There are no per-member prompt overrides.
   - Members may optionally expose a small set of high-signal tuning controls when the selected model supports them.
-  - Built-in councils ship as immutable templates; users Duplicate to edit their own councils.
+  - Three built-in councils ship as immutable templates (SOTA, mid-tier, free-tier); users Duplicate to edit their own.
 - Recovery + reruns are explicit and never overwrite history:
   - **Continue**: if a session is interrupted and ends `failed`, you can continue the *same* session run.
     - Already-delivered artifacts are preserved; only missing inference is executed.
