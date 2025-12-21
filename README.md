@@ -18,6 +18,18 @@ Councils are configurable: swap models per slot, tune prompts per phase, save li
 
 ---
 
+## Built-in Councils
+
+Three councils ship as immutable templates—duplicate one to customize:
+
+| Council | Tier | Synthesizer |
+|---------|------|-------------|
+| **The Founding Council** | Frontier SOTA | GPT-5.2 Pro |
+| **The Lantern Council** | Fast mid-tier | Gemini 3 Flash |
+| **The Commons Council** | Free-tier only | DeepSeek R1 0528 |
+
+---
+
 ## Security (BYOK)
 
 - Your OpenRouter API key is encrypted and stored in your browser—never on the server

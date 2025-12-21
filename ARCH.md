@@ -25,7 +25,10 @@ Intentionally opinionated architecture emphasizing security (BYOK identity), det
 - A council contains:
   - **7 fixed member slots** `A–G`, each assigned exactly one provider model,
   - **phase prompts** (Phase 1, Phase 2, Phase 3) shared by all members who participate in that phase.
-- Two councils ship as **built-in templates** in the repo and are immutable.
+- Three councils ship as **built-in templates** in the repo and are immutable:
+  - **The Founding Council**: frontier SOTA models (GPT-5.2, Claude Opus 4.5, Gemini 3 Pro, etc.). GPT-5.2 Pro synthesizes.
+  - **The Lantern Council**: fast mid-tier models for rapid iteration. Gemini 3 Flash synthesizes.
+  - **The Commons Council**: free-tier models only (zero cost). DeepSeek R1 0528 synthesizes.
   - Users can **Duplicate** a built-in council to create an editable copy.
 - Runs are launched with an explicit council selection (no “active council” default).
 - Sessions snapshot the council **name-at-run** and council **composition/prompts** in `runSpec` for historical inspection.
