@@ -22,6 +22,16 @@ const LANTERN_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
   7: "google/gemini-3-flash-preview",
 };
 
+const COMMONS_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
+  1: "nvidia/nemotron-3-nano-30b-a3b:free",
+  2: "openai/gpt-oss-120b:free",
+  3: "kwaipilot/kat-coder-pro:free",
+  4: "mistralai/devstral-2512:free",
+  5: "qwen/qwen3-coder:free",
+  6: "xiaomi/mimo-v2-flash:free",
+  7: "deepseek/deepseek-r1-0528:free",
+};
+
 export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCouncilTemplate>> = {
   founding: {
     slug: "founding",
@@ -49,6 +59,20 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
       5: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[5] },
       6: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[6] },
       7: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[7] },
+    },
+  },
+  commons: {
+    slug: "commons",
+    name: "The Commons Council",
+    description: "Free-tier voices for all. DeepSeek R1 0528 delivers the verdict.",
+    members: {
+      1: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[1] },
+      2: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[2] },
+      3: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[3] },
+      4: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[4] },
+      5: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[5] },
+      6: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[6] },
+      7: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[7] },
     },
   },
 };
@@ -82,4 +106,13 @@ export const BUILT_IN_MODEL_SEEDS: ReadonlyArray<ProviderModelSeed> = dedupeSeed
   { modelId: LANTERN_COUNCIL_MODEL_IDS[5], modelName: LANTERN_COUNCIL_MODEL_IDS[5] },
   { modelId: LANTERN_COUNCIL_MODEL_IDS[6], modelName: LANTERN_COUNCIL_MODEL_IDS[6] },
   { modelId: LANTERN_COUNCIL_MODEL_IDS[7], modelName: LANTERN_COUNCIL_MODEL_IDS[7] },
+
+  // Commons council (free-tier models)
+  { modelId: COMMONS_COUNCIL_MODEL_IDS[1], modelName: COMMONS_COUNCIL_MODEL_IDS[1] },
+  { modelId: COMMONS_COUNCIL_MODEL_IDS[2], modelName: COMMONS_COUNCIL_MODEL_IDS[2] },
+  { modelId: COMMONS_COUNCIL_MODEL_IDS[3], modelName: COMMONS_COUNCIL_MODEL_IDS[3] },
+  { modelId: COMMONS_COUNCIL_MODEL_IDS[4], modelName: COMMONS_COUNCIL_MODEL_IDS[4] },
+  { modelId: COMMONS_COUNCIL_MODEL_IDS[5], modelName: COMMONS_COUNCIL_MODEL_IDS[5] },
+  { modelId: COMMONS_COUNCIL_MODEL_IDS[6], modelName: COMMONS_COUNCIL_MODEL_IDS[6] },
+  { modelId: COMMONS_COUNCIL_MODEL_IDS[7], modelName: COMMONS_COUNCIL_MODEL_IDS[7] },
 ]);

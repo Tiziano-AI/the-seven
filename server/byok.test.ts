@@ -42,7 +42,7 @@ describe("BYOK tRPC auth", () => {
   it("supports SQLite-backed storage for built-in councils", async () => {
     const caller = appRouter.createCaller({ apiKey: "test", traceId: "test" });
     const result = await caller.councils.list();
-    expect(result.councils).toHaveLength(2);
-    expect(result.councils.map((c) => c.ref.kind)).toEqual(["built_in", "built_in"]);
+    expect(result.councils).toHaveLength(3);
+    expect(result.councils.map((c) => c.ref.kind)).toEqual(["built_in", "built_in", "built_in"]);
   });
 });
