@@ -13,3 +13,8 @@ export type RateLimitSpec = Readonly<{
  * Seconds in a 24-hour day for fixed-window limits.
  */
 export const DAY_SECONDS = 24 * 60 * 60;
+
+/**
+ * Seconds in a 60-second minute for fixed-window limits.
+ */
+export const MINUTE_SECONDS = 60;

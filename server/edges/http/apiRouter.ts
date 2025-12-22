@@ -4,6 +4,7 @@ import { createRequestContext } from "./context";
 import { sendError, sendSuccess } from "./envelopes";
 import { EdgeError } from "./errors";
 import { errorToLogFields, log } from "../../_core/log";
+import { checkIngressFloodLimits } from "../../services/ingressRateLimits";
 import { handleValidateKey } from "./authHandlers";
 import { handleDemoConsume, handleDemoRequest } from "./demoHandlers";
 import {
@@ -46,6 +47,26 @@ function parsePositiveInt(value: string | undefined, label: string): number {
   return parsed;
 }
 
+async function enforceIngressFloodLimit(ctx: Awaited<ReturnType<typeof createRequestContext>>): Promise<void> {
+  const limit = await checkIngressFloodLimits({
+    ip: ctx.ip,
+    now: ctx.now,
+  });
+  if (!limit) return;
+
+  throw new EdgeError({
+    kind: "rate_limited",
+    message: "Request rate limit exceeded",
+    details: {
+      scope: limit.scope,
+      limit: limit.limit,
+      windowSeconds: limit.windowSeconds,
+      resetAt: new Date(limit.resetAtMs).toISOString(),
+    },
+    status: 429,
+  });
+}
+
 async function handleRequest(params: {
   req: express.Request;
   res: express.Response;
@@ -55,6 +76,7 @@ async function handleRequest(params: {
 }): Promise<void> {
   const ctx = await createRequestContext(params.req, params.res);
   try {
+    await enforceIngressFloodLimit(ctx);
     const payload = await params.handler(ctx, params.req);
     sendSuccess(params.res, {
       traceId: ctx.traceId,

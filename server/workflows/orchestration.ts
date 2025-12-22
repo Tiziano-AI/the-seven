@@ -22,7 +22,7 @@ import {
 } from "../../shared/domain/sevenMembers";
 import type { MemberResponse, MemberReview } from "../../drizzle/schema";
 import { buildReviewPrompt, buildSynthesisPrompt } from "./orchestrationPrompts";
-import { runOpenRouterCallWithPreflight } from "./orchestrationOpenRouter";
+import { OpenRouterRateLimitError, runOpenRouterCallWithPreflight } from "./orchestrationOpenRouter";
 
 async function runParallel(tasks: ReadonlyArray<() => Promise<void>>): Promise<void> {
   if (tasks.length === 0) return;
@@ -41,6 +41,16 @@ function isExpectedPhase1Complete(responses: ReadonlyArray<MemberResponse>): boo
 function isExpectedPhase2Complete(reviews: ReadonlyArray<MemberReview>): boolean {
   const have = new Set(reviews.map((row) => row.reviewerMemberPosition));
   return REVIEWER_MEMBER_POSITIONS.every((memberPosition) => have.has(memberPosition));
+}
+
+function failureKindForInference(
+  error: unknown,
+  fallback: SessionFailureKind
+): SessionFailureKind {
+  if (error instanceof OpenRouterRateLimitError) {
+    return "openrouter_rate_limited";
+  }
+  return fallback;
 }
 
 async function failSession(params: {
@@ -177,7 +187,7 @@ export async function orchestrateSession(params: {
         traceId,
         sessionId,
         userId,
-        failureKind: "phase1_inference_failed",
+        failureKind: failureKindForInference(error, "phase1_inference_failed"),
         event: "orchestration_phase1_failed",
         error,
       });
@@ -247,7 +257,7 @@ export async function orchestrateSession(params: {
         traceId,
         sessionId,
         userId,
-        failureKind: "phase2_inference_failed",
+        failureKind: failureKindForInference(error, "phase2_inference_failed"),
         event: "orchestration_phase2_failed",
         error,
       });
@@ -298,7 +308,7 @@ export async function orchestrateSession(params: {
           traceId,
           sessionId,
           userId,
-          failureKind: "phase3_inference_failed",
+          failureKind: failureKindForInference(attempt.error, "phase3_inference_failed"),
           event: "orchestration_phase3_failed",
           error: attempt.error,
         });
