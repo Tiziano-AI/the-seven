@@ -549,6 +549,17 @@ OpenRouter is integrated via a strict **adapter → store → service** split:
 - Resend rate limits (default 2 req/sec) are respected via edge throttling and per-email rate limits.
   - Evidence: `vendor:resend:2025-12-21:https://resend.com/docs/api-reference/rate-limit`
 
+### Demo Magic-Link Email Template
+
+- Brand naming is always **The Seven** (never "Seven" alone).
+- Subject: `Your demo link for The Seven`.
+- HTML body is a table-based layout with inline styles (no external assets):
+  - A top brand lockup ("The Seven"), a primary heading ("Your demo link"),
+  - A single CTA button ("Open The Seven demo"),
+  - A fallback plain link, requested email, and expiry note,
+  - A safety note for unsolicited requests.
+- Text body mirrors the HTML content: link, requested email, expiry, and safety note.
+
 ### Costs & Billing (Canonical)
 
 - **Cost = out-of-pocket spend**, sourced from OpenRouter’s generation endpoint (not estimated from normalized usage).
