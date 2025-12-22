@@ -22,8 +22,9 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
+          if (id.includes("@tanstack")) return "query-vendor";
           if (id.includes("react-dom") || id.includes("scheduler")) return "react-dom-vendor";
-          if (id.includes("react")) return "react-vendor";
+          if (/[\\/]node_modules[\\/]react[\\/]/.test(id)) return "react-vendor";
           if (
             id.includes("react-markdown") ||
             id.includes("remark") ||
@@ -35,7 +36,6 @@ export default defineConfig({
             return "markdown-vendor";
           }
           if (id.includes("@radix-ui")) return "radix-vendor";
-          if (id.includes("@tanstack")) return "query-vendor";
           if (id.includes("lucide-react")) return "icons-vendor";
           if (id.includes("date-fns")) return "date-vendor";
           return "vendor";

@@ -5,12 +5,12 @@ function buildContentSecurityPolicy(nodeEnv: NodeEnv): string {
   const scriptSrc =
     nodeEnv === "development"
       ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-      : "script-src 'self'; ";
+      : "script-src 'self' https://static.cloudflareinsights.com 'unsafe-inline'; ";
 
   const connectSrc =
     nodeEnv === "development"
       ? "connect-src 'self' ws: wss:; "
-      : "connect-src 'self'; ";
+      : "connect-src 'self' https://cloudflareinsights.com; ";
 
   return (
     "default-src 'self'; " +
@@ -30,4 +30,3 @@ export function applySecurityHeaders(res: Response, nodeEnv: NodeEnv): void {
   res.setHeader("X-XSS-Protection", "1; mode=block");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 }
-
