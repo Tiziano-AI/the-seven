@@ -35,7 +35,7 @@ Three councils ship as immutable templates—duplicate one to customize:
 - Your OpenRouter API key is encrypted and stored in your browser—never on the server
 - The server uses your key per-request, then discards it
 - All provider traffic is server-side; your browser never calls OpenRouter directly
-- Provider rate limits are surfaced back to the client (HTTP 429 + run failureKind `openrouter_rate_limited`)
+- OpenRouter rate limits surface as HTTP 429 during key validation and as run failureKind `openrouter_rate_limited` for sessions
 - A coarse ingress flood guard protects the API from abusive request bursts (may return `rate_limited`)
 
 ## Demo mode (free)
@@ -131,7 +131,7 @@ Set `SEVEN_BASE_URL` to target a non-local server (defaults to `http://localhost
 
 Self-host anywhere that runs Node.js with a persistent volume for SQLite.
 
-Included `railway.toml` works out of the box with [Railway](https://railway.app):
+Optional: included `railway.toml` works out of the box with [Railway](https://railway.app):
 - Merge to main → production deploy
 - Open PR → ephemeral environment
 
