@@ -63,6 +63,8 @@ export function useQueryComposer(): {
   councilValue: string;
   setCouncilValue: (value: string) => void;
   isCouncilsLoading: boolean;
+  councilsError: string | null;
+  refetchCouncils: () => void;
   query: string;
   setQuery: (value: string) => void;
   files: File[];
@@ -114,6 +116,8 @@ export function useQueryComposer(): {
     refetchOnWindowFocus: false,
   });
 
+  const councilsError = councilsQuery.isError ? councilsQuery.error.message : null;
+
   const councilRef = useMemo(() => decodeCouncilRef(councilValue), [councilValue]);
 
   const isSubmitting =
@@ -128,6 +132,10 @@ export function useQueryComposer(): {
       value: encodeCouncilRef(council.ref),
     }));
   }, [councilsQuery.data]);
+
+  const refetchCouncils = useCallback(() => {
+    void councilsQuery.refetch();
+  }, [councilsQuery.refetch]);
 
   useEffect(() => {
     if (!councilValue) return;
@@ -239,6 +247,8 @@ export function useQueryComposer(): {
     councilValue,
     setCouncilValue: setCouncilValueWithMemory,
     isCouncilsLoading: councilsQuery.isLoading,
+    councilsError,
+    refetchCouncils,
     query,
     setQuery: setQueryWithDraft,
     files,

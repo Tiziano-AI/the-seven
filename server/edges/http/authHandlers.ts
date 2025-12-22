@@ -1,6 +1,7 @@
 import { EdgeError } from "./errors";
 import { requireServerRuntimeConfig } from "../../_core/runtimeConfig";
 import { OpenRouterRequestFailedError, validateOpenRouterApiKey } from "../../adapters/openrouter/client";
+import { checkAuthValidateLimits } from "../../services/authRateLimits";
 import type { RequestContext } from "./context";
 
 export type ValidateKeyResponse = Readonly<{ valid: boolean }>;
@@ -14,6 +15,25 @@ export async function handleValidateKey(ctx: RequestContext): Promise<ValidateKe
       message: "Missing OpenRouter API key",
       details: { reason },
       status: 401,
+    });
+  }
+
+  const limit = await checkAuthValidateLimits({
+    byokId: authHeader.byokId,
+    ip: ctx.ip,
+    now: ctx.now,
+  });
+  if (limit) {
+    throw new EdgeError({
+      kind: "rate_limited",
+      message: "Auth validation rate limit exceeded",
+      details: {
+        scope: limit.scope,
+        limit: limit.limit,
+        windowSeconds: limit.windowSeconds,
+        resetAt: new Date(limit.resetAtMs).toISOString(),
+      },
+      status: 429,
     });
   }
 
