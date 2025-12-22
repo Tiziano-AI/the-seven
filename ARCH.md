@@ -206,6 +206,15 @@ Evidence: vendor:openrouter:2025-12-22:https://openrouter.ai/docs/api-reference/
 - Demo session tokens are hashed before storage; only the plaintext token from the magic link exchange is returned to the client.
 - Any “account recovery” is a client-only concept: losing the password means losing the locally stored encrypted key.
 
+### Content Security Policy (CSP)
+
+- Production CSP permits Cloudflare Web Analytics and JavaScript Detections:
+  - `script-src` allows `https://static.cloudflareinsights.com` and `'unsafe-inline'` so Cloudflare-injected scripts can run.
+  - `connect-src` allows `https://cloudflareinsights.com` (non-proxied beacon endpoint); proxied sites post to `self` at `/cdn-cgi/rum`.
+- Development CSP additionally allows `'unsafe-eval'` for local tooling.
+  - Evidence: `vendor:cloudflare:2025-12-22:https://developers.cloudflare.com/web-analytics/data-metrics/data-origin-and-collection/`
+  - Evidence: `vendor:cloudflare:2025-12-22:https://developers.cloudflare.com/bots/additional-configurations/javascript-detections/`
+
 ## Abuse Controls (Demo)
 
 - Rate limits apply at the ingress layer for demo email requests, demo link consumption, and demo run submissions; prompts and attachments are not capped.
@@ -318,6 +327,12 @@ This repo uses a strict role-based module taxonomy. Each runtime behavior follow
 - `client/src/components/ui/*`: Radix/shadcn wrappers that bake in our primitives.
 - `client/src/styles/*`:
   - `client/src/styles/tokens.css`: tokens + Tailwind v4 `@theme` mapping.
+
+### Client build (Vite) chunking
+
+- `react-vendor` is reserved for React core (`react`) only.
+- `react-dom-vendor` contains `react-dom` + `scheduler`.
+- Third-party React ecosystem packages (for example `@tanstack/*`) must remain outside `react-vendor` to avoid circular dependencies between the React and React DOM chunks.
   - `client/src/styles/base.css`: base element styles (field background, typography).
   - `client/src/styles/components.css`: primitives (`.btn`, `.control`, `.card`, surfaces).
 - `client/src/styles/utilities.css`: shared utility classes (`.text-*`, `.icon-*`, `.content-*`).

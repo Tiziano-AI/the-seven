@@ -46,6 +46,12 @@ This file is the evidence appendix for `ARCH.md`.
   - `CF-Connecting-IP` header includes the client IP at the origin.
     - Evidence: `vendor:cloudflare:2025-12-21:https://developers.cloudflare.com/fundamentals/reference/http-headers/`
 
+- Cloudflare Web Analytics + JS detections (CSP allowances):
+  - Web Analytics beacon loads from `static.cloudflareinsights.com` and posts RUM data to `/cdn-cgi/rum` (proxied) or `cloudflareinsights.com` (non-proxied).
+    - Evidence: `vendor:cloudflare:2025-12-22:https://developers.cloudflare.com/web-analytics/data-metrics/data-origin-and-collection/`
+  - JavaScript detections inject scripts at the HTML edge and require CSP allowances (nonces or inline/script-src relaxations).
+    - Evidence: `vendor:cloudflare:2025-12-22:https://developers.cloudflare.com/bots/additional-configurations/javascript-detections/`
+
 ## Evidence (Local Runtime)
 
 - `dotenv/config` wires into dotenv’s `.env` loader (so `import "dotenv/config"` is sufficient to load `.env` into `process.env`).
