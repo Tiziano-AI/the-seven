@@ -91,6 +91,14 @@ export function RerunDialog(props: RerunDialogProps) {
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Council</Label>
+            {councilsQuery.isError && (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+                <span>Couldn’t load councils: {councilsQuery.error.message}</span>
+                <Button variant="ghost" size="sm" onClick={() => void councilsQuery.refetch()}>
+                  Retry
+                </Button>
+              </div>
+            )}
             <Select
               value={councilValue}
               onValueChange={(value) => {

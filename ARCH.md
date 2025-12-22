@@ -181,6 +181,11 @@ All HTTP JSON edges accept optional ingress metadata headers. Invalid values are
 5. The server authorizes the demo session, runs the Commons Council using the server-owned OpenRouter key, and stores results under the demo user.
 6. The browser polls for status and reads results by session id (authorized by the demo token).
 
+## Client Query State Handling
+
+- Client data fetches must explicitly handle the query error state (`isError`) for all TanStack Query edges so failures never render silently.
+  - Evidence: node_modules:.pnpm/@tanstack+query-core@5.90.12/node_modules/@tanstack/query-core/src/types.ts:653-669
+
 ## Security Notes
 
 - The server must never persist or log:
@@ -192,10 +197,15 @@ All HTTP JSON edges accept optional ingress metadata headers. Invalid values are
 
 ## Abuse Controls (Demo)
 
-- Rate limits apply at the ingress layer only (email request + demo run submissions); prompts and attachments are not capped.
+- Rate limits apply at the ingress layer for demo email requests, demo link consumption, and demo run submissions; prompts and attachments are not capped.
 - Limits are enforced per email, per IP, and globally using fixed-window counters.
 - Client IP is derived from `CF-Connecting-IP` when present (Cloudflare), with standard proxy fallbacks.
   - Evidence: `vendor:cloudflare:2025-12-21:https://developers.cloudflare.com/fundamentals/reference/http-headers/`
+
+## Abuse Controls (BYOK)
+
+- OpenRouter key validation (`auth.validate`) is rate-limited per BYOK id, per IP, and globally using fixed-window counters.
+- Limit constants are defined in `server/domain/authLimits.ts` and enforced in `server/edges/http/authHandlers.ts`.
 
 ### Job durability (best effort + recoverable)
 

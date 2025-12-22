@@ -233,7 +233,25 @@ export default function CouncilPage() {
             }}
           />
 
-          {selectedRef && councilQuery.data ? (
+          {selectedRef && councilQuery.isError ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Council unavailable</CardTitle>
+                <CardDescription>
+                  The selected council could not be loaded.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">{councilQuery.error.message}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => void councilQuery.refetch()}>Retry</Button>
+                  <Button variant="outline" onClick={() => setSelectedRef(null)}>
+                    Back to list
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : selectedRef && councilQuery.data ? (
             <CouncilEditorCard
               editable={councilQuery.data.editable}
               deletable={councilQuery.data.deletable}
