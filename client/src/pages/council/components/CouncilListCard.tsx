@@ -43,9 +43,9 @@ export function CouncilListCard(props: {
           return (
             <div
               key={key}
-              className="inset flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+              className="inset space-y-3"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-foreground">
                   {council.name}
                   {isSelected && <span className="text-muted-foreground"> • selected</span>}
@@ -55,7 +55,7 @@ export function CouncilListCard(props: {
                 )}
               </div>
 
-              <div className="flex w-full justify-start sm:w-auto sm:justify-end">
+              <div className="flex justify-end">
                 <div className="action-rail">
                   <Button
                     variant="outline"

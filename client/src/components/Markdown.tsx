@@ -59,12 +59,12 @@ const MarkdownRenderer = lazy(async () => {
               </blockquote>
             ),
             code: ({ children, className }) => (
-              <code className={cn("block font-mono text-xs leading-relaxed text-foreground", className)}>
+              <code className={cn("font-mono text-foreground", className)}>
                 {children}
               </code>
             ),
             pre: ({ children }) => (
-              <pre className="mt-3 mb-3 overflow-auto rounded-md border border-border bg-muted/60 p-4">
+              <pre className="mt-3 mb-3 overflow-auto rounded-md border border-border bg-muted/60 p-4 font-mono text-xs leading-relaxed">
                 {children}
               </pre>
             ),
