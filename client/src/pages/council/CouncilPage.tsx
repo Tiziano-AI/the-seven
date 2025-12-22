@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { useApiKey } from "@/contexts/ApiKeyContext";
-import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { deleteCouncil, duplicateCouncil, fetchCouncil, fetchCouncils, updateCouncil } from "@/lib/api";
 import { useNavigate } from "@/lib/routing/router";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -28,29 +29,38 @@ function isUserCouncilRef(ref: CouncilRef): ref is Readonly<{ kind: "user"; coun
  * CouncilPage renders council list + editor in a two-column layout.
  */
 export default function CouncilPage() {
-  const { apiKey, isAuthenticated } = useApiKey();
+  const { authHeader, isAuthenticated, mode } = useAuth();
   const navigate = useNavigate();
-  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || mode === "demo") {
       navigate("/");
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, mode, navigate]);
 
-  const councilsQuery = trpc.councils.list.useQuery(undefined, {
-    enabled: !!apiKey,
+  const councilsQuery = useQuery({
+    queryKey: ["councils", authHeader],
+    queryFn: async () => {
+      if (!authHeader) return { councils: [] };
+      return fetchCouncils({ authHeader });
+    },
+    enabled: !!authHeader,
     refetchOnWindowFocus: false,
   });
 
   const [selectedRef, setSelectedRef] = useState<CouncilRef | null>(null);
-  const councilQuery = trpc.councils.get.useQuery(
-    selectedRef ? { ref: selectedRef } : { ref: { kind: "built_in", slug: "founding" } },
-    {
-      enabled: !!apiKey && selectedRef !== null,
-      refetchOnWindowFocus: false,
-    }
-  );
+  const councilQuery = useQuery({
+    queryKey: ["council", selectedRef, authHeader],
+    queryFn: async () => {
+      if (!authHeader || !selectedRef) {
+        return null;
+      }
+      return fetchCouncil({ authHeader, ref: selectedRef });
+    },
+    enabled: !!authHeader && selectedRef !== null,
+    refetchOnWindowFocus: false,
+  });
 
   const [draft, setDraft] = useState<CouncilDraft>(buildEmptyCouncilDraft());
 
@@ -67,31 +77,57 @@ export default function CouncilPage() {
     });
   }, [councilQuery.data]);
 
-  const duplicateMutation = trpc.councils.duplicate.useMutation({
+  const duplicateMutation = useMutation({
+    mutationFn: async (params: { source: CouncilRef; name: string }) => {
+      if (!authHeader) throw new Error("Missing authentication");
+      return duplicateCouncil({ authHeader, source: params.source, name: params.name });
+    },
     onSuccess: async (data) => {
       toast.success("Council created");
       setDuplicateOpen(false);
-      await utils.councils.list.invalidate();
+      await queryClient.invalidateQueries({ queryKey: ["councils"] });
       setSelectedRef({ kind: "user", councilId: data.councilId });
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to duplicate"),
   });
 
-  const updateMutation = trpc.councils.update.useMutation({
+  const updateMutation = useMutation({
+    mutationFn: async (params: {
+      councilId: number;
+      name: string;
+      phasePrompts: CouncilDraft["phasePrompts"];
+      members: Array<{ memberPosition: number; model: { provider: string; modelId: string }; tuning: CouncilMemberTuning }>;
+    }) => {
+      if (!authHeader) throw new Error("Missing authentication");
+      return updateCouncil({
+        authHeader,
+        councilId: params.councilId,
+        name: params.name,
+        phasePrompts: params.phasePrompts,
+        members: params.members,
+      });
+    },
     onSuccess: async () => {
       toast.success("Council saved");
-      await Promise.all([utils.councils.list.invalidate(), utils.councils.get.invalidate()]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["councils"] }),
+        queryClient.invalidateQueries({ queryKey: ["council"] }),
+      ]);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to save"),
   });
 
-  const deleteMutation = trpc.councils.delete.useMutation({
+  const deleteMutation = useMutation({
+    mutationFn: async (params: { councilId: number }) => {
+      if (!authHeader) throw new Error("Missing authentication");
+      return deleteCouncil({ authHeader, councilId: params.councilId });
+    },
     onSuccess: async () => {
       toast.success("Council deleted");
       setSelectedRef(null);
-      await utils.councils.list.invalidate();
+      await queryClient.invalidateQueries({ queryKey: ["councils"] });
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to delete"),
   });
 
   const [duplicateOpen, setDuplicateOpen] = useState(false);

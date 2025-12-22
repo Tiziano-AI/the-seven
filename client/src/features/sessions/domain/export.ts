@@ -1,10 +1,10 @@
-import type { RouterOutputs } from "@/lib/trpcTypes";
+import type { SessionDetailPayload, SessionDiagnosticsPayload } from "@/lib/apiSchemas";
 import { calculateSessionTotals } from "@/features/sessions/domain/totals";
 import { formatUsdFromMicros } from "@shared/domain/usage";
 import { memberForPosition, parseMemberPosition } from "@shared/domain/sevenMembers";
 
-type SessionResults = RouterOutputs["query"]["getSession"];
-type SessionDiagnostics = RouterOutputs["query"]["getSessionDiagnostics"];
+type SessionResults = SessionDetailPayload;
+type SessionDiagnostics = SessionDiagnosticsPayload;
 
 export type ExportItemKey =
   | "question"

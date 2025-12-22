@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { trpc } from "@/lib/trpc";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { fetchCouncils, rerunSession } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { decodeCouncilRef, encodeCouncilRef } from "@/features/councils/domain/councilRef";
 import { readLastCouncilValue, writeLastCouncilValue } from "@/features/councils/domain/lastCouncil";
 import { Button } from "@/components/ui/button";
@@ -19,6 +21,7 @@ export type RerunDialogProps = Readonly<{
 }>;
 
 export function RerunDialog(props: RerunDialogProps) {
+  const { authHeader, mode } = useAuth();
   const [councilValue, setCouncilValue] = useState(() => readLastCouncilValue() ?? "");
   const [queryOverride, setQueryOverride] = useState(props.initialQuery);
 
@@ -28,19 +31,35 @@ export function RerunDialog(props: RerunDialogProps) {
     setQueryOverride(props.initialQuery);
   }, [props.initialQuery, props.open]);
 
-  const councilsQuery = trpc.councils.list.useQuery(undefined, {
-    enabled: props.open,
+  const councilsQuery = useQuery({
+    queryKey: ["councils", authHeader],
+    queryFn: async () => {
+      if (!authHeader) return { councils: [] };
+      return fetchCouncils({ authHeader });
+    },
+    enabled: props.open && !!authHeader,
     refetchOnWindowFocus: false,
   });
 
-  const rerunMutation = trpc.query.rerunSession.useMutation({
+  const rerunMutation = useMutation({
+    mutationFn: async (params: { sessionId: number; councilRef: ReturnType<typeof decodeCouncilRef>; queryOverride?: string }) => {
+      if (!authHeader || !params.councilRef) {
+        throw new Error("Missing authentication");
+      }
+      return rerunSession({
+        authHeader,
+        sessionId: params.sessionId,
+        councilRef: params.councilRef,
+        queryOverride: params.queryOverride,
+      });
+    },
     onSuccess: (data) => {
       toast.success("Rerun started");
       props.onRerunStarted(data.sessionId);
       props.onOpenChange(false);
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(error instanceof Error ? error.message : "Failed to rerun");
     },
   });
 
@@ -53,6 +72,11 @@ export function RerunDialog(props: RerunDialogProps) {
   }, [councilsQuery.data]);
 
   const isBusy = councilsQuery.isLoading || rerunMutation.isPending;
+
+  useEffect(() => {
+    if (mode !== "demo") return;
+    setCouncilValue("built_in:commons");
+  }, [mode]);
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
@@ -75,7 +99,7 @@ export function RerunDialog(props: RerunDialogProps) {
                   writeLastCouncilValue(value);
                 }
               }}
-              disabled={isBusy}
+              disabled={isBusy || mode === "demo"}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select a council…" />

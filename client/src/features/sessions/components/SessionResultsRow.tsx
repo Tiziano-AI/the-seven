@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 import { Markdown } from "@/components/Markdown";
 import { CopyButton } from "@/components/CopyButton";
 import { formatUsdFromMicros } from "@shared/domain/usage";
-import type { RouterOutputs } from "@/lib/trpcTypes";
+import type { SessionDetailPayload } from "@/lib/apiSchemas";
 
-type OpenRouterCallRow = RouterOutputs["query"]["getSession"]["openRouterCalls"][number];
-type SessionStatus = RouterOutputs["query"]["getSession"]["session"]["status"];
+type OpenRouterCallRow = SessionDetailPayload["openRouterCalls"][number];
+type SessionStatus = SessionDetailPayload["session"]["status"];
 
 export type RowStatus = Readonly<{
   kind: "queued" | "waiting" | "active" | "done" | "skipped" | "failed";

@@ -7,7 +7,24 @@ import { getDb } from "./dbClient";
  */
 export async function getUserByByokId(byokId: string): Promise<User | null> {
   const db = await getDb();
-  const result = await db.select().from(users).where(eq(users.byokId, byokId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.byokId, byokId))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+/**
+ * Loads a user by demo email.
+ */
+export async function getUserByEmail(email: string): Promise<User | null> {
+  const db = await getDb();
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
   return result.length > 0 ? result[0] : null;
 }
 
@@ -20,11 +37,11 @@ export async function getUserById(userId: number): Promise<User | null> {
   return result.length > 0 ? result[0] : null;
 }
 
-async function createUser(byokId: string): Promise<void> {
+async function createByokUser(byokId: string): Promise<void> {
   const db = await getDb();
   await db
     .insert(users)
-    .values({ byokId })
+    .values({ kind: "byok", byokId })
     .onConflictDoNothing({ target: users.byokId });
 }
 
@@ -37,11 +54,38 @@ export async function getOrCreateUserByokId(byokId: string): Promise<User> {
     return existing;
   }
 
-  await createUser(byokId);
+  await createByokUser(byokId);
 
   const user = await getUserByByokId(byokId);
   if (!user) {
     throw new Error("Failed to load user record");
+  }
+
+  return user;
+}
+
+async function createDemoUser(email: string): Promise<void> {
+  const db = await getDb();
+  await db
+    .insert(users)
+    .values({ kind: "demo", email })
+    .onConflictDoNothing({ target: users.email });
+}
+
+/**
+ * Loads or creates a demo user for the email.
+ */
+export async function getOrCreateUserByEmail(email: string): Promise<User> {
+  const existing = await getUserByEmail(email);
+  if (existing) {
+    return existing;
+  }
+
+  await createDemoUser(email);
+
+  const user = await getUserByEmail(email);
+  if (!user) {
+    throw new Error("Failed to load demo user record");
   }
 
   return user;

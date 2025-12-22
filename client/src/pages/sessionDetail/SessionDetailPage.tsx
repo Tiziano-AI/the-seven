@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useApiKey } from "@/contexts/ApiKeyContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "@/lib/routing/router";
 import { useSessionResults } from "@/features/sessions/hooks/useSessionResults";
 import { parseSessionIdFromRouteParam } from "./domain/sessionId";
@@ -12,7 +12,7 @@ import { RunSheet } from "@/features/sessions/components/RunSheet";
  * SessionDetailPage renders the canonical Run Sheet for deep links.
  */
 export default function SessionDetailPage(props: { sessionIdParam: string }) {
-  const { isAuthenticated } = useApiKey();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {

@@ -13,5 +13,8 @@ export type ByokUserContext = Readonly<{ byokId: string; user: User }>;
 export async function getOrCreateByokUserContext(apiKey: string): Promise<ByokUserContext> {
   const byokId = deriveByokIdFromApiKey(apiKey);
   const user = await getOrCreateUserByokIdFromStore(byokId);
+  if (user.kind !== "byok") {
+    throw new Error("BYOK identity mapped to non-BYOK user");
+  }
   return { byokId, user };
 }

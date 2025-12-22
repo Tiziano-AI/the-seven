@@ -29,10 +29,21 @@ This file is the evidence appendix for `ARCH.md`.
   - `GET /api/v1/models/:author/:slug/endpoints` (model endpoints + supported parameters per endpoint)
     - Evidence: `vendor:openrouter:2025-12-17:https://openrouter.ai/docs/api-reference/list-endpoints-for-a-model`
 
-## Evidence (Local Runtime)
+- Resend email delivery (demo magic-link):
+  - `POST /emails` (send email; required `from`, `to`, `subject`; idempotency header)
+    - Evidence: `vendor:resend:2025-12-21:https://resend.com/docs/api-reference/emails/send-email`
+  - Idempotency keys for `POST /emails` (24h retention, header usage)
+    - Evidence: `vendor:resend:2025-12-21:https://resend.com/docs/dashboard/emails/idempotency-keys`
+  - Rate limits (default 2 req/sec + ratelimit headers, 429 on exceed)
+    - Evidence: `vendor:resend:2025-12-21:https://resend.com/docs/api-reference/rate-limit`
+  - Domain verification (SPF + DKIM required; subdomain recommendation)
+    - Evidence: `vendor:resend:2025-12-21:https://resend.com/docs/dashboard/domains/introduction`
 
-- tRPC `httpBatchLink` does not support subscriptions (so this repo uses polling, not tRPC streaming).
-  - Evidence: `node_modules:@trpc/client/src/links/httpBatchLink.ts:98`
+- Cloudflare origin IP (abuse controls):
+  - `CF-Connecting-IP` header includes the client IP at the origin.
+    - Evidence: `vendor:cloudflare:2025-12-21:https://developers.cloudflare.com/fundamentals/reference/http-headers/`
+
+## Evidence (Local Runtime)
 
 - `dotenv/config` wires into dotenv’s `.env` loader (so `import "dotenv/config"` is sufficient to load `.env` into `process.env`).
   - Evidence: `node_modules:dotenv/config.js:1`

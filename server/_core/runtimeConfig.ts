@@ -20,11 +20,19 @@ export type DevRuntimeConfig = Readonly<{
   disableOpenRouterKeyValidation: boolean;
 }>;
 
+export type DemoRuntimeConfig = Readonly<{
+  enabled: boolean;
+  openRouterApiKey: string | null;
+  resendApiKey: string | null;
+  emailFrom: string | null;
+}>;
+
 export type ServerRuntimeConfig = Readonly<{
   nodeEnv: NodeEnv;
   preferredPort: number;
   sqlite: SqliteConfig;
   openRouter: OpenRouterIdentityConfig;
+  demo: DemoRuntimeConfig;
   dev: DevRuntimeConfig;
 }>;
 
@@ -123,6 +131,53 @@ export function loadDevDisableOpenRouterKeyValidation(env: EnvSource = process.e
   );
 }
 
+export function loadDemoEnabled(env: EnvSource = process.env): boolean {
+  const raw = normalizeEnvValue(env.SEVEN_DEMO_ENABLED);
+  if (!raw) return false;
+  if (raw === "1") return true;
+  if (raw === "0") return false;
+  throw new Error('SEVEN_DEMO_ENABLED must be "0" or "1" (got "' + raw + '")');
+}
+
+function requireDemoValue(label: string, value: string | undefined): string {
+  if (!value) {
+    throw new Error(`${label} is required when demo mode is enabled`);
+  }
+  return value;
+}
+
+export function loadDemoRuntimeConfig(env: EnvSource = process.env): DemoRuntimeConfig {
+  const enabled = loadDemoEnabled(env);
+  if (!enabled) {
+    return {
+      enabled,
+      openRouterApiKey: null,
+      resendApiKey: null,
+      emailFrom: null,
+    };
+  }
+
+  const openRouterApiKey = requireDemoValue(
+    "SEVEN_DEMO_OPENROUTER_KEY",
+    normalizeEnvValue(env.SEVEN_DEMO_OPENROUTER_KEY)
+  );
+  const resendApiKey = requireDemoValue(
+    "SEVEN_DEMO_RESEND_API_KEY",
+    normalizeEnvValue(env.SEVEN_DEMO_RESEND_API_KEY)
+  );
+  const emailFrom = requireDemoValue(
+    "SEVEN_DEMO_EMAIL_FROM",
+    normalizeEnvValue(env.SEVEN_DEMO_EMAIL_FROM)
+  );
+
+  return {
+    enabled,
+    openRouterApiKey,
+    resendApiKey,
+    emailFrom,
+  };
+}
+
 /**
  * Validates and normalizes the environment contract for running the server.
  *
@@ -146,6 +201,7 @@ export function loadServerRuntimeConfig(
       path: loadSqlitePath(env),
     },
     openRouter: loadOpenRouterIdentityConfig(env),
+    demo: loadDemoRuntimeConfig(env),
     dev: {
       disableOpenRouterKeyValidation,
     },

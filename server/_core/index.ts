@@ -2,9 +2,6 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
-import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { appRouter } from "../routers";
-import { createContext } from "./context";
 import { MAX_HTTP_JSON_BYTES } from "../domain/httpLimits";
 import { errorToLogFields, log } from "./log";
 import { requireServerRuntimeConfig } from "./runtimeConfig";
@@ -12,6 +9,7 @@ import { applySecurityHeaders } from "./securityHeaders";
 import { serveStatic, setupVite } from "./vite";
 import { loadPromptsConfig } from "../config";
 import { reconcileNonTerminalSessionsToFailed } from "../stores/sessionStore";
+import { createApiRouter } from "../edges/http/apiRouter";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -62,14 +60,8 @@ async function startServer() {
   // Configure body parser with a bounded limit for JSON ingress.
   app.use(express.json({ limit: MAX_HTTP_JSON_BYTES }));
   app.use(express.urlencoded({ limit: MAX_HTTP_JSON_BYTES, extended: true }));
-  // tRPC API
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext,
-    })
-  );
+  // HTTP JSON API
+  app.use("/api", createApiRouter());
   // development mode uses Vite, production mode uses static files
   if (runtime.nodeEnv === "development") {
     await setupVite(app, server);

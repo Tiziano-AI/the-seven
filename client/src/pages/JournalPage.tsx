@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 
-import { useApiKey } from "@/contexts/ApiKeyContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "@/lib/routing/router";
-import { trpc } from "@/lib/trpc";
+import { useQuery } from "@tanstack/react-query";
+import { fetchSessions } from "@/lib/api";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,7 +36,7 @@ function parseStatusFilter(value: string): StatusFilter {
  * JournalPage renders the run list and inline Run Sheet selection.
  */
 export default function JournalPage() {
-  const { apiKey, isAuthenticated } = useApiKey();
+  const { authHeader, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const activeSessionId = readActiveSessionId();
 
@@ -46,10 +47,14 @@ export default function JournalPage() {
   const [exportTargetIds, setExportTargetIds] = useState<ReadonlyArray<number>>([]);
   const [exportOpen, setExportOpen] = useState(false);
 
-  const { data: sessions, isLoading } = trpc.query.listSessions.useQuery(
-    undefined,
-    { enabled: !!apiKey }
-  );
+  const { data: sessions, isLoading } = useQuery({
+    queryKey: ["sessions", authHeader],
+    queryFn: async () => {
+      if (!authHeader) return [];
+      return fetchSessions({ authHeader });
+    },
+    enabled: !!authHeader,
+  });
 
   useEffect(() => {
     if (!isAuthenticated) navigate("/");

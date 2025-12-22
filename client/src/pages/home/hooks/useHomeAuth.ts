@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { httpBatchLink } from "@trpc/client";
-import superjson from "superjson";
 import { toast } from "sonner";
-import { useApiKey } from "@/contexts/ApiKeyContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { hasEncryptedKey } from "@/lib/crypto";
-import { trpc } from "@/lib/trpc";
+import { validateByokKey } from "@/lib/api";
 import { clearActiveSessionId } from "@/features/sessions/domain/activeSession";
 import { clearLastCouncilValue } from "@/features/councils/domain/lastCouncil";
 import { clearQueryDraft } from "@/features/sessions/domain/queryDraft";
@@ -27,10 +25,10 @@ export function useHomeAuth(): {
   lock: () => void;
   apiKeyForPasswordSetup: string;
 } {
-  const { apiKey, setApiKey, clearApiKey, isAuthenticated } = useApiKey();
+  const { byokKey, setByokKey, clearByokKey, isAuthenticated } = useAuth();
 
   const [authState, setAuthState] = useState<HomeAuthState>(() => {
-    if (isAuthenticated && apiKey) return "authenticated";
+    if (isAuthenticated && byokKey) return "authenticated";
     return deriveUnauthenticatedState();
   });
 
@@ -40,10 +38,10 @@ export function useHomeAuth(): {
   const apiKeyForPasswordSetup = useMemo(() => apiKeyInput.trim(), [apiKeyInput]);
 
   useEffect(() => {
-    if (isAuthenticated && apiKey && authState !== "authenticated") {
+    if (isAuthenticated && byokKey && authState !== "authenticated") {
       setAuthState("authenticated");
     }
-  }, [apiKey, authState, isAuthenticated]);
+  }, [authState, byokKey, isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated && authState === "authenticated") {
@@ -60,19 +58,7 @@ export function useHomeAuth(): {
 
     setIsValidatingKey(true);
     try {
-      const validationClient = trpc.createClient({
-        links: [
-          httpBatchLink({
-            url: "/api/trpc",
-            transformer: superjson,
-            headers() {
-              return { Authorization: `Bearer ${trimmedApiKey}` };
-            },
-          }),
-        ],
-      });
-
-      const result = await validationClient.auth.validateKey.query();
+      const result = await validateByokKey({ apiKey: trimmedApiKey });
       if (!result.valid) {
         toast.error("That key didn’t work");
         return;
@@ -94,19 +80,19 @@ export function useHomeAuth(): {
       return;
     }
 
-    setApiKey(trimmed);
+    setByokKey(trimmed);
     setApiKeyInput("");
     setAuthState("authenticated");
     toast.success("Key locked and saved");
-  }, [apiKeyInput, setApiKey]);
+  }, [apiKeyInput, setByokKey]);
 
   const unlock = useCallback(
     (decryptedApiKey: string) => {
-      setApiKey(decryptedApiKey);
+      setByokKey(decryptedApiKey);
       setAuthState("authenticated");
       toast.success("Welcome back!");
     },
-    [setApiKey]
+    [setByokKey]
   );
 
   const reset = useCallback(() => {
@@ -118,11 +104,11 @@ export function useHomeAuth(): {
   }, []);
 
   const lock = useCallback(() => {
-    clearApiKey();
+    clearByokKey();
     setApiKeyInput("");
     setAuthState(deriveUnauthenticatedState());
     toast.message("Locked");
-  }, [clearApiKey]);
+  }, [clearByokKey]);
 
   return {
     authState,

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { trpc } from "@/lib/trpc";
-import { decodeCouncilRef, encodeCouncilRef } from "@/features/councils/domain/councilRef";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { decodeCouncilRef, encodeCouncilRef, type CouncilRef } from "@/features/councils/domain/councilRef";
 import { FILE_INPUT_ACCEPT } from "@shared/domain/attachments";
+import { useAuth } from "@/contexts/AuthContext";
+import { fetchCouncils, submitQuery } from "@/lib/api";
 import {
   clearActiveSessionId,
   readActiveSessionId,
@@ -72,14 +74,43 @@ export function useQueryComposer(): {
   removeFile: (index: number) => void;
   submit: () => Promise<void>;
 } {
+  const { authHeader, mode } = useAuth();
   const [query, setQuery] = useState(() => readQueryDraft());
   const [files, setFiles] = useState<File[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(() => readActiveSessionId());
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [councilValue, setCouncilValue] = useState(() => readLastCouncilValue() ?? "");
 
-  const submitMutation = trpc.query.submit.useMutation();
-  const councilsQuery = trpc.councils.list.useQuery(undefined, {
+  const submitMutation = useMutation({
+    mutationFn: async (payload: {
+      query: string;
+      councilRef: CouncilRef;
+      attachments?: AttachmentUpload[];
+    }) => {
+      if (!authHeader) {
+        throw new Error("Missing authentication");
+      }
+      if (!payload.councilRef) {
+        throw new Error("Missing council");
+      }
+      return submitQuery({
+        authHeader,
+        query: payload.query,
+        councilRef: payload.councilRef,
+        attachments: payload.attachments,
+      });
+    },
+  });
+
+  const councilsQuery = useQuery({
+    queryKey: ["councils", authHeader],
+    queryFn: async () => {
+      if (!authHeader) {
+        return { councils: [] };
+      }
+      return fetchCouncils({ authHeader });
+    },
+    enabled: !!authHeader,
     refetchOnWindowFocus: false,
   });
 
@@ -108,11 +139,22 @@ export function useQueryComposer(): {
   }, [councilValue, councils]);
 
   const setCouncilValueWithMemory = useCallback((value: string) => {
+    if (mode === "demo") {
+      return;
+    }
     setCouncilValue(value);
     if (decodeCouncilRef(value)) {
       writeLastCouncilValue(value);
     }
-  }, []);
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode !== "demo") return;
+    const commonsValue = "built_in:commons";
+    if (councilValue !== commonsValue) {
+      setCouncilValue(commonsValue);
+    }
+  }, [councilValue, mode]);
 
   const setQueryWithDraft = useCallback((value: string) => {
     setQuery(value);
@@ -142,6 +184,10 @@ export function useQueryComposer(): {
   }, []);
 
   const submit = useCallback(async () => {
+    if (!authHeader) {
+      toast.error("Missing authentication");
+      return;
+    }
     if (!councilRef) {
       toast.error("Choose a council first");
       return;
@@ -186,7 +232,7 @@ export function useQueryComposer(): {
     } finally {
       setIsProcessingFiles(false);
     }
-  }, [councilRef, files, query, submitMutation]);
+  }, [authHeader, councilRef, files, query, submitMutation]);
 
   return {
     councils,

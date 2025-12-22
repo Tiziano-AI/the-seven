@@ -1,18 +1,18 @@
 import { useMemo } from "react";
 
-import type { RouterOutputs } from "@/lib/trpcTypes";
+import type { SessionDetailPayload } from "@/lib/apiSchemas";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SessionResultsRow, type CouncilRow, type RowStatus } from "./SessionResultsRow";
 import { MEMBER_POSITIONS, memberForPosition } from "@shared/domain/sevenMembers";
 
-type OpenRouterCallRow = RouterOutputs["query"]["getSession"]["openRouterCalls"][number];
+type OpenRouterCallRow = SessionDetailPayload["openRouterCalls"][number];
 
 /**
  * SessionResultsLadder renders the phase ladder (Verdict -> Critiques -> Replies).
  */
 export function SessionResultsLadder(props: {
   isLoading: boolean;
-  data: RouterOutputs["query"]["getSession"] | undefined;
+  data: SessionDetailPayload | undefined;
   variant?: "compact" | "detailed";
 }) {
   const sessionData = props.data;

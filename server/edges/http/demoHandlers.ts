@@ -1,0 +1,126 @@
+import { z } from "zod";
+import { isSingleLine } from "../../../shared/domain/strings";
+import { parseJsonBody } from "./parse";
+import type { RequestContext } from "./context";
+import { EdgeError } from "./errors";
+import { checkDemoEmailRequestLimits } from "../../services/demoRateLimits";
+import { requestDemoAuthLink, consumeDemoAuthLink, DemoAuthError } from "../../services/demoAuth";
+
+const demoRequestSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(3)
+    .max(320)
+    .email()
+    .refine((value) => isSingleLine(value), "Email must be single-line"),
+});
+
+const demoConsumeSchema = z.object({
+  token: z.string().trim().min(10),
+});
+
+export type DemoRequestResponse = Readonly<{ email: string }>;
+
+export type DemoConsumeResponse = Readonly<{
+  email: string;
+  token: string;
+  expiresAt: number;
+}>;
+
+export async function handleDemoRequest(ctx: RequestContext, body: unknown): Promise<DemoRequestResponse> {
+  const input = parseJsonBody(demoRequestSchema, body);
+  const normalizedEmail = input.email.trim().toLowerCase();
+
+  const limit = await checkDemoEmailRequestLimits({
+    email: normalizedEmail,
+    ip: ctx.ip,
+    now: ctx.now,
+  });
+  if (limit) {
+    throw new EdgeError({
+      kind: "rate_limited",
+      message: "Demo email rate limit exceeded",
+      details: {
+        scope: limit.scope,
+        limit: limit.limit,
+        windowSeconds: limit.windowSeconds,
+        resetAt: new Date(limit.resetAtMs).toISOString(),
+      },
+      status: 429,
+    });
+  }
+
+  try {
+    const result = await requestDemoAuthLink({
+      email: normalizedEmail,
+      requestIp: ctx.ip,
+      now: ctx.now,
+    });
+    return result;
+  } catch (error: unknown) {
+    if (error instanceof DemoAuthError) {
+      if (error.kind === "demo_disabled") {
+        throw new EdgeError({
+          kind: "forbidden",
+          message: "Demo mode is disabled",
+          details: { reason: "demo_disabled" },
+          status: 403,
+        });
+      }
+      if (error.kind === "email_send_failed") {
+        throw new EdgeError({
+          kind: "upstream_error",
+          message: error.message,
+          details: { service: "resend", status: error.status },
+          status: 502,
+        });
+      }
+    }
+    throw error;
+  }
+}
+
+export async function handleDemoConsume(ctx: RequestContext, body: unknown): Promise<DemoConsumeResponse> {
+  const input = parseJsonBody(demoConsumeSchema, body);
+  try {
+    const result = await consumeDemoAuthLink({
+      token: input.token,
+      consumedIp: ctx.ip,
+      now: ctx.now,
+    });
+    return {
+      email: result.email,
+      token: result.token,
+      expiresAt: result.expiresAt,
+    };
+  } catch (error: unknown) {
+    if (error instanceof DemoAuthError) {
+      if (error.kind === "demo_disabled") {
+        throw new EdgeError({
+          kind: "forbidden",
+          message: "Demo mode is disabled",
+          details: { reason: "demo_disabled" },
+          status: 403,
+        });
+      }
+      if (error.kind === "link_not_found" || error.kind === "link_used") {
+        throw new EdgeError({
+          kind: "unauthorized",
+          message: "Invalid demo link",
+          details: { reason: "invalid_token" },
+          status: 401,
+        });
+      }
+      if (error.kind === "link_expired") {
+        throw new EdgeError({
+          kind: "unauthorized",
+          message: "Demo link expired",
+          details: { reason: "expired_token" },
+          status: 401,
+        });
+      }
+    }
+    throw error;
+  }
+}

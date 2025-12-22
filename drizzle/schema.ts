@@ -12,19 +12,91 @@ function updatedAtColumn() {
 }
 
 /**
- * Users table - BYOK id serves as the unique identifier.
+ * Users table - BYOK users store byokId, demo users store email.
  */
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  byokId: text("byokId").notNull(),
+  kind: text("kind", { enum: ["byok", "demo"] }).notNull(),
+  byokId: text("byokId"),
+  email: text("email"),
   createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),
 }, (table) => [
   uniqueIndex("users_byokId_unique").on(table.byokId),
+  uniqueIndex("users_email_unique").on(table.email),
 ]);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+/**
+ * Demo auth links - one-time tokens delivered via email.
+ */
+export const demoAuthLinks = sqliteTable(
+  "demoAuthLinks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("tokenHash").notNull(),
+    requestedIp: text("requestedIp").notNull(),
+    consumedIp: text("consumedIp"),
+    expiresAt: integer("expiresAt", { mode: "timestamp_ms" }).notNull(),
+    usedAt: integer("usedAt", { mode: "timestamp_ms" }),
+    createdAt: createdAtColumn(),
+  },
+  (table) => [
+    uniqueIndex("demoAuthLinks_tokenHash_unique").on(table.tokenHash),
+    index("demoAuthLinks_userId_createdAt_idx").on(table.userId, table.createdAt),
+  ]
+);
+
+export type DemoAuthLink = typeof demoAuthLinks.$inferSelect;
+export type InsertDemoAuthLink = typeof demoAuthLinks.$inferInsert;
+
+/**
+ * Demo sessions - 24h tokens used for API access.
+ */
+export const demoSessions = sqliteTable(
+  "demoSessions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("tokenHash").notNull(),
+    expiresAt: integer("expiresAt", { mode: "timestamp_ms" }).notNull(),
+    lastUsedAt: integer("lastUsedAt", { mode: "timestamp_ms" }),
+    createdAt: createdAtColumn(),
+  },
+  (table) => [
+    uniqueIndex("demoSessions_tokenHash_unique").on(table.tokenHash),
+    index("demoSessions_userId_createdAt_idx").on(table.userId, table.createdAt),
+  ]
+);
+
+export type DemoSession = typeof demoSessions.$inferSelect;
+export type InsertDemoSession = typeof demoSessions.$inferInsert;
+
+/**
+ * Rate limit buckets - fixed-window counters keyed by scope.
+ */
+export const rateLimitBuckets = sqliteTable(
+  "rateLimitBuckets",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    scope: text("scope").notNull(),
+    windowStart: integer("windowStart", { mode: "timestamp_ms" }).notNull(),
+    windowSeconds: integer("windowSeconds").notNull(),
+    count: integer("count").notNull(),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (table) => [
+    uniqueIndex("rateLimitBuckets_scope_window_unique").on(table.scope, table.windowStart),
+    index("rateLimitBuckets_scope_idx").on(table.scope),
+  ]
+);
+
+export type RateLimitBucket = typeof rateLimitBuckets.$inferSelect;
+export type InsertRateLimitBucket = typeof rateLimitBuckets.$inferInsert;
 
 /**
  * Councils - a named run configuration (7 member models + phase prompts).

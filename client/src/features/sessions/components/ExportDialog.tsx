@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { fetchSession, fetchSessionDiagnostics } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   DEFAULT_EXPORT_SELECTION,
   buildExportFilename,
@@ -33,7 +34,7 @@ const EXPORT_ITEMS: ReadonlyArray<Readonly<{ key: ExportItemKey; label: string; 
 ];
 
 export function ExportDialog(props: ExportDialogProps) {
-  const utils = trpc.useUtils();
+  const { authHeader } = useAuth();
   const [selection, setSelection] = useState<ExportSelection>(DEFAULT_EXPORT_SELECTION);
   const [formats, setFormats] = useState<Readonly<{ json: boolean; markdown: boolean }>>({
     json: true,
@@ -77,14 +78,18 @@ export function ExportDialog(props: ExportDialogProps) {
       toast.error("Select runs and at least one export format.");
       return;
     }
+    if (!authHeader) {
+      toast.error("Sign in again to export runs.");
+      return;
+    }
 
     setIsExporting(true);
     try {
       const runs: ExportRunBundle[] = await Promise.all(
         sortedIds.map(async (sessionId) => {
           const [session, diagnostics] = await Promise.all([
-            utils.query.getSession.fetch({ sessionId }),
-            utils.query.getSessionDiagnostics.fetch({ sessionId }),
+            fetchSession({ authHeader, sessionId }),
+            fetchSessionDiagnostics({ authHeader, sessionId }),
           ]);
           return { session, diagnostics };
         })

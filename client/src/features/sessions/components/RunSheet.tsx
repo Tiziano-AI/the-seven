@@ -1,24 +1,36 @@
-import { useMemo, useState } from "react";
+import { Suspense, lazy, useMemo, useState } from "react";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
-import { trpc } from "@/lib/trpc";
-import type { RouterOutputs } from "@/lib/trpcTypes";
+import { useMutation } from "@tanstack/react-query";
+import { continueSession } from "@/lib/api";
+import type { SessionDetailPayload } from "@/lib/apiSchemas";
+import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "@/lib/routing/router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Markdown } from "@/components/Markdown";
 import { CopyButton } from "@/components/CopyButton";
-import { ExportDialog } from "./ExportDialog";
-import { RerunDialog } from "./RerunDialog";
 import { SessionResultsLadder } from "./SessionResultsLadder";
-import { SessionDiagnosticsPanel } from "./SessionDiagnosticsPanel";
 import { StatusBadge } from "./StatusBadge";
 import { calculateSessionTotals } from "../domain/totals";
 import { formatFailureKind } from "../domain/failureKind";
 import { formatUsdFromMicros } from "@shared/domain/usage";
+
+const ExportDialog = lazy(async () => {
+  const module = await import("./ExportDialog");
+  return { default: module.ExportDialog };
+});
+const RerunDialog = lazy(async () => {
+  const module = await import("./RerunDialog");
+  return { default: module.RerunDialog };
+});
+const SessionDiagnosticsPanel = lazy(async () => {
+  const module = await import("./SessionDiagnosticsPanel");
+  return { default: module.SessionDiagnosticsPanel };
+});
 
 /**
  * RunSheetContext describes where the Run Sheet is rendered.
@@ -27,7 +39,7 @@ export type RunSheetContext = "active" | "journal" | "detail";
 
 type RunSheetProps = Readonly<{
   sessionId: number;
-  data: RouterOutputs["query"]["getSession"] | undefined;
+  data: SessionDetailPayload | undefined;
   isLoading: boolean;
   context: RunSheetContext;
   onDismiss?: () => void;
@@ -39,6 +51,7 @@ type RunSheetProps = Readonly<{
  */
 export function RunSheet(props: RunSheetProps) {
   const navigate = useNavigate();
+  const { authHeader } = useAuth();
   const [rerunOpen, setRerunOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -54,13 +67,17 @@ export function RunSheet(props: RunSheetProps) {
       : `${formattedCost} (partial)`
     : formattedCost;
 
-  const continueMutation = trpc.query.continueSession.useMutation({
+  const continueMutation = useMutation({
+    mutationFn: async (params: { sessionId: number }) => {
+      if (!authHeader) throw new Error("Missing authentication");
+      return continueSession({ authHeader, sessionId: params.sessionId });
+    },
     onSuccess: async () => {
       toast.success("Continuing run");
       props.onRefetch?.();
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(error instanceof Error ? error.message : "Failed to continue run");
     },
   });
 
@@ -162,18 +179,26 @@ export function RunSheet(props: RunSheetProps) {
 
   return (
     <Card>
-      <ExportDialog
-        open={exportOpen}
-        onOpenChange={setExportOpen}
-        selectedIds={[props.sessionId]}
-      />
-      <RerunDialog
-        open={rerunOpen}
-        onOpenChange={setRerunOpen}
-        sessionId={props.sessionId}
-        initialQuery={sessionData.session.query}
-        onRerunStarted={(newSessionId) => navigate(`/session/${newSessionId}`)}
-      />
+      {exportOpen && (
+        <Suspense fallback={null}>
+          <ExportDialog
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+            selectedIds={[props.sessionId]}
+          />
+        </Suspense>
+      )}
+      {rerunOpen && (
+        <Suspense fallback={null}>
+          <RerunDialog
+            open={rerunOpen}
+            onOpenChange={setRerunOpen}
+            sessionId={props.sessionId}
+            initialQuery={sessionData.session.query}
+            onRerunStarted={(newSessionId: number) => navigate(`/session/${newSessionId}`)}
+          />
+        </Suspense>
+      )}
 
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -244,7 +269,15 @@ export function RunSheet(props: RunSheetProps) {
           variant={props.context === "detail" ? "detailed" : "compact"}
         />
 
-        <SessionDiagnosticsPanel sessionId={props.sessionId} />
+        <Suspense
+          fallback={
+            <div className="inset inset-card">
+              <div className="text-sm text-muted-foreground">Loading diagnostics…</div>
+            </div>
+          }
+        >
+          <SessionDiagnosticsPanel sessionId={props.sessionId} />
+        </Suspense>
       </CardContent>
     </Card>
   );
