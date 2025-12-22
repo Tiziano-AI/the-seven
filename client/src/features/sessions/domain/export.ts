@@ -1,4 +1,4 @@
-import type { SessionDetailPayload, SessionDiagnosticsPayload } from "@/lib/apiSchemas";
+import type { SessionDetailPayload, SessionDiagnosticsPayload } from "@shared/domain/apiSchemas";
 import { calculateSessionTotals } from "@/features/sessions/domain/totals";
 import { formatUsdFromMicros } from "@shared/domain/usage";
 import { memberForPosition, parseMemberPosition } from "@shared/domain/sevenMembers";
@@ -45,6 +45,9 @@ export type ExportRun = Readonly<{
     id: number;
     status: SessionResults["session"]["status"];
     failureKind: SessionResults["session"]["failureKind"];
+    questionHash: SessionResults["session"]["questionHash"];
+    ingressSource: SessionResults["session"]["ingressSource"];
+    ingressVersion: SessionResults["session"]["ingressVersion"];
     councilNameAtRun: string;
     createdAt: SessionResults["session"]["createdAt"];
     updatedAt: SessionResults["session"]["updatedAt"];
@@ -137,6 +140,9 @@ export function buildJsonExport(params: {
         id: session.session.id,
         status: session.session.status,
         failureKind: session.session.failureKind,
+        questionHash: session.session.questionHash,
+        ingressSource: session.session.ingressSource,
+        ingressVersion: session.session.ingressVersion,
         councilNameAtRun: session.session.councilNameAtRun,
         createdAt: session.session.createdAt,
         updatedAt: session.session.updatedAt,

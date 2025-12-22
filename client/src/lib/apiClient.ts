@@ -1,29 +1,15 @@
 import { z } from "zod";
-
-const successEnvelopeSchema = z.object({
-  trace_id: z.string(),
-  ts: z.string(),
-  result: z.object({
-    resource: z.string(),
-    payload: z.unknown(),
-  }),
-});
-
-const errorEnvelopeSchema = z.object({
-  kind: z.string(),
-  message: z.string(),
-  trace_id: z.string(),
-  ts: z.string(),
-  details: z.unknown(),
-});
+import { errorEnvelopeSchema, type ErrorDetails, type ErrorKind } from "@shared/domain/apiErrors";
+import { successEnvelopeSchema } from "@shared/domain/apiSchemas";
+import { INGRESS_SOURCE_WEB } from "@shared/domain/ingress";
 
 export class ApiErrorResponse extends Error {
-  readonly kind: string;
+  readonly kind: ErrorKind;
   readonly traceId: string;
-  readonly details: unknown;
+  readonly details: ErrorDetails;
   readonly status: number;
 
-  constructor(params: { kind: string; message: string; traceId: string; details: unknown; status: number }) {
+  constructor(params: { kind: ErrorKind; message: string; traceId: string; details: ErrorDetails; status: number }) {
     super(params.message);
     this.kind = params.kind;
     this.traceId = params.traceId;
@@ -47,6 +33,7 @@ export async function apiRequest<T>(params: {
 }): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "X-Seven-Ingress": INGRESS_SOURCE_WEB,
   };
   if (params.authHeader) {
     headers.Authorization = params.authHeader;

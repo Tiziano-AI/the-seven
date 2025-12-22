@@ -2,12 +2,14 @@ import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
 import { requireServerRuntimeConfig } from "../../_core/runtimeConfig";
 import { resolveAuthContext, type AuthContext } from "./auth";
+import { parseIngressHeaders, type IngressContext } from "./ingress";
 
 export type RequestContext = Readonly<{
   traceId: string;
   now: Date;
   ip: string | null;
   auth: AuthContext;
+  ingress: IngressContext;
 }>;
 
 function parseTraceId(value: string | undefined): string | null {
@@ -58,5 +60,6 @@ export async function createRequestContext(req: Request, res: Response): Promise
     now,
     ip: getRequestIp(req),
     auth,
+    ingress: parseIngressHeaders(req),
   };
 }

@@ -1,50 +1,22 @@
-import { z } from "zod";
 import { requireAuth } from "./requireAuth";
 import { parseJsonBody } from "./parse";
 import type { RequestContext } from "./context";
 import { EdgeError } from "./errors";
 import { decodeAttachmentToText, type Attachment } from "../../domain/attachments";
-import { councilRefSchema } from "../../domain/councilRef";
+import type { CouncilRef } from "../../../shared/domain/councilRef";
 import { buildRunSpecFromCouncil } from "../../services/sessionRuns";
 import { parseSessionRunSpecJson } from "../../domain/sessionRunSpec";
 import { orchestrateSession } from "../../workflows/orchestration";
 import { createSession, getSessionById } from "../../stores/sessionStore";
 import { checkDemoRunLimits } from "../../services/demoRateLimits";
 import { parseTextAttachmentsJson } from "./queryAttachments";
-
-const attachmentsInput = z
-  .array(
-    z.object({
-      name: z
-        .string()
-        .trim()
-        .min(1)
-        .max(200)
-        .refine((value) => !/[\r\n]/.test(value), "Attachment name must be single-line"),
-      base64: z.string().min(1),
-    })
-  )
-  .optional();
-
-const submitSchema = z.object({
-  query: z.string().min(1),
-  councilRef: councilRefSchema,
-  attachments: attachmentsInput,
-});
-
-const continueSchema = z.object({
-  sessionId: z.number().int(),
-});
-
-const rerunSchema = z.object({
-  sessionId: z.number().int(),
-  councilRef: councilRefSchema,
-  queryOverride: z
-    .string()
-    .min(1)
-    .refine((value) => value.trim().length > 0, "Query must not be blank")
-    .optional(),
-});
+import { hashQuestion } from "../../domain/questionHash";
+import { BUILT_IN_COUNCILS } from "../../domain/builtInCouncils";
+import {
+  queryContinueBodySchema,
+  queryRerunBodySchema,
+  querySubmitBodySchema,
+} from "../../../shared/domain/apiSchemas";
 
 async function enforceDemoRunLimit(ctx: RequestContext): Promise<void> {
   if (ctx.auth.kind !== "demo") return;
@@ -68,8 +40,18 @@ async function enforceDemoRunLimit(ctx: RequestContext): Promise<void> {
   }
 }
 
-function requireCommonsCouncil(ref: z.infer<typeof councilRefSchema>): void {
+function requireCommonsCouncil(ref: CouncilRef): void {
   if (ref.kind === "built_in" && ref.slug === "commons") return;
+  throw new EdgeError({
+    kind: "forbidden",
+    message: "Demo mode only allows Commons Council",
+    details: { reason: "demo_council_only" },
+    status: 403,
+  });
+}
+
+function requireCommonsSession(session: Readonly<{ councilNameAtRun: string }>): void {
+  if (session.councilNameAtRun === BUILT_IN_COUNCILS.commons.name) return;
   throw new EdgeError({
     kind: "forbidden",
     message: "Demo mode only allows Commons Council",
@@ -80,7 +62,7 @@ function requireCommonsCouncil(ref: z.infer<typeof councilRefSchema>): void {
 
 export async function handleQuerySubmit(ctx: RequestContext, body: unknown): Promise<Readonly<{ sessionId: number }>> {
   const auth = requireAuth(ctx.auth);
-  const input = parseJsonBody(submitSchema, body);
+  const input = parseJsonBody(querySubmitBodySchema, body);
 
   if (auth.kind === "demo") {
     requireCommonsCouncil(input.councilRef);
@@ -108,7 +90,8 @@ export async function handleQuerySubmit(ctx: RequestContext, body: unknown): Pro
     attachments: decodedAttachments,
   });
 
-  parseSessionRunSpecJson(run.runSpecJson);
+  const parsedRunSpec = parseSessionRunSpecJson(run.runSpecJson);
+  const questionHash = hashQuestion(parsedRunSpec.userMessage);
 
   const sessionId = await createSession({
     userId: auth.userId,
@@ -116,6 +99,9 @@ export async function handleQuerySubmit(ctx: RequestContext, body: unknown): Pro
     attachedFilesMarkdown: JSON.stringify(decodedAttachments),
     councilNameAtRun: run.councilNameAtRun,
     runSpec: run.runSpecJson,
+    questionHash,
+    ingressSource: ctx.ingress.source,
+    ingressVersion: ctx.ingress.version,
     status: "pending",
   });
 
@@ -131,7 +117,7 @@ export async function handleQuerySubmit(ctx: RequestContext, body: unknown): Pro
 
 export async function handleContinueSession(ctx: RequestContext, body: unknown): Promise<Readonly<{ sessionId: number }>> {
   const auth = requireAuth(ctx.auth);
-  const input = parseJsonBody(continueSchema, body);
+  const input = parseJsonBody(queryContinueBodySchema, body);
 
   const existing = await getSessionById(input.sessionId);
   if (!existing || existing.userId !== auth.userId) {
@@ -152,6 +138,9 @@ export async function handleContinueSession(ctx: RequestContext, body: unknown):
     });
   }
 
+  if (auth.kind === "demo") {
+    requireCommonsSession(existing);
+  }
   await enforceDemoRunLimit(ctx);
 
   void orchestrateSession({
@@ -166,7 +155,7 @@ export async function handleContinueSession(ctx: RequestContext, body: unknown):
 
 export async function handleRerunSession(ctx: RequestContext, body: unknown): Promise<Readonly<{ sessionId: number }>> {
   const auth = requireAuth(ctx.auth);
-  const input = parseJsonBody(rerunSchema, body);
+  const input = parseJsonBody(queryRerunBodySchema, body);
 
   if (auth.kind === "demo") {
     requireCommonsCouncil(input.councilRef);
@@ -203,7 +192,8 @@ export async function handleRerunSession(ctx: RequestContext, body: unknown): Pr
     attachments,
   });
 
-  parseSessionRunSpecJson(run.runSpecJson);
+  const parsedRunSpec = parseSessionRunSpecJson(run.runSpecJson);
+  const questionHash = hashQuestion(parsedRunSpec.userMessage);
 
   const sessionId = await createSession({
     userId: auth.userId,
@@ -211,6 +201,9 @@ export async function handleRerunSession(ctx: RequestContext, body: unknown): Pr
     attachedFilesMarkdown: existing.attachedFilesMarkdown,
     councilNameAtRun: run.councilNameAtRun,
     runSpec: run.runSpecJson,
+    questionHash,
+    ingressSource: ctx.ingress.source,
+    ingressVersion: ctx.ingress.version,
     status: "pending",
   });
 

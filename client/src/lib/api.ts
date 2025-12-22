@@ -14,7 +14,7 @@ import {
   submitPayloadSchema,
   successPayloadSchema,
   validateKeyPayloadSchema,
-} from "./apiSchemas";
+} from "@shared/domain/apiSchemas";
 import { encodeCouncilRef, type CouncilRef } from "@shared/domain/councilRef";
 import type { CouncilMemberTuning } from "@shared/domain/councilMemberTuning";
 

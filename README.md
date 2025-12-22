@@ -74,6 +74,9 @@ SEVEN_DEMO_ENABLED=1
 SEVEN_DEMO_OPENROUTER_KEY=...
 SEVEN_DEMO_RESEND_API_KEY=...
 SEVEN_DEMO_EMAIL_FROM=hello@updates.theseven.ai
+
+# CLI (optional)
+SEVEN_BYOK_KEY=...
 ```
 
 In production, set `SEVEN_PUBLIC_ORIGIN` to your public domain (e.g. `https://theseven.ai`) and use a Resend‑verified sender address (e.g. `hello@updates.theseven.ai`).
@@ -99,6 +102,26 @@ uv run --python 3.12 devtools/gate.py
 ```
 
 **Stack**: Express + HTTP JSON API, React 19 + Vite, SQLite + Drizzle ORM, Tailwind + shadcn/ui.
+
+---
+
+## Batch CLI
+
+Run unattended batches using the existing HTTP API.
+
+```bash
+pnpm batch -- --file data/questions.jsonl --concurrency 3 --wait
+```
+
+**Input format** (JSONL, one object per line):
+
+```json
+{"question":"What is idempotency?","councils":["built_in:commons"]}
+{"question":"Compare X vs Y","councils":["built_in:commons","built_in:lantern"]}
+```
+
+The CLI reads `SEVEN_BYOK_KEY` from `.env` and submits each question to `/api/query/submit`.
+Set `SEVEN_BASE_URL` to target a non-local server (defaults to `http://localhost:3000`).
 
 ---
 

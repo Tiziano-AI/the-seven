@@ -5,7 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 
 import { useMutation } from "@tanstack/react-query";
 import { continueSession } from "@/lib/api";
-import type { SessionDetailPayload } from "@/lib/apiSchemas";
+import type { SessionDetailPayload } from "@shared/domain/apiSchemas";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "@/lib/routing/router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

@@ -165,6 +165,9 @@ export const sessions = sqliteTable(
     attachedFilesMarkdown: text("attachedFilesMarkdown"),
     councilNameAtRun: text("councilNameAtRun").notNull(),
     runSpec: text("runSpec").notNull(),
+    questionHash: text("questionHash").notNull(),
+    ingressSource: text("ingressSource").notNull(),
+    ingressVersion: text("ingressVersion"),
     status: text("status", { enum: ["pending", "processing", "completed", "failed"] })
       .notNull()
       .default("pending"),
@@ -185,6 +188,8 @@ export const sessions = sqliteTable(
   (table) => [
     index("sessions_userId_createdAt_idx").on(table.userId, table.createdAt),
     index("sessions_status_idx").on(table.status),
+    index("sessions_questionHash_idx").on(table.questionHash),
+    index("sessions_ingressSource_idx").on(table.ingressSource),
   ]
 );
 
@@ -209,6 +214,9 @@ export const openRouterCalls = sqliteTable(
     requestSystemChars: integer("requestSystemChars").notNull(),
     requestUserChars: integer("requestUserChars").notNull(),
     requestTotalChars: integer("requestTotalChars").notNull(),
+    requestStartedAt: integer("requestStartedAt"),
+    responseCompletedAt: integer("responseCompletedAt"),
+    latencyMs: integer("latencyMs"),
     responseId: text("responseId"),
     responseModel: text("responseModel"),
     billedModelId: text("billedModelId"),

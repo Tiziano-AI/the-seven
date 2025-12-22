@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchSession } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import type { SessionDetailPayload } from "@/lib/apiSchemas";
+import type { SessionDetailPayload } from "@shared/domain/apiSchemas";
 
 export type SessionResults = SessionDetailPayload;
 

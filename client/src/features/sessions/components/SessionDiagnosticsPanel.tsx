@@ -29,6 +29,12 @@ type DiagnosticsSectionProps = Readonly<{
   children: ReactNode;
 }>;
 
+function formatLatency(latencyMs: number | null): string {
+  if (latencyMs === null) return "—";
+  if (latencyMs < 1000) return `${latencyMs} ms`;
+  return `${(latencyMs / 1000).toFixed(2)} s`;
+}
+
 function DiagnosticsSection(props: DiagnosticsSectionProps) {
   return (
     <div className="inset">
@@ -136,6 +142,7 @@ export function SessionDiagnosticsPanel(props: { sessionId: number }) {
                 <TableHead className="text-right">Prompt tokens</TableHead>
                 <TableHead className="text-right">Completion tokens</TableHead>
                 <TableHead className="text-right">Total tokens</TableHead>
+                <TableHead className="text-right">Latency</TableHead>
                 <TableHead className="text-right">Cost</TableHead>
                 <TableHead>Finish</TableHead>
                 <TableHead>Error</TableHead>
@@ -144,7 +151,7 @@ export function SessionDiagnosticsPanel(props: { sessionId: number }) {
             <TableBody>
               {data.openRouterCalls.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground text-sm whitespace-normal">
+                  <TableCell colSpan={10} className="text-muted-foreground text-sm whitespace-normal">
                     No OpenRouter call records yet.
                   </TableCell>
                 </TableRow>
@@ -199,6 +206,7 @@ export function SessionDiagnosticsPanel(props: { sessionId: number }) {
                     <TableCell className="text-right">
                       {call.usageTotalTokens?.toLocaleString() ?? "—"}
                     </TableCell>
+                    <TableCell className="text-right">{formatLatency(call.latencyMs)}</TableCell>
                     <TableCell className="text-right">
                       {call.totalCostUsdMicros !== null
                         ? `$${formatUsdFromMicros(call.totalCostUsdMicros, 4)}`

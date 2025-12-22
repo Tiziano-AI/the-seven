@@ -1,4 +1,4 @@
-import type { SessionDetailPayload } from "@/lib/apiSchemas";
+import type { SessionDetailPayload } from "@shared/domain/apiSchemas";
 import { summarizeOpenRouterCalls } from "@shared/domain/usage";
 export type SessionResults = SessionDetailPayload;
 

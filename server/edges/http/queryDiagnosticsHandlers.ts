@@ -14,11 +14,14 @@ export async function handleSessionDiagnostics(ctx: RequestContext, sessionId: n
     id: number;
     status: string;
     failureKind: string | null;
-    createdAt: Date;
-    updatedAt: Date;
+    questionHash: string;
+    ingressSource: string;
+    ingressVersion: string | null;
+    createdAt: string;
+    updatedAt: string;
   };
   runSpec: {
-    createdAt: Date;
+    createdAt: string;
     userMessage: string;
     outputFormats: Readonly<{ phase1: string; phase2: string; phase3: string }>;
     council: {
@@ -61,11 +64,14 @@ export async function handleSessionDiagnostics(ctx: RequestContext, sessionId: n
       id: session.id,
       status: session.status,
       failureKind: session.failureKind,
-      createdAt: session.createdAt,
-      updatedAt: session.updatedAt,
+      questionHash: session.questionHash,
+      ingressSource: session.ingressSource,
+      ingressVersion: session.ingressVersion,
+      createdAt: session.createdAt.toISOString(),
+      updatedAt: session.updatedAt.toISOString(),
     },
     runSpec: {
-      createdAt: new Date(runSpec.createdAt),
+      createdAt: runSpec.createdAt,
       userMessage: runSpec.userMessage,
       outputFormats: runSpec.outputFormats,
       council: {

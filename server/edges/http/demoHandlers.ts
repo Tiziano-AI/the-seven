@@ -1,24 +1,9 @@
-import { z } from "zod";
-import { isSingleLine } from "../../../shared/domain/strings";
 import { parseJsonBody } from "./parse";
 import type { RequestContext } from "./context";
 import { EdgeError } from "./errors";
 import { checkDemoEmailRequestLimits } from "../../services/demoRateLimits";
 import { requestDemoAuthLink, consumeDemoAuthLink, DemoAuthError } from "../../services/demoAuth";
-
-const demoRequestSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .min(3)
-    .max(320)
-    .email()
-    .refine((value) => isSingleLine(value), "Email must be single-line"),
-});
-
-const demoConsumeSchema = z.object({
-  token: z.string().trim().min(10),
-});
+import { demoConsumeBodySchema, demoRequestBodySchema } from "../../../shared/domain/apiSchemas";
 
 export type DemoRequestResponse = Readonly<{ email: string }>;
 
@@ -29,7 +14,7 @@ export type DemoConsumeResponse = Readonly<{
 }>;
 
 export async function handleDemoRequest(ctx: RequestContext, body: unknown): Promise<DemoRequestResponse> {
-  const input = parseJsonBody(demoRequestSchema, body);
+  const input = parseJsonBody(demoRequestBodySchema, body);
   const normalizedEmail = input.email.trim().toLowerCase();
 
   const limit = await checkDemoEmailRequestLimits({
@@ -82,7 +67,7 @@ export async function handleDemoRequest(ctx: RequestContext, body: unknown): Pro
 }
 
 export async function handleDemoConsume(ctx: RequestContext, body: unknown): Promise<DemoConsumeResponse> {
-  const input = parseJsonBody(demoConsumeSchema, body);
+  const input = parseJsonBody(demoConsumeBodySchema, body);
   try {
     const result = await consumeDemoAuthLink({
       token: input.token,

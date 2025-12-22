@@ -1,38 +1,10 @@
 import { z } from "zod";
 import type { CouncilMemberTuning } from "../../shared/domain/councilMemberTuning";
-import { isSingleLine } from "../../shared/domain/strings";
+import { councilMemberTuningInputSchema, councilMemberTuningSchema } from "../../shared/domain/councilMemberTuning";
 
-export const councilMemberTuningSchema = z
-  .object({
-    temperature: z.number().finite().nullable().optional(),
-    seed: z
-      .number()
-      .int()
-      .nullable()
-      .optional()
-      .refine(
-        (value) => value === null || value === undefined || Number.isSafeInteger(value),
-        "seed must be a safe integer"
-      ),
-    verbosity: z
-      .string()
-      .trim()
-      .min(1)
-      .refine(isSingleLine, "verbosity must be single-line")
-      .nullable()
-      .optional(),
-    reasoningEffort: z
-      .string()
-      .trim()
-      .min(1)
-      .refine(isSingleLine, "reasoningEffort must be single-line")
-      .nullable()
-      .optional(),
-    includeReasoning: z.boolean().nullable().optional(),
-  })
-  .strict();
+export { councilMemberTuningSchema };
 
-export type CouncilMemberTuningInput = z.infer<typeof councilMemberTuningSchema>;
+export type CouncilMemberTuningInput = z.infer<typeof councilMemberTuningInputSchema>;
 
 function normalizeCouncilMemberTuningParsed(input: CouncilMemberTuningInput): CouncilMemberTuning | null {
   const normalized: CouncilMemberTuning = {

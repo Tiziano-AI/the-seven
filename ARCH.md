@@ -130,6 +130,18 @@ Canonical error kinds:
 - `upstream_error` (details: provider failure)
 - `internal_error` (details: internal failure id)
 
+Wire format:
+
+- All timestamps in envelopes and payloads are RFC3339 strings (ISO 8601). No `Date` objects cross the HTTP boundary.
+- Evidence: node_modules:zod/src/v3/types.ts:1108-1134
+
+### Canonical API schemas
+
+The canonical API schemas and error-detail discriminated union live in shared modules so client and server cannot drift:
+
+- `shared/domain/apiSchemas.ts` — request/response payload schemas + envelopes.
+- `shared/domain/apiErrors.ts` — error kinds and details schema.
+
 ### Authenticated edge contract (HTTP JSON)
 
 All user-specific HTTP JSON edges require exactly one auth scheme via HTTP headers:
@@ -139,6 +151,13 @@ All user-specific HTTP JSON edges require exactly one auth scheme via HTTP heade
 - Server behavior:
   - BYOK: derive `byok_id`, load-or-create the user row, execute using the provided key.
   - Demo: validate the demo token, load the demo user, execute using the server-owned demo key.
+
+### Ingress tagging headers (HTTP JSON)
+
+All HTTP JSON edges accept optional ingress metadata headers. Invalid values are ignored (the request still succeeds).
+
+- `X-Seven-Ingress`: one of `web | cli | api` (defaults to `web` when missing or invalid).
+- `X-Seven-Ingress-Version`: optional single-line string (trimmed; max 120 chars).
 
 ## Data Flow (Canonical)
 
@@ -216,6 +235,7 @@ This repo does not parse member outputs for control flow. Instead, it improves s
     - phase + member slot (`A..G` via `memberPosition`),
     - request model id,
     - request size (system/user/total chars),
+    - request timing (`requestStartedAt`, `responseCompletedAt`, `latencyMs` in epoch ms; `null` when no provider call occurred),
     - response metadata (id, routed model, finish reason, usage tokens),
     - billing metadata from generation stats (billed model id, total cost, native token counts),
     - error metadata when the call fails (HTTP status + message).
@@ -323,6 +343,17 @@ This repo uses a strict role-based module taxonomy. Each runtime behavior follow
 - `GET /api/query/sessions/:id`
 - `GET /api/query/sessions/:id/diagnostics`
 
+### Batch CLI (Canonical)
+
+`server/cli/batch.ts` provides unattended batch submission against the existing API surface.
+
+- Invocation: `pnpm batch -- --file <path> [--concurrency N] [--wait] [--base-url URL]`
+- Auth: reads `SEVEN_BYOK_KEY` from `.env` and sends `Authorization: Bearer <key>`.
+- Targeting: `--base-url` (or `SEVEN_BASE_URL`) selects the server origin.
+- Ingress: sends `X-Seven-Ingress: cli` (plus optional version header).
+- Input format: JSONL (one object per line) with the schema:
+  - `{ "question": "string", "councils": ["built_in:commons", "user:123"] }`
+
 ### Client state persistence (canonical)
 
 The client persists only minimal UI state in `localStorage`:
@@ -403,6 +434,11 @@ The canonical example lives in `.env.example`; keep it aligned with the list abo
 - Sessions persist:
   - `runSpec` (a per-run snapshot for deterministic continuation),
   - `failureKind` when `status=failed` (stable vocabulary; no free-form messages).
+  - `questionHash` (sha256 hex of the normalized runSpec user message),
+  - `ingressSource` (`web | cli | api`) plus optional `ingressVersion` (single-line string).
+- Question hash normalization:
+  - normalize `runSpec.userMessage` by trimming and converting CRLF to LF,
+  - hash is `sha256_hex(normalized_message)` (lowercase hex).
 - Users persist `kind` (`byok|demo`) plus either `byokId` or `email`:
   - BYOK users store `byokId` (sha256 hex); `email` is `null`.
   - Demo users store `email` (lowercased); `byokId` is `null`.
