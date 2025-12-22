@@ -6,7 +6,7 @@ import { decodeAttachmentToText, type Attachment } from "../../domain/attachment
 import type { CouncilRef } from "../../../shared/domain/councilRef";
 import { buildRunSpecFromCouncil } from "../../services/sessionRuns";
 import { parseSessionRunSpecJson } from "../../domain/sessionRunSpec";
-import { orchestrateSession } from "../../workflows/orchestration";
+import { startOrchestration } from "../../workflows/orchestrationRunner";
 import { createSession, getSessionById } from "../../stores/sessionStore";
 import { checkDemoRunLimits } from "../../services/demoRateLimits";
 import { parseTextAttachmentsJson } from "./queryAttachments";
@@ -105,7 +105,7 @@ export async function handleQuerySubmit(ctx: RequestContext, body: unknown): Pro
     status: "pending",
   });
 
-  void orchestrateSession({
+  startOrchestration({
     traceId: ctx.traceId,
     sessionId,
     userId: auth.userId,
@@ -143,7 +143,7 @@ export async function handleContinueSession(ctx: RequestContext, body: unknown):
   }
   await enforceDemoRunLimit(ctx);
 
-  void orchestrateSession({
+  startOrchestration({
     traceId: ctx.traceId,
     sessionId: input.sessionId,
     userId: auth.userId,
@@ -207,7 +207,7 @@ export async function handleRerunSession(ctx: RequestContext, body: unknown): Pr
     status: "pending",
   });
 
-  void orchestrateSession({
+  startOrchestration({
     traceId: ctx.traceId,
     sessionId,
     userId: auth.userId,

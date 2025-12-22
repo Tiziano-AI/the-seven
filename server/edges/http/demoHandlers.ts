@@ -1,7 +1,7 @@
 import { parseJsonBody } from "./parse";
 import type { RequestContext } from "./context";
 import { EdgeError } from "./errors";
-import { checkDemoEmailRequestLimits } from "../../services/demoRateLimits";
+import { checkDemoConsumeLimits, checkDemoEmailRequestLimits } from "../../services/demoRateLimits";
 import { requestDemoAuthLink, consumeDemoAuthLink, DemoAuthError } from "../../services/demoAuth";
 import { demoConsumeBodySchema, demoRequestBodySchema } from "../../../shared/domain/apiSchemas";
 
@@ -68,6 +68,23 @@ export async function handleDemoRequest(ctx: RequestContext, body: unknown): Pro
 
 export async function handleDemoConsume(ctx: RequestContext, body: unknown): Promise<DemoConsumeResponse> {
   const input = parseJsonBody(demoConsumeBodySchema, body);
+  const limit = await checkDemoConsumeLimits({
+    ip: ctx.ip,
+    now: ctx.now,
+  });
+  if (limit) {
+    throw new EdgeError({
+      kind: "rate_limited",
+      message: "Demo token rate limit exceeded",
+      details: {
+        scope: limit.scope,
+        limit: limit.limit,
+        windowSeconds: limit.windowSeconds,
+        resetAt: new Date(limit.resetAtMs).toISOString(),
+      },
+      status: 429,
+    });
+  }
   try {
     const result = await consumeDemoAuthLink({
       token: input.token,

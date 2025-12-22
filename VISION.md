@@ -14,7 +14,8 @@ It also offers a zero-friction demo path (email → magic link) that uses a serv
 
 - BYOK identity: the OpenRouter API key is the identity anchor (via a non-reversible hash).
 - Demo identity: the demo session token is the identity anchor (email is stored; sessions expire in 24 hours).
-- Browser persistence: only the encrypted API key blob (BYOK) and the demo session token are persisted client-side.
+- Key requirements: BYOK requires a user OpenRouter key; demo on theseven.ai uses a server-owned key (self-hosted demos provide their own).
+- Browser persistence: the encrypted API key blob (BYOK), demo session token + email + expiry, and minimal UI state (`seven.active_session_id`, `seven.last_council_ref`, `seven.query_draft`) are persisted client-side.
 - Server persistence: the server stores sessions, artifacts, and councils; it never stores plaintext BYOK keys.
 - Provider traffic: the browser never calls OpenRouter directly; all provider calls happen server-side.
 - Best-effort jobs: in-flight orchestration is not durable (no server-side key storage and no job queue). Sessions are persisted to SQLite and survive restarts.
@@ -45,4 +46,4 @@ It also offers a zero-friction demo path (email → magic link) that uses a serv
 - No durable background job queue or automatic reruns (reruns are explicit user actions).
 - No multi-provider abstraction beyond OpenRouter (OpenRouter remains the first-class provider boundary).
 
-Last updated: 2025-12-21.
+Last updated: 2025-12-22.

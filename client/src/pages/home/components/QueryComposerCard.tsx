@@ -15,6 +15,8 @@ export function QueryComposerCard(props: {
   councilValue: string;
   onCouncilChange: (value: string) => void;
   isCouncilsLoading: boolean;
+  councilsError: string | null;
+  onRetryCouncils: () => void;
   query: string;
   onQueryChange: (value: string) => void;
   files: File[];
@@ -59,6 +61,14 @@ export function QueryComposerCard(props: {
                 ))}
               </SelectContent>
             </Select>
+          )}
+          {props.councilsError && (
+            <div className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+              <span>Couldn’t load councils: {props.councilsError}</span>
+              <Button variant="ghost" size="sm" onClick={props.onRetryCouncils}>
+                Retry
+              </Button>
+            </div>
           )}
           <p className="text-sm text-muted-foreground">
             Select a council for each question.

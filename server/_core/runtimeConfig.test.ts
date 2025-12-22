@@ -103,7 +103,7 @@ describe("runtimeConfig", () => {
   describe("loadOpenRouterAppHeaders", () => {
     it("uses defaults when unset", () => {
       expect(loadOpenRouterAppHeaders({})).toEqual({
-        "HTTP-Referer": "http://localhost",
+        "HTTP-Referer": "http://localhost:3000",
         "X-Title": "The Seven",
       });
     });
