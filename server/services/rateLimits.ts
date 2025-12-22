@@ -1,4 +1,4 @@
-import { incrementRateLimitBucket } from "../stores/rateLimitStore";
+import { getRateLimitBucketCount, incrementRateLimitBucket } from "../stores/rateLimitStore";
 
 export type RateLimitDecision = Readonly<{
   scope: string;
@@ -43,5 +43,35 @@ export async function applyRateLimit(params: {
     remaining,
     resetAtMs,
     allowed: count <= params.limit,
+  };
+}
+
+/**
+ * Returns the projected decision without incrementing the bucket.
+ */
+export async function previewRateLimit(params: {
+  scope: string;
+  limit: number;
+  windowSeconds: number;
+  now: Date;
+}): Promise<RateLimitDecision> {
+  const nowMs = params.now.getTime();
+  const startMs = windowStartMs(nowMs, params.windowSeconds);
+  const windowStart = new Date(startMs);
+  const currentCount = await getRateLimitBucketCount({
+    scope: params.scope,
+    windowStart,
+  });
+  const projectedCount = currentCount + 1;
+  const remaining = Math.max(0, params.limit - projectedCount);
+  const resetAtMs = startMs + params.windowSeconds * 1000;
+  return {
+    scope: params.scope,
+    limit: params.limit,
+    windowSeconds: params.windowSeconds,
+    count: projectedCount,
+    remaining,
+    resetAtMs,
+    allowed: projectedCount <= params.limit,
   };
 }

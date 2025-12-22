@@ -4,7 +4,7 @@ import {
   DEMO_RUN_LIMITS,
   type DemoRateLimitSpec,
 } from "../domain/demoLimits";
-import { applyRateLimit, type RateLimitDecision } from "./rateLimits";
+import { applyRateLimit, previewRateLimit, type RateLimitDecision } from "./rateLimits";
 
 type DemoRateLimitKind = "email_request" | "run" | "consume";
 
@@ -34,6 +34,33 @@ async function applyScopes(scopes: ReadonlyArray<RateLimitScopeSpec>, now: Date)
   return null;
 }
 
+async function previewScopes(scopes: ReadonlyArray<RateLimitScopeSpec>, now: Date): Promise<RateLimitDecision | null> {
+  for (const scope of scopes) {
+    const decision = await previewRateLimit({
+      scope: scope.label,
+      limit: scope.limit,
+      windowSeconds: scope.windowSeconds,
+      now,
+    });
+    if (!decision.allowed) {
+      return decision;
+    }
+  }
+
+  return null;
+}
+
+async function recordScopes(scopes: ReadonlyArray<RateLimitScopeSpec>, now: Date): Promise<void> {
+  for (const scope of scopes) {
+    await applyRateLimit({
+      scope: scope.label,
+      limit: scope.limit,
+      windowSeconds: scope.windowSeconds,
+      now,
+    });
+  }
+}
+
 async function applySpec(params: {
   kind: DemoRateLimitKind;
   spec: DemoRateLimitSpec;
@@ -52,12 +79,62 @@ async function applySpec(params: {
   return applyScopes(scopes, params.now);
 }
 
+async function previewSpec(params: {
+  kind: DemoRateLimitKind;
+  spec: DemoRateLimitSpec;
+  email: string;
+  ip: string | null;
+  now: Date;
+}): Promise<RateLimitDecision | null> {
+  const scopes: RateLimitScopeSpec[] = [
+    { label: scopeFor(params.kind, "global"), ...params.spec.global },
+    { label: scopeFor(params.kind, `email:${params.email}`), ...params.spec.perEmail },
+  ];
+  if (params.ip) {
+    scopes.push({ label: scopeFor(params.kind, `ip:${params.ip}`), ...params.spec.perIp });
+  }
+
+  return previewScopes(scopes, params.now);
+}
+
+async function recordSpec(params: {
+  kind: DemoRateLimitKind;
+  spec: DemoRateLimitSpec;
+  email: string;
+  ip: string | null;
+  now: Date;
+}): Promise<void> {
+  const scopes: RateLimitScopeSpec[] = [
+    { label: scopeFor(params.kind, "global"), ...params.spec.global },
+    { label: scopeFor(params.kind, `email:${params.email}`), ...params.spec.perEmail },
+  ];
+  if (params.ip) {
+    scopes.push({ label: scopeFor(params.kind, `ip:${params.ip}`), ...params.spec.perIp });
+  }
+
+  await recordScopes(scopes, params.now);
+}
+
 export async function checkDemoEmailRequestLimits(params: {
   email: string;
   ip: string | null;
   now: Date;
 }): Promise<RateLimitDecision | null> {
-  return applySpec({
+  return previewSpec({
+    kind: "email_request",
+    spec: DEMO_EMAIL_REQUEST_LIMITS,
+    email: params.email,
+    ip: params.ip,
+    now: params.now,
+  });
+}
+
+export async function recordDemoEmailRequest(params: {
+  email: string;
+  ip: string | null;
+  now: Date;
+}): Promise<void> {
+  await recordSpec({
     kind: "email_request",
     spec: DEMO_EMAIL_REQUEST_LIMITS,
     email: params.email,

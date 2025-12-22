@@ -43,7 +43,7 @@ export function CouncilListCard(props: {
           return (
             <div
               key={key}
-              className="inset flex items-start justify-between gap-4"
+              className="inset flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
             >
               <div className="min-w-0">
                 <div className="text-sm font-medium text-foreground">
@@ -55,23 +55,25 @@ export function CouncilListCard(props: {
                 )}
               </div>
 
-              <div className="action-rail shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => props.onSelect(council.ref)}
-                  disabled={props.isBusy}
-                >
-                  {council.editable ? "Edit" : "View"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => props.onDuplicateRequest(council)}
-                  disabled={props.isDuplicatePending}
-                >
-                  Duplicate
-                </Button>
+              <div className="flex w-full justify-start sm:w-auto sm:justify-end">
+                <div className="action-rail">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => props.onSelect(council.ref)}
+                    disabled={props.isBusy}
+                  >
+                    {council.editable ? "Edit" : "View"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => props.onDuplicateRequest(council)}
+                    disabled={props.isDuplicatePending}
+                  >
+                    Duplicate
+                  </Button>
+                </div>
               </div>
             </div>
           );

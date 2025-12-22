@@ -26,7 +26,7 @@ Three councils ship as immutable templates—duplicate one to customize:
 |---------|------|-------------|
 | **The Founding Council** | Frontier SOTA | GPT-5.2 Pro |
 | **The Lantern Council** | Fast mid-tier | Gemini 3 Flash |
-| **The Commons Council** | Free-tier only | DeepSeek R1 0528 |
+| **The Commons Council** | Free-tier only | GPT OSS 120B |
 
 ---
 

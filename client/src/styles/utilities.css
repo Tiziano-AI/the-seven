@@ -158,4 +158,11 @@
   .font-mono {
     font-family: var(--font-mono);
   }
+
+  .model-content :not(pre) > code {
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--muted);
+    padding: 0.125rem 0.25rem;
+  }
 }
