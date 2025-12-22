@@ -1,13 +1,16 @@
 import { PasswordSetup } from "@/components/PasswordSetup";
 import { UnlockSession } from "@/components/UnlockSession";
 import { AppShell } from "@/components/AppShell";
-import type { ChangeEvent } from "react";
+import { useEffect, type ChangeEvent } from "react";
 import { ApiKeyEntryCard } from "./components/ApiKeyEntryCard";
+import { DemoEntryCard } from "./components/DemoEntryCard";
 import { QueryComposerCard } from "./components/QueryComposerCard";
 import { RunSheet } from "@/features/sessions/components/RunSheet";
 import { useSessionResults } from "@/features/sessions/hooks/useSessionResults";
 import { useHomeAuth, type HomeAuthState } from "./hooks/useHomeAuth";
+import { useDemoAuth } from "./hooks/useDemoAuth";
 import { useQueryComposer } from "./hooks/useQueryComposer";
+import { useAuth } from "@/contexts/AuthContext";
 
 function AuthenticatedHome(props: { onLock: () => void; authState: HomeAuthState }) {
   const queryComposer = useQueryComposer();
@@ -69,25 +72,48 @@ function AuthenticatedHome(props: { onLock: () => void; authState: HomeAuthState
  */
 export default function HomePage() {
   const auth = useHomeAuth();
+  const demo = useDemoAuth();
+  const { isAuthenticated } = useAuth();
 
-  if (auth.authState === "initial") {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("demo_token");
+    if (!token) return;
+    void demo.consumeToken(token);
+    params.delete("demo_token");
+    const next = params.toString();
+    const url = next ? `/?${next}` : "/";
+    window.history.replaceState({}, "", url);
+  }, [demo]);
+
+  if (!isAuthenticated && auth.authState === "initial") {
     return (
       <AppShell layout="centered" showNav={false}>
-        <div className="space-y-6 w-full max-w-md">
-          <ApiKeyEntryCard
-            apiKeyInput={auth.apiKeyInput}
-            onApiKeyInputChange={auth.setApiKeyInput}
-            isValidating={auth.isValidatingKey}
-            onContinue={() => {
-              void auth.validateApiKeyInput();
-            }}
-          />
+        <div className="space-y-6 w-full max-w-2xl">
+          <div className="grid gap-6 md:grid-cols-2">
+            <DemoEntryCard
+              state={demo.state}
+              emailInput={demo.emailInput}
+              onEmailInputChange={demo.setEmailInput}
+              isRequesting={demo.isRequesting}
+              onRequest={demo.requestLink}
+              onReset={demo.resetRequest}
+            />
+            <ApiKeyEntryCard
+              apiKeyInput={auth.apiKeyInput}
+              onApiKeyInputChange={auth.setApiKeyInput}
+              isValidating={auth.isValidatingKey}
+              onContinue={() => {
+                void auth.validateApiKeyInput();
+              }}
+            />
+          </div>
         </div>
       </AppShell>
     );
   }
 
-  if (auth.authState === "setup-password") {
+  if (!isAuthenticated && auth.authState === "setup-password") {
     return (
       <AppShell layout="centered" showNav={false}>
         <div className="space-y-6 w-full max-w-md">
@@ -100,11 +126,21 @@ export default function HomePage() {
     );
   }
 
-  if (auth.authState === "unlock") {
+  if (!isAuthenticated && auth.authState === "unlock") {
     return (
       <AppShell layout="centered" showNav={false}>
-        <div className="space-y-6 w-full max-w-md">
-          <UnlockSession onUnlock={auth.unlock} onReset={auth.reset} />
+        <div className="space-y-6 w-full max-w-2xl">
+          <div className="grid gap-6 md:grid-cols-2">
+            <UnlockSession onUnlock={auth.unlock} onReset={auth.reset} />
+            <DemoEntryCard
+              state={demo.state}
+              emailInput={demo.emailInput}
+              onEmailInputChange={demo.setEmailInput}
+              isRequesting={demo.isRequesting}
+              onRequest={demo.requestLink}
+              onReset={demo.resetRequest}
+            />
+          </div>
         </div>
       </AppShell>
     );

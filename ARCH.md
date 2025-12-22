@@ -1,6 +1,6 @@
 # Architecture (Canonical)
 
-Intentionally opinionated architecture emphasizing security (BYOK identity), determinism (snapshot-based runs), and observability.
+Intentionally opinionated architecture emphasizing security (BYOK + demo identity), determinism (snapshot-based runs), and observability.
 
 ## Product Posture (Non‑Negotiables)
 
@@ -11,6 +11,13 @@ Intentionally opinionated architecture emphasizing security (BYOK identity), det
 - The system has an “account” concept without accounts: **BYOK is the identity**.
   - Returning with the same OpenRouter key yields the same stored councils/history.
   - The server stores **only a non-reversible identifier** derived from the key.
+
+### Demo identity + server-owned key
+
+- Demo mode is **email-based**: users request a magic link; no password or account setup.
+- Demo sessions are **time-boxed** (24h) and scoped to a server-issued token.
+- The server uses **our** OpenRouter API key for demo runs and never stores user keys.
+- Demo users can **only** run the Commons Council; councils and models are not editable in demo mode.
 
 ### Server role: orchestration + storage
 
@@ -89,26 +96,71 @@ This repo must run on any standard Node.js host without platform-specific runtim
   - non-reversible in practice,
   - treated as sensitive metadata (keep it off logs; HTTPS only).
 
-### Authenticated edge contract (tRPC)
+### `demo_email` + `demo_session_token`
 
-All user-specific tRPC procedures require the OpenRouter key as a bearer secret via HTTP headers:
+Demo identity is email-scoped with time-bound session tokens.
 
-- Request header: `Authorization: Bearer <openrouter_api_key>`
+- `demo_email` is stored lowercased and trimmed.
+- Demo session tokens are **random**, stored **hashed** (sha256 hex), and expire after 24h.
+- The plaintext demo token is only returned once at exchange time.
+
+## Edge Contracts (HTTP JSON)
+
+All HTTP JSON endpoints return a single success or error envelope.
+
+Success:
+
+```json
+{ "trace_id": "uuid", "ts": "RFC3339", "result": { "resource": "string", "payload": {} } }
+```
+
+Error:
+
+```json
+{ "kind": "string", "message": "string", "trace_id": "uuid", "ts": "RFC3339", "details": {} }
+```
+
+Canonical error kinds:
+
+- `invalid_input` (details: validation issues)
+- `unauthorized` (details: missing/invalid auth)
+- `forbidden` (details: policy violation)
+- `not_found` (details: missing resource)
+- `rate_limited` (details: scope + retry window)
+- `upstream_error` (details: provider failure)
+- `internal_error` (details: internal failure id)
+
+### Authenticated edge contract (HTTP JSON)
+
+All user-specific HTTP JSON edges require exactly one auth scheme via HTTP headers:
+
+- BYOK header: `Authorization: Bearer <openrouter_api_key>`
+- Demo header: `Authorization: Demo <demo_session_token>`
 - Server behavior:
-  - derive `byok_id` from the provided key,
-  - load-or-create the user row keyed by `byok_id`,
-  - execute orchestration using the key in-memory for the duration of the job.
+  - BYOK: derive `byok_id`, load-or-create the user row, execute using the provided key.
+  - Demo: validate the demo token, load the demo user, execute using the server-owned demo key.
 
 ## Data Flow (Canonical)
+
+### BYOK
 
 1. User unlocks their OpenRouter API key locally (password → decrypt key).
 2. Browser calls our server with `Authorization: Bearer <openrouter_api_key>`.
    - The browser does **not** call OpenRouter directly.
-   - Optional first step: the UI can call `auth.validateKey` to confirm the key before persisting it locally.
+   - Optional first step: the UI calls `auth.validateKey` to confirm the key before persisting it locally.
 3. The server derives `byok_id` and loads persisted councils/history.
 4. When executing a query, the browser submits a job to our server with an explicit council selection.
 5. Our server runs multi-model orchestration against OpenRouter and persists results under `byok_id`.
 6. The browser polls for status and reads results by session id (authorized by the same key).
+
+### Demo
+
+1. User enters an email and requests a magic link.
+2. Server validates abuse limits, issues a one-time link token, and sends email via Resend.
+3. User opens the link; the client exchanges the token for a 24h demo session token.
+4. Browser calls our server with `Authorization: Demo <demo_session_token>`.
+5. The server authorizes the demo session, runs the Commons Council using the server-owned OpenRouter key, and stores results under the demo user.
+6. The browser polls for status and reads results by session id (authorized by the demo token).
 
 ## Security Notes
 
@@ -116,7 +168,15 @@ All user-specific tRPC procedures require the OpenRouter key as a bearer secret 
   - plaintext OpenRouter keys,
   - ciphertext OpenRouter keys,
   - user password material.
+- Demo session tokens are hashed before storage; only the plaintext token from the magic link exchange is returned to the client.
 - Any “account recovery” is a client-only concept: losing the password means losing the locally stored encrypted key.
+
+## Abuse Controls (Demo)
+
+- Rate limits apply at the ingress layer only (email request + demo run submissions); prompts and attachments are not capped.
+- Limits are enforced per email, per IP, and globally using fixed-window counters.
+- Client IP is derived from `CF-Connecting-IP` when present (Cloudflare), with standard proxy fallbacks.
+  - Evidence: `vendor:cloudflare:2025-12-21:https://developers.cloudflare.com/fundamentals/reference/http-headers/`
 
 ### Job durability (best effort + recoverable)
 
@@ -171,14 +231,14 @@ This repo uses a strict role-based module taxonomy. Each runtime behavior follow
 ### Server taxonomy
 
 - `server/_core/*`: process wiring + cross-cutting infrastructure.
-  - Express server entrypoint, logging, runtime config, tRPC base wiring, security headers.
-- `server/edges/trpc/*`: tRPC routers grouped by surface area (auth, models, sessions, councils, etc.).
-  - Routers validate/normalize inputs and call into workflows/services/stores.
-  - Routers must not contain orchestration pipelines or provider HTTP logic.
+  - Express server entrypoint, logging, runtime config, security headers.
+- `server/edges/http/*`: HTTP JSON routers grouped by surface area (auth, demo, models, councils, sessions).
+  - Edges validate/normalize inputs and call into workflows/services/stores.
+  - Edges must not contain orchestration pipelines or provider HTTP logic.
 - `server/workflows/*`: long-running orchestration jobs (multi-step, background work).
   - Workflows are responsible for status transitions and “job lifecycle” semantics.
 - `server/services/*`: domain-level orchestration helpers that are request-agnostic and side-effect aware.
-  - Services may call adapters/stores but must not know about Express/tRPC.
+  - Services may call adapters/stores but must not know about Express or edge details.
 - `server/domain/*`: typed domain models, validation helpers, limits, and pure transformations.
   - Domain modules must not touch I/O (no DB, no network, no filesystem).
 - Canonical primitives live in `server/domain` when they are server-only:
@@ -243,6 +303,26 @@ This repo uses a strict role-based module taxonomy. Each runtime behavior follow
 - `/council` -> Council (list + editor)
 - `/session/:id` -> Run Sheet (deep link only; same layout as Journal selection)
 
+### API Entrypoint Manifest (Canonical)
+
+- `POST /api/auth/validate`
+- `POST /api/demo/request`
+- `POST /api/demo/consume`
+- `GET /api/councils`
+- `GET /api/councils/output-formats`
+- `GET /api/councils/:ref`
+- `POST /api/councils/duplicate`
+- `PUT /api/councils/:id`
+- `DELETE /api/councils/:id`
+- `POST /api/models/validate`
+- `POST /api/models/autocomplete`
+- `POST /api/query/submit`
+- `POST /api/query/continue`
+- `POST /api/query/rerun`
+- `GET /api/query/sessions`
+- `GET /api/query/sessions/:id`
+- `GET /api/query/sessions/:id/diagnostics`
+
 ### Client state persistence (canonical)
 
 The client persists only minimal UI state in `localStorage`:
@@ -250,6 +330,9 @@ The client persists only minimal UI state in `localStorage`:
 - `seven.active_session_id`: last active run pinned on Ask + Journal.
 - `seven.last_council_ref`: last explicitly selected council (preselect on future asks).
 - `seven.query_draft`: draft question text for the Ask composer.
+- `seven.demo_session_token`: demo auth token (24h TTL).
+- `seven.demo_session_expires_at`: demo auth expiry timestamp (ms).
+- `seven.demo_session_email`: demo email address (lowercased).
 
 ## Runtime Configuration (Canonical)
 
@@ -268,15 +351,22 @@ The client persists only minimal UI state in `localStorage`:
 - Optional (provider identity headers):
   - `SEVEN_PUBLIC_ORIGIN` (OpenRouter `HTTP-Referer`, default `http://localhost`)
   - `SEVEN_APP_NAME` (OpenRouter `X-Title`, default `The Seven`)
+- Optional (demo mode):
+  - `SEVEN_DEMO_ENABLED` (`0|1`, default `0`)
+  - `SEVEN_DEMO_OPENROUTER_KEY` (server-owned OpenRouter key; required when demo enabled)
+  - `SEVEN_DEMO_RESEND_API_KEY` (Resend API key; required when demo enabled)
+  - `SEVEN_DEMO_EMAIL_FROM` (verified sender, e.g. `hello@updates.theseven.ai`)
 - Optional (development only):
   - `SEVEN_DEV_DISABLE_OPENROUTER_KEY_VALIDATION` (`0|1`, default `0`)
 - Optional (server wiring):
   - `PORT` (preferred port; server will pick a nearby free port if unavailable, default `3000`)
   - `NODE_ENV` (`development` | `production` | `test`, default `development`)
 
+The canonical example lives in `.env.example`; keep it aligned with the list above.
+
 ## Attachments (Canonical)
 
-- The server accepts attachments only via `query.submit` (tRPC) as base64-encoded file bytes.
+- The server accepts attachments only via the `POST /api/query/submit` edge as base64-encoded file bytes.
 - Attachments are ingested as a **pure** pipeline:
   1) validate (name + base64),
   2) decode base64 → bytes,
@@ -313,6 +403,13 @@ The client persists only minimal UI state in `localStorage`:
 - Sessions persist:
   - `runSpec` (a per-run snapshot for deterministic continuation),
   - `failureKind` when `status=failed` (stable vocabulary; no free-form messages).
+- Users persist `kind` (`byok|demo`) plus either `byokId` or `email`:
+  - BYOK users store `byokId` (sha256 hex); `email` is `null`.
+  - Demo users store `email` (lowercased); `byokId` is `null`.
+- Demo authentication persists:
+  - `demoAuthLinks` (one-time magic-link tokens, hashed, with expiry + use timestamps),
+  - `demoSessions` (session tokens, hashed, 24h TTL),
+  - `rateLimitBuckets` (fixed-window counters for demo email + run limits).
 - The runtime uses a **single writer** SQLite connection with WAL mode, full synchronous writes, and foreign keys enabled.
   - Horizontal scaling is intentionally out of scope; one server instance owns the DB file.
   - Production deployments must mount a persistent volume for the DB file.
@@ -347,6 +444,7 @@ The client persists only minimal UI state in `localStorage`:
 OpenRouter is integrated via a strict **adapter → store → service** split:
 
 - The browser never talks to `openrouter.ai` directly; all provider traffic goes through the server adapter.
+- Demo runs use a server-owned OpenRouter API key; BYOK runs use the user-provided key.
 - **Adapter** (`server/adapters/openrouter/*`): HTTP-only code that talks to `openrouter.ai` and validates provider responses.
   - Inputs/outputs are fully typed at the boundary (runtime validation via `zod`).
   - The OpenRouter API key is accepted only as an in-memory parameter for chat completions.
@@ -368,6 +466,18 @@ OpenRouter is integrated via a strict **adapter → store → service** split:
 - **Service** (`server/services/openrouterCatalog.ts`): orchestration logic that:
   - refreshes caches on a TTL policy (currently 24h),
   - exposes domain-friendly functions (`validateModelId`, `getModelDetails`, `getModelAutocomplete`).
+
+## Resend Integration (Demo Email)
+
+- Demo magic-link email uses Resend `POST /emails`.
+- Required fields are `from`, `to`, and `subject`; HTML/text bodies are provided by the server.
+  - Evidence: `vendor:resend:2025-12-21:https://resend.com/docs/api-reference/emails/send-email`
+- Idempotency is enforced via `Idempotency-Key` for safe retries.
+  - Evidence: `vendor:resend:2025-12-21:https://resend.com/docs/dashboard/emails/idempotency-keys`
+- Sending domain is verified with SPF + DKIM; the sender uses the `updates.*` subdomain.
+  - Evidence: `vendor:resend:2025-12-21:https://resend.com/docs/dashboard/domains/introduction`
+- Resend rate limits (default 2 req/sec) are respected via edge throttling and per-email rate limits.
+  - Evidence: `vendor:resend:2025-12-21:https://resend.com/docs/api-reference/rate-limit`
 
 ### Costs & Billing (Canonical)
 

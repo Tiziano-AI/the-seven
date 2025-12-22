@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useApiKey } from "@/contexts/ApiKeyContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, usePathname } from "@/lib/routing/router";
 import { parseRoute } from "@/lib/routing/routes";
 import { cn } from "@/lib/utils";
@@ -27,20 +27,25 @@ function resolveActiveNav(pathname: string): "ask" | "journal" | "council" | nul
  * AppShell provides the global layout chrome (header + navigation + main surface).
  */
 export function AppShell({ children, layout = "page", showNav, onLock }: AppShellProps) {
-  const { isAuthenticated, clearApiKey } = useApiKey();
+  const { isAuthenticated, mode, clearByokKey, clearDemoSession } = useAuth();
   const navigate = useNavigate();
   const pathname = usePathname();
 
   const navEnabled = showNav ?? isAuthenticated;
   const active = resolveActiveNav(pathname);
-  const keyStatusLabel = isAuthenticated ? "Key unlocked" : "Key locked";
+  const keyStatusLabel =
+    mode === "byok" ? "Key unlocked" : mode === "demo" ? "Demo active" : "Key locked";
 
   const handleLock = () => {
     if (onLock) {
       onLock();
       return;
     }
-    clearApiKey();
+    if (mode === "demo") {
+      clearDemoSession();
+    } else {
+      clearByokKey();
+    }
     toast.message("Locked");
     navigate("/");
   };
@@ -82,14 +87,16 @@ export function AppShell({ children, layout = "page", showNav, onLock }: AppShel
                 >
                   Journal
                 </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => navigate("/council")}
-                  size="sm"
-                  className={cn("btn-nav", active === "council" ? "btn-nav-active" : undefined)}
-                >
-                  Council
-                </Button>
+                {mode !== "demo" && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => navigate("/council")}
+                    size="sm"
+                    className={cn("btn-nav", active === "council" ? "btn-nav-active" : undefined)}
+                  >
+                    Council
+                  </Button>
+                )}
               </nav>
             )}
 

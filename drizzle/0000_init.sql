@@ -1,11 +1,59 @@
 CREATE TABLE "users" (
   "id" integer PRIMARY KEY AUTOINCREMENT,
-  "byokId" text NOT NULL,
+  "kind" text NOT NULL CHECK ("kind" IN ('byok', 'demo')),
+  "byokId" text,
+  "email" text,
   "createdAt" integer NOT NULL DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)),
   "updatedAt" integer NOT NULL DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX "users_byokId_unique" ON "users" ("byokId");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "users_email_unique" ON "users" ("email");
+--> statement-breakpoint
+CREATE TABLE "demoAuthLinks" (
+  "id" integer PRIMARY KEY AUTOINCREMENT,
+  "userId" integer NOT NULL,
+  "tokenHash" text NOT NULL,
+  "requestedIp" text NOT NULL,
+  "consumedIp" text,
+  "expiresAt" integer NOT NULL,
+  "usedAt" integer,
+  "createdAt" integer NOT NULL DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)),
+  FOREIGN KEY ("userId") REFERENCES "users" ("id") ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX "demoAuthLinks_tokenHash_unique" ON "demoAuthLinks" ("tokenHash");
+--> statement-breakpoint
+CREATE INDEX "demoAuthLinks_userId_createdAt_idx" ON "demoAuthLinks" ("userId", "createdAt");
+--> statement-breakpoint
+CREATE TABLE "demoSessions" (
+  "id" integer PRIMARY KEY AUTOINCREMENT,
+  "userId" integer NOT NULL,
+  "tokenHash" text NOT NULL,
+  "expiresAt" integer NOT NULL,
+  "lastUsedAt" integer,
+  "createdAt" integer NOT NULL DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)),
+  FOREIGN KEY ("userId") REFERENCES "users" ("id") ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX "demoSessions_tokenHash_unique" ON "demoSessions" ("tokenHash");
+--> statement-breakpoint
+CREATE INDEX "demoSessions_userId_createdAt_idx" ON "demoSessions" ("userId", "createdAt");
+--> statement-breakpoint
+CREATE TABLE "rateLimitBuckets" (
+  "id" integer PRIMARY KEY AUTOINCREMENT,
+  "scope" text NOT NULL,
+  "windowStart" integer NOT NULL,
+  "windowSeconds" integer NOT NULL,
+  "count" integer NOT NULL,
+  "createdAt" integer NOT NULL DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)),
+  "updatedAt" integer NOT NULL DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX "rateLimitBuckets_scope_window_unique" ON "rateLimitBuckets" ("scope", "windowStart");
+--> statement-breakpoint
+CREATE INDEX "rateLimitBuckets_scope_idx" ON "rateLimitBuckets" ("scope");
 --> statement-breakpoint
 CREATE TABLE "councils" (
   "id" integer PRIMARY KEY AUTOINCREMENT,

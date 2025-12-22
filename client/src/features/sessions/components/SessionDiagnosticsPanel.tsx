@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { trpc } from "@/lib/trpc";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Markdown } from "@/components/Markdown";
 import { CopyButton } from "@/components/CopyButton";
+import { fetchSessionDiagnostics } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Table,
   TableBody,
@@ -48,10 +50,18 @@ function DiagnosticsSection(props: DiagnosticsSectionProps) {
  * SessionDiagnosticsPanel renders the stacked diagnostics sections with a single disclosure.
  */
 export function SessionDiagnosticsPanel(props: { sessionId: number }) {
-  const diagnosticsQuery = trpc.query.getSessionDiagnostics.useQuery(
-    { sessionId: props.sessionId },
-    { refetchOnWindowFocus: false }
-  );
+  const { authHeader } = useAuth();
+  const diagnosticsQuery = useQuery({
+    queryKey: ["session-diagnostics", props.sessionId, authHeader],
+    queryFn: () => {
+      if (!authHeader) {
+        throw new Error("Sign in to view diagnostics.");
+      }
+      return fetchSessionDiagnostics({ authHeader, sessionId: props.sessionId });
+    },
+    enabled: !!authHeader,
+    refetchOnWindowFocus: false,
+  });
   const [open, setOpen] = useState(false);
 
   if (diagnosticsQuery.isLoading && !diagnosticsQuery.data) {

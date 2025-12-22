@@ -26,8 +26,8 @@ uv run --python 3.12 devtools/gate.py   # Full gate (check + test + build)
 **Server layout**:
 ```
 server/
-├── _core/       # Express, tRPC, config, logging
-├── edges/trpc/  # tRPC routers
+├── _core/       # Express, config, logging
+├── edges/http/  # HTTP JSON handlers
 ├── workflows/   # Orchestration (3-phase inference)
 ├── services/    # Domain helpers
 ├── domain/      # Pure types (no I/O)
@@ -41,7 +41,7 @@ client/src/
 ├── pages/       # Route components
 ├── features/    # Feature modules (sessions, councils)
 ├── components/  # Shared UI
-└── lib/         # Routing, tRPC client
+└── lib/         # Routing + API client
 ```
 
 **Database**: SQLite via better-sqlite3 + Drizzle. Schema in `drizzle/schema.ts`.
@@ -49,7 +49,7 @@ client/src/
 ## Key Files
 
 - `server/workflows/orchestration.ts` — three-phase orchestration
-- `server/edges/trpc/queryRouter.ts` — query submission endpoint
+- `server/edges/http/apiRouter.ts` — HTTP JSON API entrypoint
 - `client/src/features/sessions/components/RunSheet.tsx` — run detail UI
 - `ARCH.md` — canonical architecture docs
 

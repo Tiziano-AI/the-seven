@@ -5,7 +5,11 @@ import type { CouncilMemberTuning } from "@shared/domain/councilMemberTuning";
 import { ModelTuningPanel } from "@/components/ModelTuningPanel";
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/hooks/useDebounce";
-import { trpc } from "@/lib/trpc";
+import { useQuery } from "@tanstack/react-query";
+import { autocompleteModels, validateModel } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import type { z } from "zod";
+import { modelAutocompleteSuggestionSchema } from "@/lib/apiSchemas";
 
 interface ModelIdInputProps {
   value: string;
@@ -15,13 +19,7 @@ interface ModelIdInputProps {
   disabled?: boolean;
 }
 
-interface Suggestion {
-  modelId: string;
-  modelName: string;
-  description: string;
-  contextLength: number | null;
-  maxCompletionTokens: number | null;
-}
+type Suggestion = z.infer<typeof modelAutocompleteSuggestionSchema>;
 
 export function ModelIdInput({
   value,
@@ -30,6 +28,7 @@ export function ModelIdInput({
   onTuningChange,
   disabled = false,
 }: ModelIdInputProps) {
+  const { authHeader } = useAuth();
   const [isValidating, setIsValidating] = useState(false);
   const [isValid, setIsValid] = useState<boolean | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -51,13 +50,15 @@ export function ModelIdInput({
   }, [value, disabled]);
 
   // Validation query
-  const { data: validationData, isLoading: isValidationLoading } = trpc.models.validate.useQuery(
-    { modelId: debouncedValue },
-    { 
-      enabled: !disabled && !!debouncedValue && debouncedValue.length > 0,
-      refetchOnWindowFocus: false,
-    }
-  );
+  const { data: validationData, isLoading: isValidationLoading } = useQuery({
+    queryKey: ["model-validate", debouncedValue, authHeader],
+    queryFn: async () => {
+      if (!authHeader) throw new Error("Missing authentication");
+      return validateModel({ authHeader, modelId: debouncedValue });
+    },
+    enabled: !disabled && !!authHeader && debouncedValue.length > 0,
+    refetchOnWindowFocus: false,
+  });
 
   const validationModel = validationData?.model ?? null;
   const validationModelCapabilities = (() => {
@@ -72,13 +73,15 @@ export function ModelIdInput({
   })();
   
   // Autocomplete query
-  const { data: autocompleteData, isLoading: isAutocompleteLoading } = trpc.models.autocomplete.useQuery(
-    { query: debouncedValue, limit: 10 },
-    {
-      enabled: !disabled && !!debouncedValue && debouncedValue.length >= 2 && showSuggestions,
-      refetchOnWindowFocus: false,
-    }
-  );
+  const { data: autocompleteData, isLoading: isAutocompleteLoading } = useQuery({
+    queryKey: ["model-autocomplete", debouncedValue, authHeader],
+    queryFn: async () => {
+      if (!authHeader) throw new Error("Missing authentication");
+      return autocompleteModels({ authHeader, query: debouncedValue, limit: 10 });
+    },
+    enabled: !disabled && !!authHeader && debouncedValue.length >= 2 && showSuggestions,
+    refetchOnWindowFocus: false,
+  });
   
   // Update validation state
   useEffect(() => {

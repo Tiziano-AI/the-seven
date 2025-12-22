@@ -9,4 +9,4 @@ Rules:
 
 ## Open milestones
 
-None.
+- None.

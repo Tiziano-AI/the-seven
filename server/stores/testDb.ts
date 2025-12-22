@@ -8,6 +8,9 @@ import { openSqliteClient, resolveSqlitePath } from "./sqliteClient";
 const BASELINE_MIGRATION_TAG = "0000_init";
 const REQUIRED_TABLES = [
   "users",
+  "demoAuthLinks",
+  "demoSessions",
+  "rateLimitBuckets",
   "councils",
   "councilMembers",
   "sessions",

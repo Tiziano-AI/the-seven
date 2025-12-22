@@ -1,6 +1,6 @@
-import type { RouterOutputs } from "@/lib/trpcTypes";
+import type { SessionDetailPayload } from "@/lib/apiSchemas";
 import { summarizeOpenRouterCalls } from "@shared/domain/usage";
-export type SessionResults = RouterOutputs["query"]["getSession"];
+export type SessionResults = SessionDetailPayload;
 
 export type SessionTotals = Readonly<{
   totalTokens: number;

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BUILT_IN_COUNCIL_SLUGS } from "../../shared/domain/builtInCouncils";
+import type { CouncilRef } from "../../shared/domain/councilRef";
 
 export const councilRefSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -12,4 +13,4 @@ export const councilRefSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-export type CouncilRef = z.infer<typeof councilRefSchema>;
+export type { CouncilRef };
