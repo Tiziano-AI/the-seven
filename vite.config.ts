@@ -23,8 +23,13 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
           if (id.includes("@tanstack")) return "query-vendor";
-          if (id.includes("react-dom") || id.includes("scheduler")) return "react-dom-vendor";
-          if (/[\\/]node_modules[\\/]react[\\/]/.test(id)) return "react-vendor";
+          if (
+            id.includes("react-dom") ||
+            id.includes("scheduler") ||
+            /[\\/]node_modules[\\/]react[\\/]/.test(id)
+          ) {
+            return "react-vendor";
+          }
           if (
             id.includes("react-markdown") ||
             id.includes("remark") ||
