@@ -35,7 +35,7 @@ Intentionally opinionated architecture emphasizing security (BYOK + demo identit
 - Three councils ship as **built-in templates** in the repo and are immutable:
   - **The Founding Council**: frontier SOTA models (GPT-5.2, Claude Opus 4.5, Gemini 3 Pro, etc.). GPT-5.2 Pro synthesizes.
   - **The Lantern Council**: fast mid-tier models for rapid iteration. Gemini 3 Flash synthesizes.
-  - **The Commons Council**: free-tier models only (zero cost). DeepSeek R1 0528 synthesizes.
+  - **The Commons Council**: free-tier models only (zero cost). GPT OSS 120B synthesizes.
   - Users can **Duplicate** a built-in council to create an editable copy.
 - Runs are launched with an explicit council selection (no “active council” default).
 - Sessions snapshot the council **name-at-run** and council **composition/prompts** in `runSpec` for historical inspection.
@@ -218,6 +218,7 @@ Evidence: vendor:openrouter:2025-12-22:https://openrouter.ai/docs/api-reference/
 ## Abuse Controls (Demo)
 
 - Rate limits apply at the ingress layer for demo email requests, demo link consumption, and demo run submissions; prompts and attachments are not capped.
+- Demo email request limits are enforced only when demo mode is enabled, and counters are recorded only after a successful email send.
 
 ## Abuse Controls (Ingress Flood Guard)
 
@@ -345,6 +346,7 @@ This repo uses a strict role-based module taxonomy. Each runtime behavior follow
 - Tokens and primitives are centralized under `client/src/styles/*` and `client/src/components/ui/*`; inline styles are not used in owned client code.
 - Typography is tokenized: **MedievalSharp** for display + UI controls (navigation, labels, buttons), **Raleway** for body/prose, and **Victor Mono** for code/diagnostics.
 - UI grammar is two-tier: Surfaces (primary sections) and Insets (nested sections). All copy affordances live in the surface action rail.
+- Council list rows stack primary copy above action buttons on small screens, and align actions to the right on wider breakpoints.
 
 ### UX Narrative (Canonical)
 

@@ -1,7 +1,12 @@
 import { parseJsonBody } from "./parse";
 import type { RequestContext } from "./context";
 import { EdgeError } from "./errors";
-import { checkDemoConsumeLimits, checkDemoEmailRequestLimits } from "../../services/demoRateLimits";
+import { requireServerRuntimeConfig } from "../../_core/runtimeConfig";
+import {
+  checkDemoConsumeLimits,
+  checkDemoEmailRequestLimits,
+  recordDemoEmailRequest,
+} from "../../services/demoRateLimits";
 import { requestDemoAuthLink, consumeDemoAuthLink, DemoAuthError } from "../../services/demoAuth";
 import { demoConsumeBodySchema, demoRequestBodySchema } from "../../../shared/domain/apiSchemas";
 
@@ -16,6 +21,16 @@ export type DemoConsumeResponse = Readonly<{
 export async function handleDemoRequest(ctx: RequestContext, body: unknown): Promise<DemoRequestResponse> {
   const input = parseJsonBody(demoRequestBodySchema, body);
   const normalizedEmail = input.email.trim().toLowerCase();
+  const runtime = requireServerRuntimeConfig();
+
+  if (!runtime.demo.enabled) {
+    throw new EdgeError({
+      kind: "forbidden",
+      message: "Demo mode is disabled",
+      details: { reason: "demo_disabled" },
+      status: 403,
+    });
+  }
 
   const limit = await checkDemoEmailRequestLimits({
     email: normalizedEmail,
@@ -40,6 +55,11 @@ export async function handleDemoRequest(ctx: RequestContext, body: unknown): Pro
     const result = await requestDemoAuthLink({
       email: normalizedEmail,
       requestIp: ctx.ip,
+      now: ctx.now,
+    });
+    await recordDemoEmailRequest({
+      email: normalizedEmail,
+      ip: ctx.ip,
       now: ctx.now,
     });
     return result;

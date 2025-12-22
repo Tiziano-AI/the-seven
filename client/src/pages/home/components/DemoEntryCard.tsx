@@ -20,8 +20,8 @@ type DemoEntryCardProps = Readonly<{
 export function DemoEntryCard(props: DemoEntryCardProps) {
   if (props.state === "sent") {
     return (
-      <Card>
-        <CardHeader>
+      <Card className="max-w-md w-full">
+        <CardHeader className="space-y-3">
           <div className="flex items-center gap-3">
             <Mail className="icon-lg text-violet" />
             <div>
@@ -32,7 +32,7 @@ export function DemoEntryCard(props: DemoEntryCardProps) {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           <p className="text-sm text-muted-foreground">
             Didn’t get it? You can resend or try a different email.
           </p>
@@ -55,8 +55,8 @@ export function DemoEntryCard(props: DemoEntryCardProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="max-w-md w-full">
+      <CardHeader className="space-y-3">
         <div className="flex items-center gap-3">
           <Mail className="icon-lg text-violet" />
           <div>
@@ -67,8 +67,8 @@ export function DemoEntryCard(props: DemoEntryCardProps) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
+      <CardContent className="space-y-5">
+        <div className="space-y-2">
           <Label htmlFor="demoEmail">Email</Label>
           <Input
             id="demoEmail"
@@ -78,6 +78,9 @@ export function DemoEntryCard(props: DemoEntryCardProps) {
             onChange={(event) => props.onEmailInputChange(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && props.onRequest()}
           />
+          <p className="text-sm text-muted-foreground">
+            We use this only to send your one-time link.
+          </p>
         </div>
         <Button onClick={props.onRequest} disabled={props.isRequesting} className="w-full">
           {props.isRequesting ? "Sending…" : "Send magic link"}

@@ -15,7 +15,7 @@ export function ApiKeyEntryCard(props: {
 }) {
   return (
     <Card className="max-w-md w-full">
-      <CardHeader>
+      <CardHeader className="space-y-3">
         <div className="flex items-center gap-3">
           <Key className="icon-lg text-gold" />
           <div>
@@ -35,7 +35,7 @@ export function ApiKeyEntryCard(props: {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="apiKey">OpenRouter key</Label>
           <Input

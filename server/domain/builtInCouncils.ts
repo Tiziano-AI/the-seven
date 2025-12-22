@@ -29,7 +29,7 @@ const COMMONS_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
   4: "mistralai/devstral-2512:free",
   5: "qwen/qwen3-coder:free",
   6: "xiaomi/mimo-v2-flash:free",
-  7: "deepseek/deepseek-r1-0528:free",
+  7: "openai/gpt-oss-120b:free",
 };
 
 export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCouncilTemplate>> = {
@@ -64,7 +64,7 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
   commons: {
     slug: "commons",
     name: "The Commons Council",
-    description: "Free-tier voices for all. DeepSeek R1 0528 delivers the verdict.",
+    description: "Free-tier voices for all. GPT OSS 120B delivers the verdict.",
     members: {
       1: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[1] },
       2: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[2] },

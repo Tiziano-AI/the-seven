@@ -12,7 +12,7 @@ import { useDemoAuth } from "./hooks/useDemoAuth";
 import { useQueryComposer } from "./hooks/useQueryComposer";
 import { useAuth } from "@/contexts/AuthContext";
 
-function AuthenticatedHome(props: { onLock: () => void; authState: HomeAuthState }) {
+function AuthenticatedHome(props: { onLock?: () => void; authState: HomeAuthState }) {
   const queryComposer = useQueryComposer();
 
   const sessionQuery = useSessionResults({
@@ -75,7 +75,8 @@ function AuthenticatedHome(props: { onLock: () => void; authState: HomeAuthState
 export default function HomePage() {
   const auth = useHomeAuth();
   const demo = useDemoAuth();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, mode } = useAuth();
+  const onLock = mode === "byok" ? auth.lock : undefined;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -148,5 +149,5 @@ export default function HomePage() {
     );
   }
 
-  return <AuthenticatedHome onLock={auth.lock} authState={auth.authState} />;
+  return <AuthenticatedHome onLock={onLock} authState={auth.authState} />;
 }

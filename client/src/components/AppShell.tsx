@@ -35,6 +35,11 @@ export function AppShell({ children, layout = "page", showNav, onLock }: AppShel
   const active = resolveActiveNav(pathname);
   const keyStatusLabel =
     mode === "byok" ? "Key unlocked" : mode === "demo" ? "Demo active" : "Key locked";
+  const statusBadgeClass = isAuthenticated
+    ? mode === "demo"
+      ? "badge-accent"
+      : "badge-primary"
+    : "badge-muted";
 
   const handleLock = () => {
     if (onLock) {
@@ -101,7 +106,7 @@ export function AppShell({ children, layout = "page", showNav, onLock }: AppShel
             )}
 
             <div className="action-rail">
-              <span className={cn("badge", isAuthenticated ? "badge-secondary" : "badge-muted")}>
+              <span className={cn("badge", statusBadgeClass)}>
                 {keyStatusLabel}
               </span>
               {isAuthenticated && (
