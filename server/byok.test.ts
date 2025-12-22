@@ -37,6 +37,7 @@ describe("BYOK HTTP auth", () => {
       traceId: "test",
       now: new Date(),
       ip: null,
+      ingress: { source: "web", version: null },
       auth: { kind: "none" },
     };
 
@@ -53,6 +54,7 @@ describe("BYOK HTTP auth", () => {
       traceId: "test",
       now: new Date(),
       ip: null,
+      ingress: { source: "web", version: null },
       auth: {
         kind: "byok",
         userId: context.user.id,

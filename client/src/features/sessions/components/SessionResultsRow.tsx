@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Markdown } from "@/components/Markdown";
 import { CopyButton } from "@/components/CopyButton";
 import { formatUsdFromMicros } from "@shared/domain/usage";
-import type { SessionDetailPayload } from "@/lib/apiSchemas";
+import type { SessionDetailPayload } from "@shared/domain/apiSchemas";
 
 type OpenRouterCallRow = SessionDetailPayload["openRouterCalls"][number];
 type SessionStatus = SessionDetailPayload["session"]["status"];

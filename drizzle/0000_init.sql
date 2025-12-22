@@ -94,6 +94,9 @@ CREATE TABLE "sessions" (
   "attachedFilesMarkdown" text,
   "councilNameAtRun" text NOT NULL,
   "runSpec" text NOT NULL,
+  "questionHash" text NOT NULL,
+  "ingressSource" text NOT NULL,
+  "ingressVersion" text,
   "status" text NOT NULL DEFAULT 'pending' CHECK ("status" IN ('pending', 'processing', 'completed', 'failed')),
   "failureKind" text CHECK ("failureKind" IN (
     'server_restart',
@@ -113,6 +116,10 @@ CREATE INDEX "sessions_userId_createdAt_idx" ON "sessions" ("userId", "createdAt
 --> statement-breakpoint
 CREATE INDEX "sessions_status_idx" ON "sessions" ("status");
 --> statement-breakpoint
+CREATE INDEX "sessions_questionHash_idx" ON "sessions" ("questionHash");
+--> statement-breakpoint
+CREATE INDEX "sessions_ingressSource_idx" ON "sessions" ("ingressSource");
+--> statement-breakpoint
 CREATE TABLE "openRouterCalls" (
   "id" integer PRIMARY KEY AUTOINCREMENT,
   "sessionId" integer NOT NULL,
@@ -122,6 +129,9 @@ CREATE TABLE "openRouterCalls" (
   "requestSystemChars" integer NOT NULL,
   "requestUserChars" integer NOT NULL,
   "requestTotalChars" integer NOT NULL,
+  "requestStartedAt" integer,
+  "responseCompletedAt" integer,
+  "latencyMs" integer,
   "responseId" text,
   "responseModel" text,
   "billedModelId" text,

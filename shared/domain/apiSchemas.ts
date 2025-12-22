@@ -1,16 +1,22 @@
 import { z } from "zod";
-import { BUILT_IN_COUNCIL_SLUGS } from "@shared/domain/builtInCouncils";
+import { councilRefSchema } from "./councilRef";
+import { councilMemberTuningInputSchema, councilMemberTuningSchema } from "./councilMemberTuning";
+import { INGRESS_SOURCES } from "./ingress";
+import { providerModelRefSchema } from "./providerModels";
+import { phasePromptsSchema } from "./phasePrompts";
+import { MEMBER_POSITIONS } from "./sevenMembers";
+import { isSingleLine } from "./strings";
 
-export const councilRefSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("built_in"),
-    slug: z.enum(BUILT_IN_COUNCIL_SLUGS),
+const timestampSchema = z.string().datetime();
+
+export const successEnvelopeSchema = z.object({
+  trace_id: z.string(),
+  ts: timestampSchema,
+  result: z.object({
+    resource: z.string(),
+    payload: z.unknown(),
   }),
-  z.object({
-    kind: z.literal("user"),
-    councilId: z.number().int().positive(),
-  }),
-]);
+});
 
 export const memberSchema = z.object({
   position: z.number().int(),
@@ -19,29 +25,10 @@ export const memberSchema = z.object({
   label: z.string(),
 });
 
-export const phasePromptsSchema = z.object({
-  phase1: z.string(),
-  phase2: z.string(),
-  phase3: z.string(),
-});
-
 export const outputFormatsSchema = z.object({
   phase1: z.string(),
   phase2: z.string(),
   phase3: z.string(),
-});
-
-export const councilMemberTuningSchema = z.object({
-  temperature: z.number().nullable(),
-  seed: z.number().int().nullable(),
-  verbosity: z.string().nullable(),
-  reasoningEffort: z.string().nullable(),
-  includeReasoning: z.boolean().nullable(),
-});
-
-export const providerModelRefSchema = z.object({
-  provider: z.string(),
-  modelId: z.string(),
 });
 
 export const councilListItemSchema = z.object({
@@ -133,11 +120,14 @@ export const submitPayloadSchema = z.object({
 export const sessionSummarySchema = z.object({
   id: z.number().int(),
   query: z.string(),
+  questionHash: z.string(),
+  ingressSource: z.enum(INGRESS_SOURCES),
+  ingressVersion: z.string().nullable(),
   councilNameAtRun: z.string(),
   status: z.enum(["pending", "processing", "completed", "failed"]),
   failureKind: z.string().nullable(),
-  createdAt: z.union([z.string(), z.date()]),
-  updatedAt: z.union([z.string(), z.date()]),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
   totalTokens: z.number().int(),
   totalCostUsdMicros: z.number().int(),
   totalCostIsPartial: z.boolean(),
@@ -153,7 +143,7 @@ export const responseRowSchema = z
     memberPosition: z.number().int(),
     modelId: z.string(),
     response: z.string(),
-    createdAt: z.union([z.string(), z.date()]),
+    createdAt: timestampSchema,
     member: memberSchema,
     modelName: z.string(),
     tokensUsed: z.number().int().nullable(),
@@ -167,7 +157,7 @@ export const reviewRowSchema = z
     reviewerMemberPosition: z.number().int(),
     modelId: z.string(),
     reviewContent: z.string(),
-    createdAt: z.union([z.string(), z.date()]),
+    createdAt: timestampSchema,
     reviewerMember: memberSchema,
     modelName: z.string(),
     tokensUsed: z.number().int().nullable(),
@@ -181,7 +171,7 @@ export const synthesisRowSchema = z
     memberPosition: z.number().int(),
     modelId: z.string(),
     synthesis: z.string(),
-    createdAt: z.union([z.string(), z.date()]),
+    createdAt: timestampSchema,
     member: memberSchema,
     modelName: z.string(),
     tokensUsed: z.number().int().nullable(),
@@ -204,6 +194,9 @@ export const openRouterCallSchema = z
     requestSystemChars: z.number().int(),
     requestUserChars: z.number().int(),
     requestTotalChars: z.number().int(),
+    requestStartedAt: z.number().int().nullable(),
+    responseCompletedAt: z.number().int().nullable(),
+    latencyMs: z.number().int().nullable(),
     requestModelContextLength: z.number().int().nullable(),
     requestModelMaxCompletionTokens: z.number().int().nullable(),
     responseModelContextLength: z.number().int().nullable(),
@@ -227,18 +220,21 @@ export const openRouterCallSchema = z
     choiceErrorCode: z.number().int().nullable(),
     errorStatus: z.number().int().nullable(),
     responseId: z.string().nullable(),
-    createdAt: z.union([z.string(), z.date()]),
+    createdAt: timestampSchema,
   });
 
 export const sessionDetailPayloadSchema = z.object({
   session: z.object({
     id: z.number().int(),
     query: z.string(),
+    questionHash: z.string(),
+    ingressSource: z.enum(INGRESS_SOURCES),
+    ingressVersion: z.string().nullable(),
     councilNameAtRun: z.string(),
     status: z.enum(["pending", "processing", "completed", "failed"]),
     failureKind: z.string().nullable(),
-    createdAt: z.union([z.string(), z.date()]),
-    updatedAt: z.union([z.string(), z.date()]),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
   }),
   council: z.object({
     nameAtRun: z.string(),
@@ -265,11 +261,14 @@ export const sessionDiagnosticsPayloadSchema = z.object({
     id: z.number().int(),
     status: z.enum(["pending", "processing", "completed", "failed"]),
     failureKind: z.string().nullable(),
-    createdAt: z.union([z.string(), z.date()]),
-    updatedAt: z.union([z.string(), z.date()]),
+    questionHash: z.string(),
+    ingressSource: z.enum(INGRESS_SOURCES),
+    ingressVersion: z.string().nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
   }),
   runSpec: z.object({
-    createdAt: z.union([z.string(), z.date()]),
+    createdAt: timestampSchema,
     userMessage: z.string(),
     outputFormats: outputFormatsSchema,
     council: z.object({
@@ -286,6 +285,116 @@ export const sessionDiagnosticsPayloadSchema = z.object({
   }),
   attachments: z.array(z.object({ name: z.string(), text: z.string() })),
   openRouterCalls: z.array(openRouterCallSchema),
+});
+
+const attachmentsInputSchema = z
+  .array(
+    z.object({
+      name: z
+        .string()
+        .trim()
+        .min(1)
+        .max(200)
+        .refine((value) => !/[\r\n]/.test(value), "Attachment name must be single-line"),
+      base64: z.string().min(1),
+    })
+  )
+  .optional();
+
+const councilMembersSchema = z
+  .array(
+    z.object({
+      memberPosition: z.number().int().min(1).max(7),
+      model: providerModelRefSchema,
+      tuning: councilMemberTuningInputSchema.nullable().optional(),
+    })
+  )
+  .length(7)
+  .superRefine((members, ctx) => {
+    const seen = new Set<number>();
+    for (const member of members) {
+      if (seen.has(member.memberPosition)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["members"],
+          message: `Duplicate memberPosition ${member.memberPosition}`,
+        });
+      }
+      seen.add(member.memberPosition);
+    }
+    for (const required of MEMBER_POSITIONS) {
+      if (!seen.has(required)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["members"],
+          message: `Missing memberPosition ${required}`,
+        });
+      }
+    }
+  });
+
+export const demoRequestBodySchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(3)
+    .max(320)
+    .email()
+    .refine((value) => isSingleLine(value), "Email must be single-line"),
+});
+
+export const demoConsumeBodySchema = z.object({
+  token: z.string().trim().min(10),
+});
+
+export const duplicateCouncilBodySchema = z.object({
+  source: councilRefSchema,
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .refine((value) => !/[\r\n]/.test(value), "Council name must be single-line"),
+});
+
+export const updateCouncilBodySchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .refine((value) => !/[\r\n]/.test(value), "Council name must be single-line"),
+  phasePrompts: phasePromptsSchema,
+  members: councilMembersSchema,
+});
+
+export const modelValidateBodySchema = z.object({
+  modelId: z.string().min(1),
+});
+
+export const modelAutocompleteBodySchema = z.object({
+  query: z.string().min(1),
+  limit: z.number().int().min(1).max(50).optional(),
+});
+
+export const querySubmitBodySchema = z.object({
+  query: z.string().min(1),
+  councilRef: councilRefSchema,
+  attachments: attachmentsInputSchema,
+});
+
+export const queryContinueBodySchema = z.object({
+  sessionId: z.number().int(),
+});
+
+export const queryRerunBodySchema = z.object({
+  sessionId: z.number().int(),
+  councilRef: councilRefSchema,
+  queryOverride: z
+    .string()
+    .min(1)
+    .refine((value) => value.trim().length > 0, "Query must not be blank")
+    .optional(),
 });
 
 export type CouncilListItem = z.infer<typeof councilListItemSchema>;

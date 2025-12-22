@@ -5,8 +5,8 @@ import type { ProviderModelRef } from "../../shared/domain/providerModels";
 import type { PhasePrompts } from "../../shared/domain/phasePrompts";
 import { councilMemberTuningSchema } from "./councilMemberTuning";
 import type { CouncilMemberTuning } from "../../shared/domain/councilMemberTuning";
-import { phasePromptsSchema } from "./phasePrompts";
-import { providerModelRefSchema } from "./providerModelRef";
+import { phasePromptsSchema } from "../../shared/domain/phasePrompts";
+import { providerModelRefSchema } from "../../shared/domain/providerModels";
 import type { OutputPhase } from "./outputPhase";
 
 const councilMemberSnapshotSchema = z.object({

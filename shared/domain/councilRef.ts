@@ -1,8 +1,20 @@
+import { z } from "zod";
 import { BUILT_IN_COUNCIL_SLUGS, type BuiltInCouncilSlug, isBuiltInCouncilSlug } from "./builtInCouncils";
 
 export type CouncilRef =
   | Readonly<{ kind: "built_in"; slug: BuiltInCouncilSlug }>
   | Readonly<{ kind: "user"; councilId: number }>;
+
+export const councilRefSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("built_in"),
+    slug: z.enum(BUILT_IN_COUNCIL_SLUGS),
+  }),
+  z.object({
+    kind: z.literal("user"),
+    councilId: z.number().int().positive(),
+  }),
+]);
 
 export function encodeCouncilRef(ref: CouncilRef): string {
   if (ref.kind === "built_in") {

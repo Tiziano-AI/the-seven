@@ -48,6 +48,7 @@ vi.mock("../services/openrouterCatalog", () => {
 import { callOpenRouter } from "../adapters/openrouter/client";
 import type { OpenRouterResponse } from "../adapters/openrouter/client";
 import { buildSessionRunSpec, stringifySessionRunSpec } from "../domain/sessionRunSpec";
+import { hashQuestion } from "../domain/questionHash";
 import { createMemberResponse, getMemberResponsesBySessionId } from "../stores/memberResponseStore";
 import { createMemberReview, getMemberReviewsBySessionId } from "../stores/memberReviewStore";
 import { getMemberSynthesisBySessionId } from "../stores/memberSynthesisStore";
@@ -101,6 +102,9 @@ describe("orchestrateSession", () => {
       attachedFilesMarkdown: "[]",
       councilNameAtRun: "Test Council",
       runSpec,
+      questionHash: hashQuestion("What is idempotency?"),
+      ingressSource: "web",
+      ingressVersion: null,
       status: "failed",
       failureKind: "phase1_inference_failed",
     });
@@ -171,6 +175,9 @@ describe("orchestrateSession", () => {
       attachedFilesMarkdown: "[]",
       councilNameAtRun: "Test Council",
       runSpec,
+      questionHash: hashQuestion("Hello"),
+      ingressSource: "web",
+      ingressVersion: null,
       status: "pending",
     });
 
@@ -180,6 +187,9 @@ describe("orchestrateSession", () => {
       attachedFilesMarkdown: "[]",
       councilNameAtRun: "Test Council",
       runSpec,
+      questionHash: hashQuestion("Hello again"),
+      ingressSource: "web",
+      ingressVersion: null,
       status: "processing",
     });
 
@@ -206,6 +216,9 @@ describe("orchestrateSession", () => {
       attachedFilesMarkdown: "[]",
       councilNameAtRun: "Test Council",
       runSpec,
+      questionHash: hashQuestion("Test failure"),
+      ingressSource: "web",
+      ingressVersion: null,
       status: "pending",
     });
 
@@ -259,6 +272,9 @@ describe("orchestrateSession", () => {
       attachedFilesMarkdown: "[]",
       councilNameAtRun: "Test Council",
       runSpec,
+      questionHash: hashQuestion("Test empty content"),
+      ingressSource: "web",
+      ingressVersion: null,
       status: "pending",
     });
 

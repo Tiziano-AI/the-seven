@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import type { SessionDetailPayload } from "@/lib/apiSchemas";
+import type { SessionDetailPayload } from "@shared/domain/apiSchemas";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SessionResultsRow, type CouncilRow, type RowStatus } from "./SessionResultsRow";
 import { MEMBER_POSITIONS, memberForPosition } from "@shared/domain/sevenMembers";

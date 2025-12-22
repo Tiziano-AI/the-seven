@@ -9,7 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { autocompleteModels, validateModel } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import type { z } from "zod";
-import { modelAutocompleteSuggestionSchema } from "@/lib/apiSchemas";
+import { modelAutocompleteSuggestionSchema } from "@shared/domain/apiSchemas";
 
 interface ModelIdInputProps {
   value: string;

@@ -1,6 +1,6 @@
 import { getOutputFormat } from "../config";
 import { buildSessionRunSpec, stringifySessionRunSpec } from "../domain/sessionRunSpec";
-import type { CouncilRef } from "../domain/councilRef";
+import type { CouncilRef } from "../../shared/domain/councilRef";
 import type { Attachment } from "../domain/attachments";
 import { resolveCouncilSnapshot } from "./councils";
 

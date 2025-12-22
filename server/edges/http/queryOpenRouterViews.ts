@@ -17,6 +17,9 @@ export type OpenRouterCallView = Readonly<{
   requestSystemChars: number;
   requestUserChars: number;
   requestTotalChars: number;
+  requestStartedAt: number | null;
+  responseCompletedAt: number | null;
+  latencyMs: number | null;
   requestModelContextLength: number | null;
   requestModelMaxCompletionTokens: number | null;
   responseModelContextLength: number | null;
@@ -40,7 +43,7 @@ export type OpenRouterCallView = Readonly<{
   errorStatus: number | null;
   errorMessage: string | null;
   responseId: string | null;
-  createdAt: Date;
+  createdAt: string;
 }>;
 
 type ModelMeta = Readonly<{ contextLength: number | null; maxCompletionTokens: number | null }>;
@@ -94,6 +97,9 @@ export async function buildOpenRouterCallViews(
       requestSystemChars: call.requestSystemChars,
       requestUserChars: call.requestUserChars,
       requestTotalChars: call.requestTotalChars,
+      requestStartedAt: call.requestStartedAt ?? null,
+      responseCompletedAt: call.responseCompletedAt ?? null,
+      latencyMs: call.latencyMs ?? null,
       requestModelContextLength: modelMetaById.get(call.requestModelId)?.contextLength ?? null,
       requestModelMaxCompletionTokens:
         modelMetaById.get(call.requestModelId)?.maxCompletionTokens ?? null,
@@ -122,7 +128,7 @@ export async function buildOpenRouterCallViews(
       errorStatus: call.errorStatus,
       errorMessage: call.errorMessage,
       responseId: call.responseId,
-      createdAt: call.createdAt,
+      createdAt: call.createdAt.toISOString(),
     };
   });
 }

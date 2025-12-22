@@ -25,6 +25,12 @@ type MessageCharCounts = Readonly<{
   totalChars: number;
 }>;
 
+type OpenRouterCallTiming = Readonly<{
+  requestStartedAtMs: number;
+  responseCompletedAtMs: number;
+  latencyMs: number;
+}>;
+
 function getMessageCharCounts(messages: ReadonlyArray<Readonly<{ role: string; content: string }>>): MessageCharCounts {
   let systemChars = 0;
   let userChars = 0;
@@ -87,6 +93,7 @@ async function recordOpenRouterCallBestEffort(params: {
   response: OpenRouterResponse | null;
   generation: OpenRouterGeneration | null;
   error: unknown | null;
+  timing: OpenRouterCallTiming | null;
 }): Promise<void> {
   const { systemChars, userChars, totalChars } = getMessageCharCounts(params.messages);
   const firstChoice = params.response?.choices[0] ?? null;
@@ -118,6 +125,9 @@ async function recordOpenRouterCallBestEffort(params: {
       requestSystemChars: systemChars,
       requestUserChars: userChars,
       requestTotalChars: totalChars,
+      requestStartedAt: params.timing?.requestStartedAtMs,
+      responseCompletedAt: params.timing?.responseCompletedAtMs,
+      latencyMs: params.timing?.latencyMs,
       responseId: params.response?.id,
       responseModel: params.response?.model,
       billedModelId,
@@ -267,11 +277,13 @@ export async function runOpenRouterCallWithPreflight(params: {
       response: null,
       generation: null,
       error,
+      timing: null,
     });
     return { ok: false, error };
   }
 
   for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt += 1) {
+    const requestStartedAtMs = Date.now();
     let response: OpenRouterResponse | null = null;
     let generation: OpenRouterGeneration | null = null;
     try {
@@ -293,6 +305,7 @@ export async function runOpenRouterCallWithPreflight(params: {
       const choiceError = getChoiceError(response);
       const retryableChoiceError = isRetryableChoiceError(choiceError);
 
+      const responseCompletedAtMs = Date.now();
       await recordOpenRouterCallBestEffort({
         traceId: params.traceId,
         sessionId: params.sessionId,
@@ -303,6 +316,11 @@ export async function runOpenRouterCallWithPreflight(params: {
         response,
         generation,
         error: content.ok ? null : content.error,
+        timing: {
+          requestStartedAtMs,
+          responseCompletedAtMs,
+          latencyMs: responseCompletedAtMs - requestStartedAtMs,
+        },
       });
 
       if (content.ok) {
@@ -316,6 +334,7 @@ export async function runOpenRouterCallWithPreflight(params: {
 
       return { ok: false, error: content.error };
     } catch (error: unknown) {
+      const responseCompletedAtMs = Date.now();
       await recordOpenRouterCallBestEffort({
         traceId: params.traceId,
         sessionId: params.sessionId,
@@ -326,6 +345,11 @@ export async function runOpenRouterCallWithPreflight(params: {
         response,
         generation,
         error,
+        timing: {
+          requestStartedAtMs,
+          responseCompletedAtMs,
+          latencyMs: responseCompletedAtMs - requestStartedAtMs,
+        },
       });
 
       if (isRetryableError(error) && attempt < MAX_PROVIDER_ATTEMPTS) {

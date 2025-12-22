@@ -16,11 +16,14 @@ export async function handleGetSession(ctx: RequestContext, sessionId: number): 
   session: {
     id: number;
     query: string;
+    questionHash: string;
+    ingressSource: string;
+    ingressVersion: string | null;
     councilNameAtRun: string;
     status: string;
     failureKind: string | null;
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: string;
+    updatedAt: string;
   };
   council: {
     nameAtRun: string;
@@ -36,7 +39,7 @@ export async function handleGetSession(ctx: RequestContext, sessionId: number): 
     memberPosition: number;
     modelId: string;
     response: string;
-    createdAt: Date;
+    createdAt: string;
     member: ReturnType<typeof memberForPosition>;
     modelName: string;
     tokensUsed: number | null;
@@ -48,7 +51,7 @@ export async function handleGetSession(ctx: RequestContext, sessionId: number): 
     reviewerMemberPosition: number;
     modelId: string;
     reviewContent: string;
-    createdAt: Date;
+    createdAt: string;
     reviewerMember: ReturnType<typeof memberForPosition>;
     modelName: string;
     tokensUsed: number | null;
@@ -60,7 +63,7 @@ export async function handleGetSession(ctx: RequestContext, sessionId: number): 
     memberPosition: number;
     modelId: string;
     synthesis: string;
-    createdAt: Date;
+    createdAt: string;
     member: ReturnType<typeof memberForPosition>;
     modelName: string;
     tokensUsed: number | null;
@@ -110,7 +113,7 @@ export async function handleGetSession(ctx: RequestContext, sessionId: number): 
       memberPosition: response.memberPosition,
       modelId: response.modelId,
       response: response.response,
-      createdAt: response.createdAt,
+      createdAt: response.createdAt.toISOString(),
       member: memberForPosition(memberPosition),
       modelName: modelNamesById.get(response.modelId) ?? response.modelId,
       tokensUsed: call?.usageTotalTokens ?? null,
@@ -132,7 +135,7 @@ export async function handleGetSession(ctx: RequestContext, sessionId: number): 
       reviewerMemberPosition: review.reviewerMemberPosition,
       modelId: review.modelId,
       reviewContent: review.reviewContent,
-      createdAt: review.createdAt,
+      createdAt: review.createdAt.toISOString(),
       reviewerMember: memberForPosition(memberPosition),
       modelName: modelNamesById.get(review.modelId) ?? review.modelId,
       tokensUsed: call?.usageTotalTokens ?? null,
@@ -152,13 +155,13 @@ export async function handleGetSession(ctx: RequestContext, sessionId: number): 
         return {
           id: synthesis.id,
           sessionId: synthesis.sessionId,
-          memberPosition: synthesis.memberPosition,
-          modelId: synthesis.modelId,
-          synthesis: synthesis.synthesis,
-          createdAt: synthesis.createdAt,
-          member: memberForPosition(memberPosition),
-          modelName: modelNamesById.get(synthesis.modelId) ?? synthesis.modelId,
-          tokensUsed: call?.usageTotalTokens ?? null,
+      memberPosition: synthesis.memberPosition,
+      modelId: synthesis.modelId,
+      synthesis: synthesis.synthesis,
+      createdAt: synthesis.createdAt.toISOString(),
+      member: memberForPosition(memberPosition),
+      modelName: modelNamesById.get(synthesis.modelId) ?? synthesis.modelId,
+      tokensUsed: call?.usageTotalTokens ?? null,
           costUsdMicros: call?.totalCostUsdMicros ?? null,
         };
       })()
@@ -191,11 +194,14 @@ export async function handleGetSession(ctx: RequestContext, sessionId: number): 
     session: {
       id: session.id,
       query: session.query,
+      questionHash: session.questionHash,
+      ingressSource: session.ingressSource,
+      ingressVersion: session.ingressVersion,
       councilNameAtRun: session.councilNameAtRun,
       status: session.status,
       failureKind: session.failureKind,
-      createdAt: session.createdAt,
-      updatedAt: session.updatedAt,
+      createdAt: session.createdAt.toISOString(),
+      updatedAt: session.updatedAt.toISOString(),
     },
     council: councilView,
     responses: responsesView,
@@ -208,11 +214,14 @@ export async function handleGetSession(ctx: RequestContext, sessionId: number): 
 export async function handleListSessions(ctx: RequestContext): Promise<ReadonlyArray<Readonly<{
   id: number;
   query: string;
+  questionHash: string;
+  ingressSource: string;
+  ingressVersion: string | null;
   councilNameAtRun: string;
   status: string;
   failureKind: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
   totalTokens: number;
   totalCostUsdMicros: number;
   totalCostIsPartial: boolean;
@@ -229,11 +238,14 @@ export async function handleListSessions(ctx: RequestContext): Promise<ReadonlyA
       return {
         id: session.id,
         query: session.query,
+        questionHash: session.questionHash,
+        ingressSource: session.ingressSource,
+        ingressVersion: session.ingressVersion,
         councilNameAtRun: session.councilNameAtRun,
         status: session.status,
         failureKind: session.failureKind,
-        createdAt: session.createdAt,
-        updatedAt: session.updatedAt,
+        createdAt: session.createdAt.toISOString(),
+        updatedAt: session.updatedAt.toISOString(),
         totalTokens: summary.totalTokens,
         totalCostUsdMicros: summary.totalCostUsdMicros,
         totalCostIsPartial: summary.costIsPartial,

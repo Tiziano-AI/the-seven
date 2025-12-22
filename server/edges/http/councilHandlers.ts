@@ -1,15 +1,10 @@
-import { z } from "zod";
-import { MEMBER_POSITIONS } from "../../../shared/domain/sevenMembers";
 import type { CouncilMemberTuning } from "../../../shared/domain/councilMemberTuning";
 import { decodeCouncilRef, type CouncilRef } from "../../../shared/domain/councilRef";
-import { councilRefSchema } from "../../domain/councilRef";
 import {
-  councilMemberTuningSchema,
   normalizeCouncilMemberTuningInput,
   stringifyCouncilMemberTuningJson,
 } from "../../domain/councilMemberTuning";
-import { phasePromptsSchema } from "../../domain/phasePrompts";
-import { providerModelRefSchema } from "../../domain/providerModelRef";
+import { duplicateCouncilBodySchema, updateCouncilBodySchema } from "../../../shared/domain/apiSchemas";
 import { getOutputFormat } from "../../config";
 import { getModelDetails, type OpenRouterModelDetails } from "../../services/openrouterCatalog";
 import { listCouncils, resolveCouncilSnapshot } from "../../services/councils";
@@ -18,59 +13,6 @@ import { parseJsonBody } from "./parse";
 import type { RequestContext } from "./context";
 import { EdgeError } from "./errors";
 import { requireAuth, requireByokAuth } from "./requireAuth";
-
-const councilMembersSchema = z
-  .array(
-    z.object({
-      memberPosition: z.number().int().min(1).max(7),
-      model: providerModelRefSchema,
-      tuning: councilMemberTuningSchema.nullable().optional(),
-    })
-  )
-  .length(7)
-  .superRefine((members, ctx) => {
-    const seen = new Set<number>();
-    for (const member of members) {
-      if (seen.has(member.memberPosition)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["members"],
-          message: `Duplicate memberPosition ${member.memberPosition}`,
-        });
-      }
-      seen.add(member.memberPosition);
-    }
-    for (const required of MEMBER_POSITIONS) {
-      if (!seen.has(required)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["members"],
-          message: `Missing memberPosition ${required}`,
-        });
-      }
-    }
-  });
-
-const duplicateSchema = z.object({
-  source: councilRefSchema,
-  name: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .refine((value) => !/[\r\n]/.test(value), "Council name must be single-line"),
-});
-
-const updateSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .refine((value) => !/[\r\n]/.test(value), "Council name must be single-line"),
-  phasePrompts: phasePromptsSchema,
-  members: councilMembersSchema,
-});
 
 async function validateCouncilModelsHard(params: {
   models: ReadonlyArray<{ modelId: string }>;
@@ -238,7 +180,7 @@ export async function handleCouncilGet(ctx: RequestContext, refValue: string): P
 
 export async function handleCouncilDuplicate(ctx: RequestContext, body: unknown): Promise<Readonly<{ councilId: number }>> {
   const auth = requireByokAuth(ctx.auth);
-  const input = parseJsonBody(duplicateSchema, body);
+  const input = parseJsonBody(duplicateCouncilBodySchema, body);
 
   await requireCouncilNameAvailable({ userId: auth.userId, name: input.name });
 
@@ -277,7 +219,7 @@ export async function handleCouncilDuplicate(ctx: RequestContext, body: unknown)
 
 export async function handleCouncilUpdate(ctx: RequestContext, councilId: number, body: unknown): Promise<Readonly<{ success: true }>> {
   const auth = requireByokAuth(ctx.auth);
-  const input = parseJsonBody(updateSchema, body);
+  const input = parseJsonBody(updateCouncilBodySchema, body);
 
   await requireCouncilNameAvailable({
     userId: auth.userId,

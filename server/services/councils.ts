@@ -1,6 +1,6 @@
 import { getPhasePrompt } from "../config";
 import { BUILT_IN_COUNCILS, type BuiltInCouncilSlug } from "../domain/builtInCouncils";
-import type { CouncilRef } from "../domain/councilRef";
+import type { CouncilRef } from "../../shared/domain/councilRef";
 import { parseCouncilMemberTuningJson } from "../domain/councilMemberTuning";
 import { MEMBER_POSITIONS } from "../../shared/domain/sevenMembers";
 import type { CouncilMemberTuning } from "../../shared/domain/councilMemberTuning";
