@@ -346,7 +346,9 @@ This repo uses a strict role-based module taxonomy. Each runtime behavior follow
 - Tokens and primitives are centralized under `client/src/styles/*` and `client/src/components/ui/*`; inline styles are not used in owned client code.
 - Typography is tokenized: **MedievalSharp** for display + UI controls (navigation, labels, buttons), **Raleway** for body/prose, and **Victor Mono** for code/diagnostics.
 - UI grammar is two-tier: Surfaces (primary sections) and Insets (nested sections). All copy affordances live in the surface action rail.
-- Council list rows stack primary copy above action buttons on small screens, and align actions to the right on wider breakpoints.
+- Markdown rendering distinguishes inline code from code blocks: inline code remains inline with muted chip styling; fenced blocks render in inset `pre` surfaces with scroll.
+- Onboarding cards (demo, BYOK, unlock, password setup) share identical card chrome, spacing rhythm, and primary action placement.
+- Council list rows are stacked by default: copy first, actions below, with actions right-aligned to avoid text compression in narrow list columns.
 
 ### UX Narrative (Canonical)
 

@@ -63,10 +63,10 @@ export function PasswordSetup({ apiKey, onComplete }: PasswordSetupProps) {
   };
 
   return (
-    <Card className="max-w-md mx-auto">
-      <CardHeader>
+    <Card className="max-w-md w-full">
+      <CardHeader className="space-y-3">
         <div className="flex items-center gap-3">
-          <Lock className="icon-lg text-violet" />
+          <Lock className="icon-lg text-gold" />
           <div>
             <CardTitle>Lock Your Key</CardTitle>
             <CardDescription>
@@ -76,20 +76,20 @@ export function PasswordSetup({ apiKey, onComplete }: PasswordSetupProps) {
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-5">
         <Alert>
-          <Key className="icon-sm" />
+          <Key className="icon-sm text-gold" />
           <AlertDescription className="text-sm">
             Your key is encrypted and stored locally. You’ll use this password to unlock it when you
             come back.
           </AlertDescription>
         </Alert>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           {/* Password Input */}
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <div className="relative mt-2">
+            <div className="relative">
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
@@ -136,7 +136,7 @@ export function PasswordSetup({ apiKey, onComplete }: PasswordSetupProps) {
           </div>
 
           {/* Confirm Password Input */}
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm Password</Label>
             <Input
               id="confirmPassword"
@@ -144,12 +144,11 @@ export function PasswordSetup({ apiKey, onComplete }: PasswordSetupProps) {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Repeat your password"
-              className="mt-2"
               disabled={isLoading}
             />
             {confirmPassword.length > 0 && (
               <p
-                className={`text-sm mt-2 ${passwordsMatch ? "text-evergreen" : "text-destructive"}`}
+                className={`text-sm ${passwordsMatch ? "text-evergreen" : "text-destructive"}`}
               >
                 {passwordsMatch ? "✓ Passwords match" : "✗ Passwords do not match"}
               </p>
