@@ -82,6 +82,7 @@ This repo must run on any standard Node.js host without platform-specific runtim
 - No platform runtime plugins.
 - No platform data directories committed to git.
 - No hosting-platform OAuth / Forge / SSO plumbing inside this codebase.
+- `railway.toml` is an optional deployment descriptor and must not introduce runtime coupling.
 
 ## Identity Contract
 
@@ -183,12 +184,13 @@ All HTTP JSON edges accept optional ingress metadata headers. Invalid values are
 
 ### OpenRouter rate‑limit surfacing
 
-- When OpenRouter responds with HTTP 429, the server surfaces rate limiting explicitly:
+- OpenRouter can signal rate limits either as HTTP 429 responses or as response bodies with `choices[].error.code = 429` after a request begins.
+- We treat both signals as provider rate limits:
   - `auth.validate` responds with an `upstream_error` (service `openrouter`, status `429`) so clients can present the provider limit.
   - Orchestration marks the session `failureKind` as `openrouter_rate_limited` so the Run Sheet shows the provider cap.
 - This is not a local quota; it is a transparent surfacing of provider feedback.
 
-Evidence: server/adapters/openrouter/client.ts:163-339; server/workflows/orchestrationOpenRouter.ts:22-395; server/workflows/orchestration.ts:46-255; server/edges/http/authHandlers.ts:30-44
+Evidence: vendor:openrouter:2025-12-22:https://openrouter.ai/docs/api-reference/errors; vendor:openrouter:2025-12-22:https://openrouter.ai/docs/errors; server/adapters/openrouter/client.ts:163-339; server/workflows/orchestrationOpenRouter.ts:22-395; server/workflows/orchestration.ts:46-255; server/edges/http/authHandlers.ts:30-44
 
 ## Client Query State Handling
 
@@ -407,7 +409,7 @@ The client persists only minimal UI state in `localStorage`:
 - Optional (storage path):
   - `SEVEN_DB_PATH` (SQLite database file path; default `data/the-seven.db`)
 - Optional (provider identity headers):
-  - `SEVEN_PUBLIC_ORIGIN` (OpenRouter `HTTP-Referer`, default `http://localhost`)
+- `SEVEN_PUBLIC_ORIGIN` (OpenRouter `HTTP-Referer`, default `http://localhost:3000`)
   - `SEVEN_APP_NAME` (OpenRouter `X-Title`, default `The Seven`)
 - Optional (demo mode):
   - `SEVEN_DEMO_ENABLED` (`0|1`, default `0`)

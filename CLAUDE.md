@@ -40,8 +40,11 @@ server/
 client/src/
 ├── pages/       # Route components
 ├── features/    # Feature modules (sessions, councils)
-├── components/  # Shared UI
-└── lib/         # Routing + API client
+├── components/  # Shared UI (incl. components/ui)
+├── styles/      # Tokens + base + components + utilities
+├── contexts/    # Auth + app contexts
+├── hooks/       # Shared hooks
+└── lib/         # Routing + API client + crypto
 ```
 
 **Database**: SQLite via better-sqlite3 + Drizzle. Schema in `drizzle/schema.ts`.

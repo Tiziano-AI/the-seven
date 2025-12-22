@@ -9,4 +9,4 @@ Rules:
 
 ## Open milestones
 
-- None.
+- Verify demo + BYOK auth flows in dev (reproduce prior failures or confirm resolved) and document outcome.
