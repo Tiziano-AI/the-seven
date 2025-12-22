@@ -330,8 +330,9 @@ This repo uses a strict role-based module taxonomy. Each runtime behavior follow
 
 ### Client build (Vite) chunking
 
-- `react-vendor` contains React core (`react`), `react-dom`, and `scheduler` in a single chunk to avoid circular dependency failures at runtime.
-- Third-party React ecosystem packages (for example `@tanstack/*`) must remain outside `react-vendor` to keep bundle ownership clear and stable.
+- All `node_modules` packages default to the `vendor` chunk, with a single exception:
+  - `markdown-vendor` isolates markdown tooling (`react-markdown`, `remark`, `rehype`, `micromark`, `hast`, `mdast`).
+- React, React DOM, Radix, and the rest of the UI stack remain in `vendor` to avoid cross‑chunk circular dependencies that can break runtime initialization.
   - `client/src/styles/base.css`: base element styles (field background, typography).
   - `client/src/styles/components.css`: primitives (`.btn`, `.control`, `.card`, surfaces).
 - `client/src/styles/utilities.css`: shared utility classes (`.text-*`, `.icon-*`, `.content-*`).
