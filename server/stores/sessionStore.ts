@@ -22,6 +22,7 @@ export type SessionFailureKind =
   | "phase3_inference_failed"
   | "invalid_run_spec"
   | "concurrent_execution"
+  | "openrouter_rate_limited"
   | "internal_error";
 
 /**

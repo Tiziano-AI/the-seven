@@ -105,6 +105,7 @@ CREATE TABLE "sessions" (
     'phase3_inference_failed',
     'invalid_run_spec',
     'concurrent_execution',
+    'openrouter_rate_limited',
     'internal_error'
   )),
   "createdAt" integer NOT NULL DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)),

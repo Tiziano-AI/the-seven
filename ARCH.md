@@ -181,6 +181,15 @@ All HTTP JSON edges accept optional ingress metadata headers. Invalid values are
 5. The server authorizes the demo session, runs the Commons Council using the server-owned OpenRouter key, and stores results under the demo user.
 6. The browser polls for status and reads results by session id (authorized by the demo token).
 
+### OpenRouter rate‑limit surfacing
+
+- When OpenRouter responds with HTTP 429, the server surfaces rate limiting explicitly:
+  - `auth.validate` responds with an `upstream_error` (service `openrouter`, status `429`) so clients can present the provider limit.
+  - Orchestration marks the session `failureKind` as `openrouter_rate_limited` so the Run Sheet shows the provider cap.
+- This is not a local quota; it is a transparent surfacing of provider feedback.
+
+Evidence: server/adapters/openrouter/client.ts:163-339; server/workflows/orchestrationOpenRouter.ts:22-395; server/workflows/orchestration.ts:46-255; server/edges/http/authHandlers.ts:30-44
+
 ## Client Query State Handling
 
 - Client data fetches must explicitly handle the query error state (`isError`) for all TanStack Query edges so failures never render silently.
@@ -198,6 +207,14 @@ All HTTP JSON edges accept optional ingress metadata headers. Invalid values are
 ## Abuse Controls (Demo)
 
 - Rate limits apply at the ingress layer for demo email requests, demo link consumption, and demo run submissions; prompts and attachments are not capped.
+
+## Abuse Controls (Ingress Flood Guard)
+
+- All HTTP JSON requests pass through a coarse flood guard (global + per‑IP) to mitigate DDoS.
+- The flood guard is **not** a BYOK quota; it only trips at abusive volumes and is independent of OpenRouter limits.
+- When tripped, the edge returns `rate_limited` with `{ scope, limit, windowSeconds, resetAt }`.
+
+Evidence: server/domain/ingressLimits.ts:1-17; server/services/ingressRateLimits.ts:1-36; server/edges/http/apiRouter.ts:50-115; server/services/rateLimits.ts:19-46
 - Limits are enforced per email, per IP, and globally using fixed-window counters.
 - Client IP is derived from `CF-Connecting-IP` when present (Cloudflare), with standard proxy fallbacks.
   - Evidence: `vendor:cloudflare:2025-12-21:https://developers.cloudflare.com/fundamentals/reference/http-headers/`
