@@ -45,7 +45,7 @@ vi.mock("../services/openrouterCatalog", () => {
   };
 });
 
-import { callOpenRouter } from "../adapters/openrouter/client";
+import { callOpenRouter, OpenRouterRequestFailedError } from "../adapters/openrouter/client";
 import type { OpenRouterResponse } from "../adapters/openrouter/client";
 import { buildSessionRunSpec, stringifySessionRunSpec } from "../domain/sessionRunSpec";
 import { hashQuestion } from "../domain/questionHash";
@@ -163,6 +163,41 @@ describe("orchestrateSession", () => {
 
     const calls = await getOpenRouterCallsBySessionId(sessionId);
     expect(calls.length).toBe(12);
+  });
+
+  it("marks OpenRouter rate limit failures explicitly", async () => {
+    const user = await getOrCreateUserByokId("byok-test");
+    const runSpec = buildRunSpec({ userMessage: "Rate limit check" });
+
+    const sessionId = await createSession({
+      userId: user.id,
+      query: "Rate limit check",
+      attachedFilesMarkdown: "[]",
+      councilNameAtRun: "Test Council",
+      runSpec,
+      questionHash: hashQuestion("Rate limit check"),
+      ingressSource: "web",
+      ingressVersion: null,
+      status: "pending",
+    });
+
+    vi.mocked(callOpenRouter).mockImplementation(async () => {
+      throw new OpenRouterRequestFailedError({
+        status: 429,
+        message: "OpenRouter rate limit exceeded",
+      });
+    });
+
+    await orchestrateSession({
+      traceId: "trace-test",
+      sessionId,
+      userId: user.id,
+      apiKey: "key-test",
+    });
+
+    const session = await getSessionById(sessionId);
+    expect(session?.status).toBe("failed");
+    expect(session?.failureKind).toBe("openrouter_rate_limited");
   });
 
   it("records failureKind on startup reconciliation", async () => {

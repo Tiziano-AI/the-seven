@@ -50,7 +50,7 @@ export function ModelIdInput({
   }, [value, disabled]);
 
   // Validation query
-  const { data: validationData, isLoading: isValidationLoading } = useQuery({
+  const validationQuery = useQuery({
     queryKey: ["model-validate", debouncedValue, authHeader],
     queryFn: async () => {
       if (!authHeader) throw new Error("Missing authentication");
@@ -60,6 +60,8 @@ export function ModelIdInput({
     refetchOnWindowFocus: false,
   });
 
+  const validationData = validationQuery.data;
+  const isValidationLoading = validationQuery.isLoading;
   const validationModel = validationData?.model ?? null;
   const validationModelCapabilities = (() => {
     if (!validationModel) return [];
@@ -73,7 +75,7 @@ export function ModelIdInput({
   })();
   
   // Autocomplete query
-  const { data: autocompleteData, isLoading: isAutocompleteLoading } = useQuery({
+  const autocompleteQuery = useQuery({
     queryKey: ["model-autocomplete", debouncedValue, authHeader],
     queryFn: async () => {
       if (!authHeader) throw new Error("Missing authentication");
@@ -82,6 +84,8 @@ export function ModelIdInput({
     enabled: !disabled && !!authHeader && debouncedValue.length >= 2 && showSuggestions,
     refetchOnWindowFocus: false,
   });
+  const autocompleteData = autocompleteQuery.data;
+  const isAutocompleteLoading = autocompleteQuery.isLoading;
   
   // Update validation state
   useEffect(() => {
@@ -90,6 +94,12 @@ export function ModelIdInput({
       setIsValidating(false);
     }
   }, [validationData]);
+
+  useEffect(() => {
+    if (!validationQuery.isError) return;
+    setIsValid(null);
+    setIsValidating(false);
+  }, [validationQuery.isError]);
   
   // Update suggestions
   useEffect(() => {
@@ -97,6 +107,12 @@ export function ModelIdInput({
       setSuggestions(autocompleteData.suggestions);
     }
   }, [autocompleteData]);
+
+  useEffect(() => {
+    if (!autocompleteQuery.isError) return;
+    setSuggestions([]);
+    setSelectedIndex(-1);
+  }, [autocompleteQuery.isError]);
   
   // Show loading state when debounced value changes
   useEffect(() => {
@@ -182,6 +198,9 @@ export function ModelIdInput({
     if (isValidating || isValidationLoading) {
       return <Loader2 className="animate-spin icon-sm text-muted-foreground" />;
     }
+    if (validationQuery.isError) {
+      return <XCircle className="icon-sm text-destructive" />;
+    }
     if (isValid === true) {
       return <CheckCircle2 className="icon-sm text-evergreen" />;
     }
@@ -212,6 +231,11 @@ export function ModelIdInput({
       </div>
       
       {/* Validation message */}
+      {!disabled && validationQuery.isError && (
+        <p className="text-xs text-destructive mt-1">
+          Validation failed: {validationQuery.error.message}
+        </p>
+      )}
       {!disabled && isValid === false && (
         <p className="text-xs text-destructive mt-1">
           Model ID not found in OpenRouter catalog cache
@@ -251,7 +275,15 @@ export function ModelIdInput({
       )}
 	      
       {/* Autocomplete suggestions */}
-      {showSuggestions && suggestions.length > 0 && (
+      {showSuggestions && autocompleteQuery.isError && (
+        <div className="popover absolute z-50 w-full mt-1 p-3">
+          <p className="text-xs text-destructive">
+            Autocomplete failed: {autocompleteQuery.error.message}
+          </p>
+        </div>
+      )}
+
+      {showSuggestions && !autocompleteQuery.isError && suggestions.length > 0 && (
         <div
           ref={suggestionsRef}
           className="popover absolute z-50 w-full mt-1 max-h-60 overflow-auto"
@@ -287,10 +319,10 @@ export function ModelIdInput({
 	            </button>
 	          ))}
 	        </div>
-	      )}
+      )}
       
       {/* Loading state for autocomplete */}
-      {showSuggestions && isAutocompleteLoading && (
+      {showSuggestions && isAutocompleteLoading && !autocompleteQuery.isError && (
         <div className="popover absolute z-50 w-full mt-1 p-3">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="animate-spin icon-sm" />

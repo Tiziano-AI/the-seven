@@ -19,6 +19,16 @@ import { parseUsdAmountToMicros } from "../../shared/domain/usage";
 const MAX_PROVIDER_ATTEMPTS = 3;
 const IS_TEST = process.env.NODE_ENV === "test";
 
+export class OpenRouterRateLimitError extends Error {
+  readonly status: number | null;
+
+  constructor(params: { status: number | null; message: string }) {
+    super(params.message);
+    this.name = "OpenRouterRateLimitError";
+    this.status = params.status;
+  }
+}
+
 type MessageCharCounts = Readonly<{
   systemChars: number;
   userChars: number;
@@ -83,6 +93,13 @@ function isRetryableChoiceError(
   return isRetryableStatus(error.code);
 }
 
+function isRateLimitChoiceError(
+  error: OpenRouterResponse["choices"][number]["error"] | null
+): boolean {
+  if (!error) return false;
+  return error.code === 429;
+}
+
 async function recordOpenRouterCallBestEffort(params: {
   traceId: string;
   sessionId: number;
@@ -107,7 +124,12 @@ async function recordOpenRouterCallBestEffort(params: {
     params.generation?.upstream_inference_cost
   );
 
-  const errorStatus = params.error instanceof OpenRouterRequestFailedError ? params.error.status : null;
+  const errorStatus =
+    params.error instanceof OpenRouterRateLimitError
+      ? params.error.status
+      : params.error instanceof OpenRouterRequestFailedError
+        ? params.error.status
+        : null;
 
   const errorMessage =
     params.error && params.error instanceof Error
@@ -304,6 +326,7 @@ export async function runOpenRouterCallWithPreflight(params: {
 
       const choiceError = getChoiceError(response);
       const retryableChoiceError = isRetryableChoiceError(choiceError);
+      const rateLimitChoiceError = isRateLimitChoiceError(choiceError);
 
       const responseCompletedAtMs = Date.now();
       await recordOpenRouterCallBestEffort({
@@ -332,6 +355,16 @@ export async function runOpenRouterCallWithPreflight(params: {
         continue;
       }
 
+      if (rateLimitChoiceError) {
+        const message = choiceError?.message
+          ? `OpenRouter rate limit exceeded: ${choiceError.message}`
+          : "OpenRouter rate limit exceeded";
+        return {
+          ok: false,
+          error: new OpenRouterRateLimitError({ status: choiceError?.code ?? 429, message }),
+        };
+      }
+
       return { ok: false, error: content.error };
     } catch (error: unknown) {
       const responseCompletedAtMs = Date.now();
@@ -355,6 +388,16 @@ export async function runOpenRouterCallWithPreflight(params: {
       if (isRetryableError(error) && attempt < MAX_PROVIDER_ATTEMPTS) {
         await sleepMs(backoffDelayMs(attempt));
         continue;
+      }
+
+      if (error instanceof OpenRouterRequestFailedError && error.status === 429) {
+        return {
+          ok: false,
+          error: new OpenRouterRateLimitError({
+            status: error.status,
+            message: "OpenRouter rate limit exceeded",
+          }),
+        };
       }
 
       return {

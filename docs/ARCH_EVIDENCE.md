@@ -26,6 +26,9 @@ This file is the evidence appendix for `ARCH.md`.
     - Note: response wraps generation details under `data` with fields like `id`, `model`, `total_cost`, `native_tokens_*`.
   - Response semantics (model routing + usage token caveats)
     - Evidence: `vendor:openrouter:2025-12-19:https://openrouter.ai/docs/api-reference/overview` (response `model` may differ; usage tokens are normalized; exact cost via generation endpoint)
+  - Error semantics (HTTP status vs. body, rate limit signaling)
+    - Evidence: `vendor:openrouter:2025-12-22:https://openrouter.ai/docs/api-reference/errors`
+    - Evidence: `vendor:openrouter:2025-12-22:https://openrouter.ai/docs/errors`
   - `GET /api/v1/models/:author/:slug/endpoints` (model endpoints + supported parameters per endpoint)
     - Evidence: `vendor:openrouter:2025-12-17:https://openrouter.ai/docs/api-reference/list-endpoints-for-a-model`
 

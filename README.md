@@ -35,25 +35,28 @@ Three councils ship as immutable templates—duplicate one to customize:
 - Your OpenRouter API key is encrypted and stored in your browser—never on the server
 - The server uses your key per-request, then discards it
 - All provider traffic is server-side; your browser never calls OpenRouter directly
+- OpenRouter rate limits surface as HTTP 429 (error envelope kind `upstream_error`) during key validation and as run failureKind `openrouter_rate_limited` for sessions
+- A coarse ingress flood guard protects the API from abusive request bursts (may return `rate_limited`)
 
 ## Demo mode (free)
 
 - Enter an email to receive a magic link (no password).
 - Demo sessions last 24 hours and are limited to the Commons Council (free-tier models).
 - Demo runs use a server-owned OpenRouter key; prompts and attachments behave the same as BYOK runs.
+- On theseven.ai, the demo uses our server-owned key; self-hosted demos must set `SEVEN_DEMO_OPENROUTER_KEY`.
 
 ---
 
 ## Quick start
 
 ```bash
-# Prerequisites: Node.js, pnpm, OpenRouter API key
+# Prerequisites: Node.js, pnpm. OpenRouter API key only for BYOK; demo uses a server-owned key.
 
 pnpm install
 pnpm dev
 ```
 
-Open the app, enter your OpenRouter key, pick a council, ask a question.
+Open the app, enter your OpenRouter key (BYOK) or use demo mode (if enabled), pick a council (BYOK) or use Commons (demo), ask a question.
 
 ---
 
@@ -80,12 +83,13 @@ SEVEN_BYOK_KEY=...
 ```
 
 In production, set `SEVEN_PUBLIC_ORIGIN` to your public domain (e.g. `https://theseven.ai`) and use a Resend‑verified sender address (e.g. `hello@updates.theseven.ai`).
+`SEVEN_DEMO_OPENROUTER_KEY` is the server-owned OpenRouter key used only for demo runs.
 
 **Councils**:
 
 - Built-in councils are read-only templates
-- Duplicate one to create an editable copy
-- Configure models per slot (A–G), prompts per phase, and optional tuning knobs
+- Duplicate one to create an editable copy (BYOK only)
+- Configure models per slot (A–G), prompts per phase, and optional tuning knobs (BYOK only)
 
 ---
 
@@ -93,6 +97,7 @@ In production, set `SEVEN_PUBLIC_ORIGIN` to your public domain (e.g. `https://th
 
 ```bash
 pnpm dev          # Start dev server
+pnpm db:migrate   # Apply baseline migration
 pnpm test         # Run tests
 pnpm check        # TypeScript check
 pnpm build        # Production build
@@ -129,7 +134,7 @@ Set `SEVEN_BASE_URL` to target a non-local server (defaults to `http://localhost
 
 Self-host anywhere that runs Node.js with a persistent volume for SQLite.
 
-Included `railway.toml` works out of the box with [Railway](https://railway.app):
+Current deployment target is Railway; `railway.toml` is included as a convenience and does not add runtime coupling:
 - Merge to main → production deploy
 - Open PR → ephemeral environment
 

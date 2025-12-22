@@ -26,6 +26,15 @@ export async function handleValidateKey(ctx: RequestContext): Promise<ValidateKe
     const valid = await validateOpenRouterApiKey(authHeader.openRouterKey);
     return { valid };
   } catch (error: unknown) {
+    if (error instanceof OpenRouterRequestFailedError && error.status === 429) {
+      throw new EdgeError({
+        kind: "upstream_error",
+        message: "OpenRouter rate limit exceeded",
+        details: { service: "openrouter", status: error.status },
+        status: 429,
+      });
+    }
+
     const status = error instanceof OpenRouterRequestFailedError ? error.status : null;
     throw new EdgeError({
       kind: "upstream_error",

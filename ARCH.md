@@ -82,6 +82,7 @@ This repo must run on any standard Node.js host without platform-specific runtim
 - No platform runtime plugins.
 - No platform data directories committed to git.
 - No hosting-platform OAuth / Forge / SSO plumbing inside this codebase.
+- `railway.toml` is an optional deployment descriptor and must not introduce runtime coupling.
 
 ## Identity Contract
 
@@ -181,6 +182,21 @@ All HTTP JSON edges accept optional ingress metadata headers. Invalid values are
 5. The server authorizes the demo session, runs the Commons Council using the server-owned OpenRouter key, and stores results under the demo user.
 6. The browser polls for status and reads results by session id (authorized by the demo token).
 
+### OpenRouter rate‑limit surfacing
+
+- OpenRouter can signal rate limits either as HTTP 429 responses or as response bodies with `choices[].error.code = 429` after a request begins.
+- We treat both signals as provider rate limits:
+  - `auth.validate` responds with HTTP 429 and an `upstream_error` (service `openrouter`, status `429`) so clients can present the provider limit.
+  - Orchestration marks the session `failureKind` as `openrouter_rate_limited` so the Run Sheet shows the provider cap.
+- This is not a local quota; it is a transparent surfacing of provider feedback.
+
+Evidence: vendor:openrouter:2025-12-22:https://openrouter.ai/docs/api-reference/errors; vendor:openrouter:2025-12-22:https://openrouter.ai/docs/errors; server/adapters/openrouter/client.ts:163-339; server/workflows/orchestrationOpenRouter.ts:22-395; server/workflows/orchestration.ts:46-255; server/edges/http/authHandlers.ts:30-44
+
+## Client Query State Handling
+
+- Client data fetches must explicitly handle the query error state (`isError`) for all TanStack Query edges so failures never render silently.
+  - Evidence: node_modules:.pnpm/@tanstack+query-core@5.90.12/node_modules/@tanstack/query-core/src/types.ts:653-669
+
 ## Security Notes
 
 - The server must never persist or log:
@@ -192,10 +208,23 @@ All HTTP JSON edges accept optional ingress metadata headers. Invalid values are
 
 ## Abuse Controls (Demo)
 
-- Rate limits apply at the ingress layer only (email request + demo run submissions); prompts and attachments are not capped.
+- Rate limits apply at the ingress layer for demo email requests, demo link consumption, and demo run submissions; prompts and attachments are not capped.
+
+## Abuse Controls (Ingress Flood Guard)
+
+- All HTTP JSON requests pass through a coarse flood guard (global + per‑IP) to mitigate DDoS.
+- The flood guard is **not** a BYOK quota; it only trips at abusive volumes and is independent of OpenRouter limits.
+- When tripped, the edge returns `rate_limited` with `{ scope, limit, windowSeconds, resetAt }`.
+
+Evidence: server/domain/ingressLimits.ts:1-17; server/services/ingressRateLimits.ts:1-36; server/edges/http/apiRouter.ts:50-115; server/services/rateLimits.ts:19-46
 - Limits are enforced per email, per IP, and globally using fixed-window counters.
 - Client IP is derived from `CF-Connecting-IP` when present (Cloudflare), with standard proxy fallbacks.
   - Evidence: `vendor:cloudflare:2025-12-21:https://developers.cloudflare.com/fundamentals/reference/http-headers/`
+
+## Abuse Controls (BYOK)
+
+- OpenRouter key validation (`auth.validate`) is rate-limited per BYOK id, per IP, and globally using fixed-window counters.
+- Limit constants are defined in `server/domain/authLimits.ts` and enforced in `server/edges/http/authHandlers.ts`.
 
 ### Job durability (best effort + recoverable)
 
@@ -282,6 +311,10 @@ This repo uses a strict role-based module taxonomy. Each runtime behavior follow
 
 ### Client taxonomy
 
+- `client/src/pages/*`: route-level pages (Ask, Journal, Council, Session detail).
+- `client/src/contexts/*`: auth + app contexts.
+- `client/src/hooks/*`: shared hooks.
+- `client/src/lib/*`: routing, API client, crypto, and shared client utilities.
 - `client/src/components/ui/*`: Radix/shadcn wrappers that bake in our primitives.
 - `client/src/styles/*`:
   - `client/src/styles/tokens.css`: tokens + Tailwind v4 `@theme` mapping.
@@ -314,7 +347,7 @@ This repo uses a strict role-based module taxonomy. Each runtime behavior follow
   - Run actions (continue, rerun, export, dismiss/back) live in the Run Sheet header action rail.
 - **Session deep link** (`/session/:id`) renders the same Run Sheet layout as Journal selection.
 - All user and model text renders through the Markdown renderer for consistent typography and spacing.
-- Council selection has no default on first use; after explicit selection it is persisted and preselected on subsequent asks.
+- Council selection has no default on first BYOK use; after explicit selection it is persisted and preselected on subsequent asks. Demo forces the Commons Council.
 
 ### UI Entrypoint Manifest (Canonical)
 
@@ -359,7 +392,7 @@ This repo uses a strict role-based module taxonomy. Each runtime behavior follow
 The client persists only minimal UI state in `localStorage`:
 
 - `seven.active_session_id`: last active run pinned on Ask + Journal.
-- `seven.last_council_ref`: last explicitly selected council (preselect on future asks).
+- `seven.last_council_ref`: last explicitly selected council (preselect on future asks; BYOK only — demo forces Commons and does not persist selection).
 - `seven.query_draft`: draft question text for the Ask composer.
 - `seven.demo_session_token`: demo auth token (24h TTL).
 - `seven.demo_session_expires_at`: demo auth expiry timestamp (ms).
@@ -380,7 +413,7 @@ The client persists only minimal UI state in `localStorage`:
 - Optional (storage path):
   - `SEVEN_DB_PATH` (SQLite database file path; default `data/the-seven.db`)
 - Optional (provider identity headers):
-  - `SEVEN_PUBLIC_ORIGIN` (OpenRouter `HTTP-Referer`, default `http://localhost`)
+  - `SEVEN_PUBLIC_ORIGIN` (OpenRouter `HTTP-Referer`, default `http://localhost:3000`)
   - `SEVEN_APP_NAME` (OpenRouter `X-Title`, default `The Seven`)
 - Optional (demo mode):
   - `SEVEN_DEMO_ENABLED` (`0|1`, default `0`)
@@ -431,6 +464,7 @@ The canonical example lives in `.env.example`; keep it aligned with the list abo
 - The SQLite file path is resolved from `SEVEN_DB_PATH` (default `data/the-seven.db`).
 - Migrations are squashed to a single baseline migration (`drizzle/0000_init.sql`).
 - Schema changes are applied by editing `drizzle/schema.ts` and re-squashing the baseline.
+- Apply the baseline migration via `pnpm db:migrate` (invokes `server/_core/migrate.ts`).
 - Sessions persist:
   - `runSpec` (a per-run snapshot for deterministic continuation),
   - `failureKind` when `status=failed` (stable vocabulary; no free-form messages).

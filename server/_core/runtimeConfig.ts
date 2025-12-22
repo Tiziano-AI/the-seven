@@ -101,7 +101,7 @@ export function loadOpenRouterIdentityConfig(
   env: EnvSource = process.env
 ): OpenRouterIdentityConfig {
   const publicOrigin =
-    normalizeEnvValue(env.SEVEN_PUBLIC_ORIGIN) ?? "http://localhost";
+    normalizeEnvValue(env.SEVEN_PUBLIC_ORIGIN) ?? "http://localhost:3000";
   const appName = normalizeEnvValue(env.SEVEN_APP_NAME) ?? "The Seven";
 
   return {

@@ -47,7 +47,13 @@ export default function JournalPage() {
   const [exportTargetIds, setExportTargetIds] = useState<ReadonlyArray<number>>([]);
   const [exportOpen, setExportOpen] = useState(false);
 
-  const { data: sessions, isLoading } = useQuery({
+  const {
+    data: sessions,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["sessions", authHeader],
     queryFn: async () => {
       if (!authHeader) return [];
@@ -127,6 +133,27 @@ export default function JournalPage() {
             </Card>
           ))}
         </div>
+      </AppShell>
+    );
+  }
+
+  if (isError) {
+    return (
+      <AppShell layout="centered">
+        <Card>
+          <CardHeader>
+            <CardTitle>Journal unavailable</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-muted-foreground">{error.message}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => void refetch()}>Retry</Button>
+              <Button variant="outline" onClick={() => navigate("/")}>
+                Back to Ask
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </AppShell>
     );
   }
