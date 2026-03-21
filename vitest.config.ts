@@ -1,16 +1,24 @@
+import path from "node:path";
 import { defineConfig } from "vitest/config";
-import path from "path";
-import { buildPathAliases } from "./config/aliases";
-
-const templateRoot = path.resolve(import.meta.dirname);
 
 export default defineConfig({
-  root: templateRoot,
   resolve: {
-    alias: buildPathAliases(templateRoot),
+    alias: {
+      "@": path.resolve(import.meta.dirname, "apps/web/src"),
+    },
   },
   test: {
     environment: "node",
-    include: ["server/**/*.test.ts", "server/**/*.spec.ts"],
+    include: [
+      "apps/**/*.test.ts",
+      "apps/**/*.test.tsx",
+      "packages/**/*.test.ts",
+      "packages/**/*.test.tsx",
+      "tools/**/*.test.ts",
+    ],
+    hookTimeout: 90_000,
+    testTimeout: 90_000,
+    restoreMocks: true,
+    globals: true,
   },
 });

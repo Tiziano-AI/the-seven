@@ -1,12 +1,7 @@
 # Plan
 
-This file is the only place for planning/journaling/roadmaps in this repo.
+No open milestones.
 
-Rules:
-
-- Track only remaining work. Delete completed items after landing.
-- Prefer outcome-oriented milestones over task lists.
-
-## Open milestones
-
-- Verify demo + BYOK auth flows in dev (reproduce prior failures or confirm resolved) and document outcome.
+- The greenfield rewrite is complete.
+- The current canonical validation command is:
+  - `uv run --python 3.12 devtools/gate.py --full`

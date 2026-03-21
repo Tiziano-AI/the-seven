@@ -1,0 +1,94 @@
+import type { BuiltInCouncilSlug, MemberPosition, ProviderModelRef } from "@the-seven/contracts";
+
+export type ProviderModelSeed = Readonly<{ modelId: string; modelName: string }>;
+
+const DEFAULT_MEMBER_MODELS: Record<MemberPosition, ProviderModelSeed> = {
+  1: { modelId: "openai/gpt-5.2", modelName: "GPT-5.2" },
+  2: { modelId: "google/gemini-3-pro-preview", modelName: "Gemini 3 Pro Preview" },
+  3: { modelId: "anthropic/claude-opus-4.5", modelName: "Claude Opus 4.5" },
+  4: { modelId: "x-ai/grok-4", modelName: "Grok 4" },
+  5: { modelId: "qwen/qwen3-max", modelName: "Qwen3 Max" },
+  6: { modelId: "deepseek/deepseek-v3.2-speciale", modelName: "DeepSeek V3.2 Speciale" },
+  7: { modelId: "openai/gpt-5.2-pro", modelName: "GPT-5.2 Pro" },
+};
+
+const LANTERN_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
+  1: "amazon/nova-2-lite-v1",
+  2: "x-ai/grok-4.1-fast",
+  3: "moonshotai/kimi-k2-thinking",
+  4: "openai/gpt-5.1-codex-mini",
+  5: "qwen/qwen3-vl-8b-thinking",
+  6: "mistralai/mistral-large-2512",
+  7: "google/gemini-3-flash-preview",
+};
+
+const COMMONS_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
+  1: "nvidia/nemotron-3-nano-30b-a3b:free",
+  2: "openai/gpt-oss-120b:free",
+  3: "kwaipilot/kat-coder-pro:free",
+  4: "mistralai/devstral-2512:free",
+  5: "qwen/qwen3-coder:free",
+  6: "xiaomi/mimo-v2-flash:free",
+  7: "openai/gpt-oss-120b:free",
+};
+
+export type BuiltInCouncilTemplate = Readonly<{
+  slug: BuiltInCouncilSlug;
+  name: string;
+  description: string;
+  members: Record<MemberPosition, ProviderModelRef>;
+}>;
+
+export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCouncilTemplate>> = {
+  founding: {
+    slug: "founding",
+    name: "The Founding Council",
+    description: "The default seven voices: replies, critique, verdict.",
+    members: {
+      1: { provider: "openrouter", modelId: DEFAULT_MEMBER_MODELS[1].modelId },
+      2: { provider: "openrouter", modelId: DEFAULT_MEMBER_MODELS[2].modelId },
+      3: { provider: "openrouter", modelId: DEFAULT_MEMBER_MODELS[3].modelId },
+      4: { provider: "openrouter", modelId: DEFAULT_MEMBER_MODELS[4].modelId },
+      5: { provider: "openrouter", modelId: DEFAULT_MEMBER_MODELS[5].modelId },
+      6: { provider: "openrouter", modelId: DEFAULT_MEMBER_MODELS[6].modelId },
+      7: { provider: "openrouter", modelId: DEFAULT_MEMBER_MODELS[7].modelId },
+    },
+  },
+  lantern: {
+    slug: "lantern",
+    name: "The Lantern Council",
+    description: "A lean lineup for rapid iteration. Gemini 3 Flash delivers the verdict.",
+    members: {
+      1: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[1] },
+      2: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[2] },
+      3: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[3] },
+      4: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[4] },
+      5: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[5] },
+      6: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[6] },
+      7: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[7] },
+    },
+  },
+  commons: {
+    slug: "commons",
+    name: "The Commons Council",
+    description: "Free-tier voices for all. GPT OSS 120B delivers the verdict.",
+    members: {
+      1: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[1] },
+      2: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[2] },
+      3: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[3] },
+      4: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[4] },
+      5: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[5] },
+      6: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[6] },
+      7: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[7] },
+    },
+  },
+};
+
+export const BUILT_IN_MODEL_SEEDS: ReadonlyArray<ProviderModelSeed> = Object.values(
+  BUILT_IN_COUNCILS,
+).flatMap((council) =>
+  Object.values(council.members).map((member) => ({
+    modelId: member.modelId,
+    modelName: member.modelId,
+  })),
+);

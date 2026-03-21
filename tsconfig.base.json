@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["apps/web/src/*"],
+      "@the-seven/contracts": ["packages/contracts/src/index.ts"],
+      "@the-seven/contracts/*": ["packages/contracts/src/*"],
+      "@the-seven/config": ["packages/config/src/index.ts"],
+      "@the-seven/config/*": ["packages/config/src/*"],
+      "@the-seven/db": ["packages/db/src/index.ts"],
+      "@the-seven/db/*": ["packages/db/src/*"]
+    },
+    "types": ["node"]
+  }
+}
