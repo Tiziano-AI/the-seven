@@ -1,0 +1,32 @@
+{
+  "name": "@the-seven/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@the-seven/config": "workspace:*",
+    "@the-seven/contracts": "workspace:*",
+    "@the-seven/db": "workspace:*",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "file-type": "21.3.3",
+    "next": "16.2.1",
+    "officeparser": "6.0.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
+    "server-only": "0.0.1",
+    "sonner": "2.0.7",
+    "tailwind-merge": "3.5.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.2.2",
+    "tailwindcss": "4.2.2"
+  }
+}

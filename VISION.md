@@ -18,7 +18,7 @@ It also offers a zero-friction demo path (email → magic link) that uses a serv
 - Browser persistence: the encrypted API key blob (BYOK), demo session token + email + expiry, and minimal UI state (`seven.active_session_id`, `seven.last_council_ref`, `seven.query_draft`) are persisted client-side.
 - Server persistence: the server stores sessions, artifacts, and councils; it never stores plaintext BYOK keys.
 - Provider traffic: the browser never calls OpenRouter directly; all provider calls happen server-side.
-- Best-effort jobs: in-flight orchestration is not durable (no server-side key storage and no job queue). Sessions are persisted to SQLite and survive restarts.
+- Durable jobs: orchestration is persisted in PostgreSQL and resumes after restarts through a leased job runner. Short-lived worker credentials are envelope-encrypted at rest and deleted when the job reaches a terminal state.
 
 ## User Experience (Target)
 
@@ -38,12 +38,13 @@ It also offers a zero-friction demo path (email → magic link) that uses a serv
     - Already-delivered artifacts are preserved; only missing inference is executed.
     - Continue uses the original run snapshot.
   - **Rerun**: create a new session id and rerun the question with an explicitly chosen council (optionally with a query override).
+  - Restart recovery: queued and leased jobs recover through the durable job table instead of silently stalling after a process restart.
 
 ## Non‑Goals
 
 - No account system / OAuth (demo uses one-time email links, not accounts).
 - No server-side key escrow or key recovery.
-- No durable background job queue or automatic reruns (reruns are explicit user actions).
+- No automatic semantic retries that fabricate missing artifacts; recovery may replay only durable state and explicit user actions.
 - No multi-provider abstraction beyond OpenRouter (OpenRouter remains the first-class provider boundary).
 
-Last updated: 2025-12-22.
+Last updated: 2026-03-21.
