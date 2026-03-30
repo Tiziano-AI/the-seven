@@ -213,16 +213,22 @@ function isRetryableStatus(status: number | null): boolean {
 
 export function normalizeCouncilMemberTuningInput(
   tuning: CouncilMemberTuningInput | null | undefined,
+  supportedParameters?: ReadonlyArray<string>,
 ): OpenRouterTuningOptions {
+  const supports = (param: string) => !supportedParameters || supportedParameters.includes(param);
   return {
-    ...(typeof tuning?.temperature === "number" ? { temperature: tuning.temperature } : {}),
-    ...(typeof tuning?.topP === "number" ? { top_p: tuning.topP } : {}),
-    ...(typeof tuning?.seed === "number" ? { seed: tuning.seed } : {}),
-    ...(tuning?.verbosity ? { verbosity: tuning.verbosity } : {}),
-    ...(typeof tuning?.includeReasoning === "boolean"
+    ...(typeof tuning?.temperature === "number" && supports("temperature")
+      ? { temperature: tuning.temperature }
+      : {}),
+    ...(typeof tuning?.topP === "number" && supports("top_p") ? { top_p: tuning.topP } : {}),
+    ...(typeof tuning?.seed === "number" && supports("seed") ? { seed: tuning.seed } : {}),
+    ...(tuning?.verbosity && supports("verbosity") ? { verbosity: tuning.verbosity } : {}),
+    ...(typeof tuning?.includeReasoning === "boolean" && supports("include_reasoning")
       ? { include_reasoning: tuning.includeReasoning }
       : {}),
-    ...(tuning?.reasoningEffort ? { reasoning: { effort: tuning.reasoningEffort } } : {}),
+    ...(tuning?.reasoningEffort && supports("reasoning")
+      ? { reasoning: { effort: tuning.reasoningEffort } }
+      : {}),
   };
 }
 
