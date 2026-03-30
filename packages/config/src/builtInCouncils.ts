@@ -16,7 +16,7 @@ const DEFAULT_MEMBER_MODELS: Record<number, ProviderModelSeed> = {
   4: { modelId: "moonshotai/kimi-k2.5", modelName: "Kimi K2.5" },
   5: { modelId: "qwen/qwen3.5-397b-a17b", modelName: "Qwen3.5 397B A17B" },
   6: { modelId: "anthropic/claude-opus-4.6", modelName: "Claude Opus 4.6" },
-  7: { modelId: "openai/gpt-5.4-pro", modelName: "GPT-5.4 Pro" },
+  7: { modelId: "openai/gpt-5.4", modelName: "GPT-5.4" },
 };
 
 const LANTERN_COUNCIL_MODEL_IDS: Record<number, string> = {
@@ -70,7 +70,7 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
   founding: {
     slug: "founding",
     name: "The Founding Council",
-    description: "The flagship seven voices. GPT-5.4 Pro delivers the verdict.",
+    description: "The flagship seven voices. GPT-5.4 delivers the verdict.",
     phasePrompts: DEFAULT_PHASE_PROMPTS,
     members: buildCouncilMembers({
       1: { provider: "openrouter", modelId: DEFAULT_MEMBER_MODELS[1].modelId },
