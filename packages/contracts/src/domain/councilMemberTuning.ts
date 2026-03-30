@@ -3,6 +3,7 @@ import { isSingleLine } from "./strings";
 
 export type CouncilMemberTuning = Readonly<{
   temperature: number | null;
+  topP: number | null;
   seed: number | null;
   verbosity: string | null;
   reasoningEffort: string | null;
@@ -11,6 +12,7 @@ export type CouncilMemberTuning = Readonly<{
 
 const baseSchema = z.object({
   temperature: z.number().finite().nullable(),
+  topP: z.number().min(0).max(1).nullable(),
   seed: z.number().int().nullable(),
   verbosity: z
     .string()
