@@ -358,7 +358,8 @@ async function runDemoSmoke(input: {
     const demoAuthHeader = `Demo ${demoSession.token}`;
 
     console.log("Live smoke: demo session submit");
-    const demoQuestion = `Demo live smoke ${new Date().toISOString()}`;
+    const demoQuestion =
+      "Is a council of 7 AI models more likely to produce a better answer than a single top-tier model given the same question? Under what conditions does multi-model deliberation add value versus just adding cost and latency?";
     const demoRun = await createSession({
       authHeader: demoAuthHeader,
       query: demoQuestion,
@@ -448,7 +449,8 @@ async function main() {
   }
 
   console.log("Live smoke: BYOK session submit");
-  const byokQuestion = `BYOK live smoke ${new Date().toISOString()}`;
+  const byokQuestion =
+    "When building a multi-model orchestration system, should you optimize for the best answer (use the smartest model for everything) or for diverse perspectives (use different architectures even if individually weaker)? When does diversity beat raw capability?";
   const byokSession = await createSession({
     authHeader,
     query: byokQuestion,
