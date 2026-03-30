@@ -197,7 +197,7 @@ async function startWebhookReceiver() {
       const timeoutPromise = new Promise<string>((_, reject) => {
         setTimeout(() => {
           reject(new Error("Timed out waiting for the Resend inbound webhook."));
-        }, 90_000);
+        }, 180_000);
       });
       return await Promise.race([emailIdPromise, timeoutPromise]);
     },
@@ -337,15 +337,17 @@ async function runDemoSmoke(input: {
   await assertResendInboundAccess(serverEnv);
   const receiver = await startWebhookReceiver();
   const tunnel = await startQuickTunnel(`http://127.0.0.1:${receiver.port}`);
+  const webhookEndpoint = `${tunnel.publicUrl}${receiver.routePath}`;
+  console.log(`  tunnel: ${tunnel.publicUrl}`);
+  console.log(`  webhook endpoint: ${webhookEndpoint}`);
   let webhookId: string | null = null;
   try {
-    const webhook = await createTemporaryWebhook(
-      serverEnv,
-      `${tunnel.publicUrl}${receiver.routePath}`,
-    );
+    const webhook = await createTemporaryWebhook(serverEnv, webhookEndpoint);
     webhookId = webhook.id;
+    console.log(`  webhook id: ${webhookId}`);
 
     const demoRequest = await requestDemoLink(liveEnv.demoTestEmail);
+    console.log(`  demo email sent to: ${demoRequest.email}`);
     assert(
       demoRequest.email === liveEnv.demoTestEmail.trim().toLowerCase(),
       "Demo request returned an unexpected recipient.",
