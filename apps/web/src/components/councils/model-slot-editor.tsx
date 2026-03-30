@@ -11,6 +11,7 @@ export type EditableCouncilMember = Readonly<{
   model: { provider: "openrouter"; modelId: string };
   tuning: {
     temperature: number | null;
+    topP: number | null;
     seed: number | null;
     verbosity: string | null;
     reasoningEffort: string | null;
@@ -58,6 +59,7 @@ export function ModelSlotEditor(props: {
 
   const tuning = props.member.tuning ?? {
     temperature: null,
+    topP: null,
     seed: null,
     verbosity: null,
     reasoningEffort: null,

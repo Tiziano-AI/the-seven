@@ -16,6 +16,7 @@ export type OpenRouterRequest = Readonly<{
   model: string;
   messages: ReadonlyArray<OpenRouterMessage>;
   temperature?: number;
+  top_p?: number;
   seed?: number;
   verbosity?: string;
   include_reasoning?: boolean;
@@ -24,6 +25,7 @@ export type OpenRouterRequest = Readonly<{
 
 export type OpenRouterTuningOptions = Readonly<{
   temperature?: number;
+  top_p?: number;
   seed?: number;
   verbosity?: string;
   include_reasoning?: boolean;
@@ -214,6 +216,7 @@ export function normalizeCouncilMemberTuningInput(
 ): OpenRouterTuningOptions {
   return {
     ...(typeof tuning?.temperature === "number" ? { temperature: tuning.temperature } : {}),
+    ...(typeof tuning?.topP === "number" ? { top_p: tuning.topP } : {}),
     ...(typeof tuning?.seed === "number" ? { seed: tuning.seed } : {}),
     ...(tuning?.verbosity ? { verbosity: tuning.verbosity } : {}),
     ...(typeof tuning?.includeReasoning === "boolean"

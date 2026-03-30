@@ -47,12 +47,21 @@ export type BuiltInCouncilTemplate = Readonly<{
   members: CouncilMembers;
 }>;
 
+const DEFAULT_TUNING = {
+  temperature: 1,
+  topP: 1,
+  seed: null,
+  verbosity: null,
+  reasoningEffort: "xhigh",
+  includeReasoning: null,
+} as const;
+
 function buildCouncilMembers(models: Record<number, ProviderModelRef>): CouncilMembers {
   return parseCouncilMembers(
     MEMBER_POSITIONS.map((memberPosition) => ({
       memberPosition,
       model: models[memberPosition],
-      tuning: null,
+      tuning: DEFAULT_TUNING,
     })),
   );
 }
