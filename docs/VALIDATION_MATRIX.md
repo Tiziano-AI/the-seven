@@ -51,19 +51,42 @@ This is the required verification pyramid for the rewrite.
 - continue failed run
 - rerun completed run
 
+## Local Operator
+
+- `pnpm local:doctor` verifies:
+  - Homebrew presence
+  - Docker daemon and Compose availability
+  - Node, pnpm, and uv
+  - `psql` and `pg_isready`
+  - Playwright browser availability
+  - `.env.local` presence
+  - required live-test keys when provider-backed verification is requested
+- `pnpm local:bootstrap -- --install` installs missing Homebrew-managed prerequisites and Playwright browsers
+- `pnpm local:db:up` waits for a healthy compose-managed Postgres instance
+- `pnpm local:db:reset` destroys the named volume and returns a blank database
+
+## Live
+
+- `pnpm test:live` asserts:
+  - BYOK auth validate against real OpenRouter
+  - model validate/autocomplete through the live catalog path
+  - council CRUD against the local app and local Postgres
+  - session submit plus terminal-state polling and diagnostics retrieval
+  - demo request/consume through real Resend outbound and inbound retrieval
+- `pnpm local:live` additionally asserts:
+  - temporary Cloudflare quick tunnel lifecycle
+  - temporary Resend webhook creation and deletion
+  - Playwright browser coverage against the externally started local server
+
 ## Gate
 
 The final delivery gate is:
 
 ```bash
-uv run --python 3.12 devtools/gate.py --full
-
-pnpm run lint
-pnpm run check
-pnpm run test
-pnpm run test:e2e
-pnpm run build
+pnpm local:doctor
+pnpm local:db:up
 pnpm run db:bootstrap:check
+uv run --python 3.12 devtools/gate.py --full
 ```
 
-All commands must pass on a blank Postgres database with the current init migration.
+All commands must pass on a blank compose-managed Postgres database with the current init migration.
