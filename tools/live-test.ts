@@ -4,9 +4,9 @@ import { once } from "node:events";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
   BUILT_IN_COUNCILS,
+  type LiveTestEnv,
   loadLiveTestEnv,
   loadServerEnv,
-  type LiveTestEnv,
   type ServerEnv,
 } from "@the-seven/config";
 import {

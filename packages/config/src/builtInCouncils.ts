@@ -10,13 +10,13 @@ import { DEFAULT_PHASE_PROMPTS } from "./prompts";
 export type ProviderModelSeed = Readonly<{ modelId: string; modelName: string }>;
 
 const DEFAULT_MEMBER_MODELS: Record<number, ProviderModelSeed> = {
-  1: { modelId: "openai/gpt-5.2", modelName: "GPT-5.2" },
-  2: { modelId: "google/gemini-3-pro-preview", modelName: "Gemini 3 Pro Preview" },
-  3: { modelId: "anthropic/claude-opus-4.5", modelName: "Claude Opus 4.5" },
-  4: { modelId: "x-ai/grok-4", modelName: "Grok 4" },
-  5: { modelId: "qwen/qwen3-max", modelName: "Qwen3 Max" },
-  6: { modelId: "deepseek/deepseek-v3.2-speciale", modelName: "DeepSeek V3.2 Speciale" },
-  7: { modelId: "openai/gpt-5.2-pro", modelName: "GPT-5.2 Pro" },
+  1: { modelId: "google/gemini-3.1-pro-preview", modelName: "Gemini 3.1 Pro Preview" },
+  2: { modelId: "x-ai/grok-4.20-beta", modelName: "Grok 4.20 Beta" },
+  3: { modelId: "z-ai/glm-5", modelName: "GLM 5" },
+  4: { modelId: "moonshotai/kimi-k2.5", modelName: "Kimi K2.5" },
+  5: { modelId: "qwen/qwen3.5-397b-a17b", modelName: "Qwen3.5 397B A17B" },
+  6: { modelId: "openai/gpt-5.4", modelName: "GPT-5.4" },
+  7: { modelId: "anthropic/claude-opus-4.6", modelName: "Claude Opus 4.6" },
 };
 
 const LANTERN_COUNCIL_MODEL_IDS: Record<number, string> = {
@@ -30,13 +30,13 @@ const LANTERN_COUNCIL_MODEL_IDS: Record<number, string> = {
 };
 
 const COMMONS_COUNCIL_MODEL_IDS: Record<number, string> = {
-  1: "nvidia/nemotron-3-nano-30b-a3b:free",
-  2: "openai/gpt-oss-120b:free",
-  3: "kwaipilot/kat-coder-pro:free",
-  4: "mistralai/devstral-2512:free",
-  5: "qwen/qwen3-coder:free",
-  6: "xiaomi/mimo-v2-flash:free",
-  7: "openai/gpt-oss-120b:free",
+  1: "qwen/qwen3.5-122b-a10b",
+  2: "google/gemini-3.1-flash-lite-preview",
+  3: "openai/gpt-5.4-nano",
+  4: "openai/gpt-oss-120b:free",
+  5: "nvidia/nemotron-3-super-120b-a12b:free",
+  6: "kwaipilot/kat-coder-pro-v2",
+  7: "minimax/minimax-m2.7",
 };
 
 export type BuiltInCouncilTemplate = Readonly<{
@@ -61,7 +61,7 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
   founding: {
     slug: "founding",
     name: "The Founding Council",
-    description: "The default seven voices: replies, critique, verdict.",
+    description: "The flagship seven voices. Claude Opus 4.6 delivers the verdict.",
     phasePrompts: DEFAULT_PHASE_PROMPTS,
     members: buildCouncilMembers({
       1: { provider: "openrouter", modelId: DEFAULT_MEMBER_MODELS[1].modelId },
@@ -91,7 +91,7 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
   commons: {
     slug: "commons",
     name: "The Commons Council",
-    description: "Free-tier voices for all. GPT OSS 120B delivers the verdict.",
+    description: "Budget-friendly voices for demo mode. MiniMax M2.7 delivers the verdict.",
     phasePrompts: DEFAULT_PHASE_PROMPTS,
     members: buildCouncilMembers({
       1: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[1] },
