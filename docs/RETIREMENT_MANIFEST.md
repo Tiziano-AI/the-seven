@@ -19,7 +19,15 @@ Everything listed here is retired in the rewrite and must be deleted in the same
 - runtime JSON config file loading
 - fire-and-forget orchestration entrypoints
 - separate response/review/synthesis persistence paths
+- split council-member row writes
+- split `users.byok_id` / `users.email` identity persistence
+- preview/record limiter paths
+- miss-only model-catalog refresh logic
 - any duplicate ask/run inspector composition paths
+- repo-root `.env` as a runtime entrypoint
+- ad hoc local developer startup commands outside `pnpm local:*`
+- manual local Postgres lifecycle outside `docker compose` + `pnpm local:db:*`
+- permanent dashboard-only webhook setup for local demo-flow verification
 
 ## Dependencies
 
@@ -41,6 +49,11 @@ Everything listed here is retired in the rewrite and must be deleted in the same
 - `/session/:id`
 - unversioned `/api/*`
 - `member responses` / `member reviews` / `member synthesis` as separate persistence owners
+- `council_members`
+- `provider_kind`
+- `byok_id`
+- `.env` as the canonical local runtime file
+- “start Postgres manually” as the canonical local bootstrap instruction
 
 ## Validation Rule
 

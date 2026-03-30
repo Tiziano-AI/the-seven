@@ -47,6 +47,52 @@ No runtime code remains in `client/`, `server/`, or `shared/`.
 - Formatting/linting/import organization: Biome only
 - External providers: one adapter per provider boundary
 
+## Canonical Local Operator Surface
+
+- Local Mac development uses exactly one database/runtime substrate:
+  - Docker Desktop + `docker compose`
+  - repo-root `compose.yaml`
+  - one `postgres:17-alpine` service published on `127.0.0.1:5432`
+- Repo-root `.env.local` is the only canonical local runtime secrets file.
+- Node-side tooling loads `.env.local` through the shared config/env loader before parsing runtime settings.
+- `tools/local-dev.ts` is the only local operator entrypoint. It owns:
+  - workstation doctor/bootstrap
+  - local database lifecycle
+  - local app launch
+  - local gate execution
+  - full local live verification orchestration
+- `tools/live-test.ts` is the provider-backed smoke owner. It assumes the local app is already running and exercises:
+  - BYOK auth validation
+  - model validate/autocomplete
+  - council CRUD
+  - session submit plus terminal-state polling
+  - demo request/consume via real Resend outbound + inbound retrieval
+- Browser coverage remains Playwright-owned. The Playwright config must support both:
+  - self-started local dev server for standalone `pnpm test:e2e`
+  - externally started local server for `pnpm local:live`
+
+### Decision Basis
+
+- Node exposes built-in dotenv loading through `process.loadEnvFile`, which allows one repo-root `.env.local` loader without adding a new runtime dependency.
+  - Source: `vendor:node:v25:https://nodejs.org/api/process.html#processloadenvfilepath`
+- Docker Compose service health checks and named-volume lifecycle support one canonical local Postgres substrate and deterministic reset flow.
+  - Source: `vendor:docker:compose:https://docs.docker.com/reference/compose-file/services/#healthcheck`
+  - Source: `vendor:docker:compose:https://docs.docker.com/reference/cli/docker/compose/down/`
+- Playwright supports a `webServer` config that can either start a server or reuse an existing one, which is the canonical way to let `pnpm local:live` own app startup.
+  - Source: `vendor:playwright:test-webserver:https://playwright.dev/docs/test-webserver`
+- Cloudflare quick tunnels are the canonical lightweight public URL for local webhook testing and are explicitly documented for development use.
+  - Source: `vendor:cloudflare:tunnel:https://developers.cloudflare.com/tunnel/setup/`
+- Resend documents:
+  - API-managed webhook creation and deletion
+  - `email.received` delivery events
+  - retrieval of the full received email payload by ID
+  These surfaces are sufficient for a temporary local inbound-email harness.
+  - Source: `vendor:resend:create-webhook:https://resend.com/docs/api-reference/webhooks/create-webhook`
+  - Source: `vendor:resend:delete-webhook:https://resend.com/docs/api-reference/webhooks/delete-webhook`
+  - Source: `vendor:resend:received-event:https://resend.com/docs/webhooks/emails/received`
+  - Source: `vendor:resend:retrieve-received-email:https://resend.com/docs/api-reference/emails/retrieve-received-email`
+- Local live verification requires a Resend API key that can both manage webhooks and read received emails. Send-only restricted keys are not valid for the canonical local live path.
+
 ### Decision Basis
 
 - Next App Router is the canonical router/build/runtime for server and client composition, route handlers, and server/client component boundaries.
@@ -152,7 +198,7 @@ Canonical error kinds:
 
 - Browser stores the encrypted OpenRouter key locally behind a user password.
 - Browser sends `Authorization: Bearer <openrouter_api_key>` to `/api/v1`.
-- Server derives `byok_id = sha256_hex(openrouter_api_key)` and uses the key transiently for upstream requests.
+- Server derives a BYOK principal as `sha256_hex(openrouter_api_key)` and uses the key transiently for upstream requests.
 - When a job must outlive the request, server persists only an envelope-encrypted credential blob tied to that job and deletes it when the job reaches a terminal state.
 - Server never persists plaintext keys or user passwords.
 
@@ -175,15 +221,13 @@ The database is greenfield and may be dropped and recreated. One squashed init m
 ### Core tables
 
 - `users`
-  - user identity, either BYOK or demo
+  - canonical identity row keyed by `(kind, principal)`
 - `demo_magic_links`
   - one-time demo email tokens
 - `demo_sessions`
   - 24-hour demo session tokens
 - `councils`
-  - saved council metadata and phase prompts
-- `council_members`
-  - exactly seven member slots per user council
+  - saved council aggregate with `name` plus `definition_json{phasePrompts,members[7]}`
 - `sessions`
   - immutable run snapshot, attachment snapshot, visible status, failure kind, totals, trace metadata
 - `session_artifacts`
@@ -193,9 +237,9 @@ The database is greenfield and may be dropped and recreated. One squashed init m
 - `jobs`
   - durable execution queue, lease control, and envelope-encrypted worker credentials
 - `rate_limit_buckets`
-  - fixed-window counters
+  - atomic fixed-window admission counters
 - `catalog_cache`
-  - OpenRouter model catalog and validation cache
+  - OpenRouter model catalog cache with a 24-hour TTL lazy refresh policy
 
 ### Session snapshot model
 
@@ -210,6 +254,23 @@ The database is greenfield and may be dropped and recreated. One squashed init m
 - ingress metadata.
 
 Historical inspection never dereferences live council state.
+
+### Council aggregate
+
+- User-defined councils persist as one aggregate row.
+- `definition_json` stores:
+  - `phasePrompts`
+  - `members`
+- `members` is validated as exactly seven unique positions `1..7`.
+- No split `council_members` write path survives.
+
+### Identity and limiter rules
+
+- `users.principal` is the only canonical persisted identity value.
+- BYOK principal = `sha256_hex(openrouter_api_key)`.
+- Demo principal = normalized lowercase email.
+- All limiter decisions are atomic admit-and-count operations on `rate_limit_buckets`.
+- Accepted demo email requests consume quota before downstream email send and are not refunded on provider failure.
 
 ## Durable Orchestration Contract
 
@@ -244,11 +305,15 @@ Historical inspection never dereferences live council state.
   - model catalog fetch
   - chat completions
   - generation lookup
-  - typed upstream failure mapping
+  - typed upstream failure mapping to `upstream_error`
 - Resend adapter
   - demo magic-link email send
   - idempotency key propagation
-  - typed upstream failure mapping
+  - typed upstream failure mapping to `upstream_error`
+- Local live-test Resend harness
+  - temporary webhook creation and deletion
+  - received-email retrieval by webhook event id
+  - no permanent dashboard-managed webhook is part of the canonical local stack
 
 Adapters use native `fetch`. Axios is retired.
 
