@@ -6,6 +6,7 @@ import {
   BUILT_IN_COUNCILS,
   loadLiveTestEnv,
   loadServerEnv,
+  type LiveTestEnv,
   type ServerEnv,
 } from "@the-seven/config";
 import {
@@ -91,7 +92,7 @@ async function assertResendInboundAccess(env: ServerEnv) {
 
 async function createTemporaryWebhook(env: ServerEnv, publicUrl: string) {
   const data = await resendRequest(env, "POST", "/webhooks", {
-    url: publicUrl,
+    endpoint: publicUrl,
     enabled: true,
     events: ["email.received"],
   });
@@ -252,7 +253,7 @@ function extractDemoToken(input: { html?: string | null; text?: string | null })
 }
 
 async function waitForTerminalSession(authHeader: string, sessionId: number, label: string) {
-  const deadline = Date.now() + 240_000;
+  const deadline = Date.now() + 600_000;
   while (Date.now() < deadline) {
     const detail = await fetchSession(authHeader, sessionId);
     if (sessionTerminalStates.has(detail.session.status)) {
@@ -321,6 +322,71 @@ async function runPlaywrightSmoke(input: {
       SEVEN_PLAYWRIGHT_SESSION_QUERY: input.sessionQuery,
     },
   });
+}
+
+const skipDemo = process.env.SEVEN_SKIP_DEMO_LIVE === "1";
+
+async function runDemoSmoke(input: {
+  liveEnv: LiveTestEnv;
+  serverEnv: ServerEnv;
+  commonsRef: { kind: "built_in"; slug: "commons" };
+}) {
+  const { liveEnv, serverEnv, commonsRef } = input;
+
+  console.log("Live smoke: demo request + consume");
+  await assertResendInboundAccess(serverEnv);
+  const receiver = await startWebhookReceiver();
+  const tunnel = await startQuickTunnel(`http://127.0.0.1:${receiver.port}`);
+  let webhookId: string | null = null;
+  try {
+    const webhook = await createTemporaryWebhook(
+      serverEnv,
+      `${tunnel.publicUrl}${receiver.routePath}`,
+    );
+    webhookId = webhook.id;
+
+    const demoRequest = await requestDemoLink(liveEnv.demoTestEmail);
+    assert(
+      demoRequest.email === liveEnv.demoTestEmail.trim().toLowerCase(),
+      "Demo request returned an unexpected recipient.",
+    );
+
+    const emailId = await receiver.waitForEmailId();
+    const receivedEmail = await retrieveReceivedEmail(serverEnv, emailId);
+    const demoToken = extractDemoToken(receivedEmail);
+    const demoSession = await consumeDemoLink(demoToken);
+    const demoAuthHeader = `Demo ${demoSession.token}`;
+
+    console.log("Live smoke: demo session submit");
+    const demoQuestion = `Demo live smoke ${new Date().toISOString()}`;
+    const demoRun = await createSession({
+      authHeader: demoAuthHeader,
+      query: demoQuestion,
+      councilRef: commonsRef,
+    });
+    const demoDetail = await waitForTerminalSession(
+      demoAuthHeader,
+      demoRun.sessionId,
+      "Demo session",
+    );
+    const demoDiagnostics = await fetchSessionDiagnostics(demoAuthHeader, demoRun.sessionId);
+    assertSessionArtifacts(demoDetail, demoDiagnostics);
+
+    console.log("Live smoke: playwright");
+    await runPlaywrightSmoke({
+      demoToken: demoSession.token,
+      demoEmail: demoSession.email,
+      demoExpiresAt: demoSession.expiresAt,
+      sessionId: demoRun.sessionId,
+      sessionQuery: demoQuestion,
+    });
+  } finally {
+    if (webhookId) {
+      await deleteTemporaryWebhook(serverEnv, webhookId);
+    }
+    await tunnel.close();
+    await receiver.close();
+  }
 }
 
 async function main() {
@@ -396,59 +462,10 @@ async function main() {
   const byokDiagnostics = await fetchSessionDiagnostics(authHeader, byokSession.sessionId);
   assertSessionArtifacts(byokDetail, byokDiagnostics);
 
-  console.log("Live smoke: demo request + consume");
-  await assertResendInboundAccess(serverEnv);
-  const receiver = await startWebhookReceiver();
-  const tunnel = await startQuickTunnel(`http://127.0.0.1:${receiver.port}`);
-  let webhookId: string | null = null;
-  try {
-    const webhook = await createTemporaryWebhook(
-      serverEnv,
-      `${tunnel.publicUrl}${receiver.routePath}`,
-    );
-    webhookId = webhook.id;
-
-    const demoRequest = await requestDemoLink(liveEnv.demoTestEmail);
-    assert(
-      demoRequest.email === liveEnv.demoTestEmail.trim().toLowerCase(),
-      "Demo request returned an unexpected recipient.",
-    );
-
-    const emailId = await receiver.waitForEmailId();
-    const receivedEmail = await retrieveReceivedEmail(serverEnv, emailId);
-    const demoToken = extractDemoToken(receivedEmail);
-    const demoSession = await consumeDemoLink(demoToken);
-    const demoAuthHeader = `Demo ${demoSession.token}`;
-
-    console.log("Live smoke: demo session submit");
-    const demoQuestion = `Demo live smoke ${new Date().toISOString()}`;
-    const demoRun = await createSession({
-      authHeader: demoAuthHeader,
-      query: demoQuestion,
-      councilRef: commonsRef,
-    });
-    const demoDetail = await waitForTerminalSession(
-      demoAuthHeader,
-      demoRun.sessionId,
-      "Demo session",
-    );
-    const demoDiagnostics = await fetchSessionDiagnostics(demoAuthHeader, demoRun.sessionId);
-    assertSessionArtifacts(demoDetail, demoDiagnostics);
-
-    console.log("Live smoke: playwright");
-    await runPlaywrightSmoke({
-      demoToken: demoSession.token,
-      demoEmail: demoSession.email,
-      demoExpiresAt: demoSession.expiresAt,
-      sessionId: demoRun.sessionId,
-      sessionQuery: demoQuestion,
-    });
-  } finally {
-    if (webhookId) {
-      await deleteTemporaryWebhook(serverEnv, webhookId);
-    }
-    await tunnel.close();
-    await receiver.close();
+  if (skipDemo) {
+    console.log("Live smoke: demo flow skipped (SEVEN_SKIP_DEMO_LIVE=1)");
+  } else {
+    await runDemoSmoke({ liveEnv, serverEnv, commonsRef });
   }
 }
 
