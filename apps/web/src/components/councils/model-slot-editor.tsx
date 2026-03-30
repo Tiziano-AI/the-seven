@@ -58,11 +58,11 @@ export function ModelSlotEditor(props: {
   }, [props.authHeader, props.member.model.modelId]);
 
   const tuning = props.member.tuning ?? {
-    temperature: null,
-    topP: null,
+    temperature: 1,
+    topP: 1,
     seed: null,
     verbosity: null,
-    reasoningEffort: null,
+    reasoningEffort: "xhigh",
     includeReasoning: null,
   };
 
