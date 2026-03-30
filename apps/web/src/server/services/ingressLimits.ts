@@ -1,9 +1,9 @@
 import "server-only";
 
 import { INGRESS_FLOOD_LIMITS } from "@the-seven/config";
-import { applyFixedWindowLimit } from "./rateLimits";
+import { admitFixedWindowLimit } from "./rateLimits";
 
-export async function applyIngressFloodLimit(input: { ip: string | null; now: Date }) {
+export async function admitIngressFloodLimit(input: { ip: string | null; now: Date }) {
   const scopes = [
     { scope: "ingress:flood:global", spec: INGRESS_FLOOD_LIMITS.global },
     ...(input.ip
@@ -12,7 +12,7 @@ export async function applyIngressFloodLimit(input: { ip: string | null; now: Da
   ];
 
   for (const scope of scopes) {
-    const limited = await applyFixedWindowLimit({
+    const limited = await admitFixedWindowLimit({
       scope: scope.scope,
       spec: scope.spec,
       now: input.now,

@@ -7,8 +7,8 @@ import { handleRoute } from "@/server/http/route";
 import {
   getOutputFormats,
   removeCouncil,
+  replaceCouncil,
   resolveCouncilSnapshot,
-  saveCouncil,
 } from "@/server/services/councils";
 import {
   assertCouncilNameAvailable,
@@ -45,28 +45,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ loc
         });
       }
 
-      try {
-        const snapshot = await resolveCouncilSnapshot({ userId: auth.userId, ref });
-        return {
-          ref,
-          name: snapshot.nameAtRun,
-          phasePrompts: snapshot.phasePrompts,
-          outputFormats: getOutputFormats(),
-          members: snapshot.members,
-          editable: ref.kind === "user",
-          deletable: ref.kind === "user",
-        };
-      } catch (error) {
-        if (error instanceof Error && error.message === "Council not found") {
-          throw new EdgeError({
-            kind: "not_found",
-            message: "Council not found",
-            details: { resource: "council" },
-            status: 404,
-          });
-        }
-        throw error;
-      }
+      const snapshot = await resolveCouncilSnapshot({ userId: auth.userId, ref });
+      return {
+        ref,
+        name: snapshot.nameAtRun,
+        phasePrompts: snapshot.phasePrompts,
+        outputFormats: getOutputFormats(),
+        members: snapshot.members,
+        editable: ref.kind === "user",
+        deletable: ref.kind === "user",
+      };
     },
   });
 }
@@ -93,13 +81,13 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ loc
         name: input.name,
         excludeCouncilId: ref.councilId,
       });
-      await validateCouncilMembers(input.members);
-      await saveCouncil({
+      const members = await validateCouncilMembers(input.members);
+      await replaceCouncil({
         userId: auth.userId,
         councilId: ref.councilId,
         name: input.name,
         phasePrompts: input.phasePrompts,
-        members: input.members,
+        members,
       });
       return { success: true };
     },

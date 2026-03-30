@@ -2,13 +2,13 @@ import "server-only";
 
 import type {
   AttachmentText,
-  CouncilMemberTuning,
+  CouncilMemberAssignment,
   OutputFormats,
   PhasePrompts,
-  ProviderModelRef,
   SessionSnapshot,
 } from "@the-seven/contracts";
-import { isMemberPosition, SYNTHESIZER_MEMBER_POSITION } from "@the-seven/contracts";
+import { SYNTHESIZER_MEMBER_POSITION } from "@the-seven/contracts";
+import { canonicalizeCouncilMembers } from "./councilDefinition";
 
 export function formatSnapshotUserMessage(
   query: string,
@@ -42,27 +42,10 @@ export function buildSessionSnapshot(input: {
   council: Readonly<{
     nameAtRun: string;
     phasePrompts: PhasePrompts;
-    members: ReadonlyArray<
-      Readonly<{
-        memberPosition: number;
-        model: ProviderModelRef;
-        tuning: CouncilMemberTuning | null;
-      }>
-    >;
+    members: ReadonlyArray<CouncilMemberAssignment>;
   }>;
 }): SessionSnapshot {
-  const members = input.council.members.map((member) => {
-    const position = member.memberPosition;
-    if (!isMemberPosition(position)) {
-      throw new Error(`Invalid memberPosition ${position}`);
-    }
-
-    return {
-      memberPosition: position,
-      model: member.model,
-      tuning: member.tuning,
-    };
-  });
+  const members = canonicalizeCouncilMembers(input.council.members);
 
   return {
     version: 1,
@@ -74,7 +57,7 @@ export function buildSessionSnapshot(input: {
     council: {
       nameAtRun: input.council.nameAtRun,
       phasePrompts: input.council.phasePrompts,
-      members,
+      members: [...members],
     },
   };
 }

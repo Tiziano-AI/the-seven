@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { getDb } from "../client";
 import { rateLimitBuckets } from "../schema";
 
@@ -15,7 +15,7 @@ function floorWindowStart(now: Date, windowSeconds: number): Date {
   return new Date(Math.floor(now.getTime() / windowMs) * windowMs);
 }
 
-export async function getRateLimitBucket(input: {
+export async function admitRateLimitBucket(input: {
   scope: string;
   now: Date;
   windowSeconds: number;
@@ -23,46 +23,24 @@ export async function getRateLimitBucket(input: {
   const db = await getDb();
   const windowStart = floorWindowStart(input.now, input.windowSeconds);
   const rows = await db
-    .select()
-    .from(rateLimitBuckets)
-    .where(
-      and(eq(rateLimitBuckets.scope, input.scope), eq(rateLimitBuckets.windowStart, windowStart)),
-    )
-    .limit(1);
-
-  return rows[0] ?? null;
-}
-
-export async function incrementRateLimitBucket(input: {
-  scope: string;
-  now: Date;
-  windowSeconds: number;
-}) {
-  const db = await getDb();
-  const windowStart = floorWindowStart(input.now, input.windowSeconds);
-  const existing = await getRateLimitBucket(input);
-
-  if (!existing) {
-    const inserted = await db
-      .insert(rateLimitBuckets)
-      .values({
-        scope: input.scope,
-        windowStart,
-        windowSeconds: input.windowSeconds,
-        count: 1,
-      })
-      .returning();
-    return requireRow(inserted, "rate_limit_buckets.insert");
-  }
-
-  const updated = await db
-    .update(rateLimitBuckets)
-    .set({
-      count: existing.count + 1,
+    .insert(rateLimitBuckets)
+    .values({
+      scope: input.scope,
+      windowStart,
+      windowSeconds: input.windowSeconds,
+      count: 1,
+      createdAt: input.now,
       updatedAt: input.now,
     })
-    .where(eq(rateLimitBuckets.id, existing.id))
+    .onConflictDoUpdate({
+      target: [rateLimitBuckets.scope, rateLimitBuckets.windowStart],
+      set: {
+        count: sql`${rateLimitBuckets.count} + 1`,
+        windowSeconds: input.windowSeconds,
+        updatedAt: input.now,
+      },
+    })
     .returning();
 
-  return requireRow(updated, "rate_limit_buckets.update");
+  return requireRow(rows, "rate_limit_buckets.admit");
 }

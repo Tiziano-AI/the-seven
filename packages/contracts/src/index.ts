@@ -1,5 +1,6 @@
 export * from "./domain/attachments";
 export * from "./domain/builtInCouncils";
+export * from "./domain/councilDefinition";
 export * from "./domain/councilMemberTuning";
 export * from "./domain/councilRef";
 export * from "./domain/ingress";

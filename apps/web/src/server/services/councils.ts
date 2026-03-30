@@ -1,35 +1,26 @@
 import "server-only";
 
-import {
-  BUILT_IN_COUNCILS,
-  DEFAULT_OUTPUT_FORMATS,
-  DEFAULT_PHASE_PROMPTS,
-} from "@the-seven/config";
+import { BUILT_IN_COUNCILS, DEFAULT_OUTPUT_FORMATS } from "@the-seven/config";
 import type {
-  CouncilMemberTuning,
+  CouncilMemberAssignment,
   CouncilRef,
   OutputFormats,
   PhasePrompts,
-  ProviderModelRef,
 } from "@the-seven/contracts";
 import {
   createCouncil,
   deleteCouncil,
-  getUserCouncilWithMembers,
+  getUserCouncil,
   listUserCouncils,
-  updateCouncil,
+  replaceCouncil as replaceStoredCouncil,
 } from "@the-seven/db";
+import { canonicalizeCouncilDefinition } from "../domain/councilDefinition";
+import { EdgeError } from "../http/errors";
 
 export type CouncilSnapshot = Readonly<{
   nameAtRun: string;
   phasePrompts: PhasePrompts;
-  members: ReadonlyArray<
-    Readonly<{
-      memberPosition: number;
-      model: ProviderModelRef;
-      tuning: CouncilMemberTuning | null;
-    }>
-  >;
+  members: ReadonlyArray<CouncilMemberAssignment>;
 }>;
 
 export async function listCouncils(userId: number) {
@@ -46,12 +37,28 @@ export async function listCouncils(userId: number) {
     ...builtIns,
     ...userCouncils.map((council) => ({
       ref: { kind: "user", councilId: council.id } as const,
-      name: council.name,
+      name: council.definition.name,
       description: null,
       editable: true,
       deletable: true,
     })),
   ];
+}
+
+async function requireOwnedCouncil(input: { userId: number; councilId: number }) {
+  const stored = await getUserCouncil({
+    userId: input.userId,
+    councilId: input.councilId,
+  });
+  if (!stored) {
+    throw new EdgeError({
+      kind: "not_found",
+      message: "Council not found",
+      details: { resource: "council" },
+      status: 404,
+    });
+  }
+  return stored;
 }
 
 export async function resolveCouncilSnapshot(input: {
@@ -62,42 +69,20 @@ export async function resolveCouncilSnapshot(input: {
     const council = BUILT_IN_COUNCILS[input.ref.slug];
     return {
       nameAtRun: council.name,
-      phasePrompts: {
-        phase1: DEFAULT_PHASE_PROMPTS.phase1,
-        phase2: DEFAULT_PHASE_PROMPTS.phase2,
-        phase3: DEFAULT_PHASE_PROMPTS.phase3,
-      },
-      members: Object.entries(council.members).map(([memberPosition, model]) => ({
-        memberPosition: Number(memberPosition),
-        model,
-        tuning: null,
-      })),
+      phasePrompts: council.phasePrompts,
+      members: council.members,
     };
   }
 
-  const stored = await getUserCouncilWithMembers({
+  const stored = await requireOwnedCouncil({
     userId: input.userId,
     councilId: input.ref.councilId,
   });
-  if (!stored) {
-    throw new Error("Council not found");
-  }
 
   return {
-    nameAtRun: stored.council.name,
-    phasePrompts: {
-      phase1: stored.council.phase1Prompt,
-      phase2: stored.council.phase2Prompt,
-      phase3: stored.council.phase3Prompt,
-    },
-    members: stored.members.map((member) => ({
-      memberPosition: member.memberPosition,
-      model: {
-        provider: member.provider,
-        modelId: member.modelId,
-      },
-      tuning: (member.tuningJson as CouncilMemberTuning | null) ?? null,
-    })),
+    nameAtRun: stored.definition.name,
+    phasePrompts: stored.definition.phasePrompts,
+    members: stored.definition.members,
   };
 }
 
@@ -112,48 +97,51 @@ export async function duplicateCouncilFromSnapshot(input: {
 }) {
   return createCouncil({
     userId: input.userId,
-    name: input.name,
-    phase1Prompt: input.snapshot.phasePrompts.phase1,
-    phase2Prompt: input.snapshot.phasePrompts.phase2,
-    phase3Prompt: input.snapshot.phasePrompts.phase3,
-    members: input.snapshot.members.map((member) => ({
-      memberPosition: member.memberPosition,
-      provider: member.model.provider,
-      modelId: member.model.modelId,
-      tuningJson: member.tuning,
-    })),
+    definition: canonicalizeCouncilDefinition({
+      name: input.name,
+      phasePrompts: input.snapshot.phasePrompts,
+      members: input.snapshot.members,
+    }),
   });
 }
 
-export async function saveCouncil(input: {
+export async function replaceCouncil(input: {
   userId: number;
   councilId: number;
   name: string;
   phasePrompts: PhasePrompts;
-  members: ReadonlyArray<
-    Readonly<{
-      memberPosition: number;
-      model: ProviderModelRef;
-      tuning: CouncilMemberTuning | null;
-    }>
-  >;
+  members: ReadonlyArray<CouncilMemberAssignment>;
 }) {
-  await updateCouncil({
+  const definition = canonicalizeCouncilDefinition({
+    name: input.name,
+    phasePrompts: input.phasePrompts,
+    members: input.members,
+  });
+
+  const replaced = await replaceStoredCouncil({
     userId: input.userId,
     councilId: input.councilId,
-    name: input.name,
-    phase1Prompt: input.phasePrompts.phase1,
-    phase2Prompt: input.phasePrompts.phase2,
-    phase3Prompt: input.phasePrompts.phase3,
-    members: input.members.map((member) => ({
-      memberPosition: member.memberPosition,
-      provider: member.model.provider,
-      modelId: member.model.modelId,
-      tuningJson: member.tuning,
-    })),
+    definition,
   });
+
+  if (!replaced) {
+    throw new EdgeError({
+      kind: "not_found",
+      message: "Council not found",
+      details: { resource: "council" },
+      status: 404,
+    });
+  }
 }
 
 export async function removeCouncil(input: { userId: number; councilId: number }) {
-  await deleteCouncil(input);
+  const deleted = await deleteCouncil(input);
+  if (!deleted) {
+    throw new EdgeError({
+      kind: "not_found",
+      message: "Council not found",
+      details: { resource: "council" },
+      status: 404,
+    });
+  }
 }

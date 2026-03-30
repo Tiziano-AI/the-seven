@@ -6,38 +6,23 @@ import {
   createDemoSession,
   getDemoMagicLinkByTokenHash,
   getDemoSessionByTokenHash,
-  getOrCreateUserByEmail,
+  getOrCreateUser,
   getUserById,
   markDemoMagicLinkUsed,
   touchDemoSession,
 } from "@the-seven/db";
-import { ResendRequestFailedError, sendResendEmail } from "../adapters/resend";
+import { sendResendEmail } from "../adapters/resend";
 import { createDemoToken, hashDemoToken } from "../domain/demoTokens";
 
 export class DemoAuthError extends Error {
-  readonly kind:
-    | "demo_disabled"
-    | "link_not_found"
-    | "link_used"
-    | "link_expired"
-    | "user_missing"
-    | "email_send_failed";
-  readonly status: number | null;
+  readonly kind: "demo_disabled" | "link_not_found" | "link_used" | "link_expired" | "user_missing";
 
   constructor(input: {
-    kind:
-      | "demo_disabled"
-      | "link_not_found"
-      | "link_used"
-      | "link_expired"
-      | "user_missing"
-      | "email_send_failed";
+    kind: "demo_disabled" | "link_not_found" | "link_used" | "link_expired" | "user_missing";
     message: string;
-    status?: number | null;
   }) {
     super(input.message);
     this.kind = input.kind;
-    this.status = input.status ?? null;
   }
 }
 
@@ -62,8 +47,11 @@ export async function requestDemoAuthLink(input: {
     throw new DemoAuthError({ kind: "demo_disabled", message: "Demo mode is disabled" });
   }
 
-  const normalizedEmail = input.email.trim().toLowerCase();
-  const user = await getOrCreateUserByEmail(normalizedEmail);
+  const principal = input.email.trim().toLowerCase();
+  const user = await getOrCreateUser({
+    kind: "demo",
+    principal,
+  });
   const linkToken = createDemoToken();
   const expiresAt = addHours(input.now, DEMO_AUTH_LINK_TTL_HOURS);
 
@@ -76,32 +64,21 @@ export async function requestDemoAuthLink(input: {
   });
 
   const link = `${env.publicOrigin.replace(/\/+$/, "")}/?demo_token=${linkToken.token}`;
-  const email = buildDemoEmail({ email: normalizedEmail, link });
+  const email = buildDemoEmail({ email: principal, link });
 
-  try {
-    await sendResendEmail({
-      apiKey: env.demo.resendApiKey,
-      idempotencyKey: linkToken.tokenHash,
-      payload: {
-        from: env.demo.emailFrom,
-        to: [normalizedEmail],
-        subject: email.subject,
-        html: email.html,
-        text: email.text,
-      },
-    });
-  } catch (error) {
-    if (error instanceof ResendRequestFailedError) {
-      throw new DemoAuthError({
-        kind: "email_send_failed",
-        message: error.message,
-        status: error.status,
-      });
-    }
-    throw error;
-  }
+  await sendResendEmail({
+    apiKey: env.demo.resendApiKey,
+    idempotencyKey: linkToken.tokenHash,
+    payload: {
+      from: env.demo.emailFrom,
+      to: [principal],
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+    },
+  });
 
-  return { email: normalizedEmail };
+  return { email: principal };
 }
 
 export async function consumeDemoAuthLink(input: {
@@ -143,12 +120,12 @@ export async function consumeDemoAuthLink(input: {
   });
 
   const user = await getUserById(link.userId);
-  if (!user?.email) {
+  if (!user || user.kind !== "demo") {
     throw new DemoAuthError({ kind: "user_missing", message: "Demo user not found" });
   }
 
   return {
-    email: user.email,
+    email: user.principal,
     token: sessionToken.token,
     expiresAt: sessionExpiresAt.getTime(),
   };
@@ -162,8 +139,9 @@ export async function getDemoSessionContext(input: { token: string; now: Date })
   if (session.expiresAt.getTime() <= input.now.getTime()) {
     return { kind: "expired" } as const;
   }
+
   const user = await getUserById(session.userId);
-  if (!user?.email) {
+  if (!user || user.kind !== "demo") {
     return { kind: "missing" } as const;
   }
 
@@ -171,6 +149,6 @@ export async function getDemoSessionContext(input: { token: string; now: Date })
   return {
     kind: "active",
     userId: user.id,
-    email: user.email,
+    principal: user.principal,
   } as const;
 }

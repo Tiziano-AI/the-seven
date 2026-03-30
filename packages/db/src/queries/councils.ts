@@ -1,12 +1,19 @@
+import {
+  type CouncilDefinition,
+  type CouncilPersistedDefinition,
+  parseCouncilDefinition,
+  parseCouncilPersistedDefinition,
+} from "@the-seven/contracts";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "../client";
-import { councilMembers, councils } from "../schema";
+import { councils } from "../schema";
 
-export type CouncilMemberAssignmentInput = Readonly<{
-  memberPosition: number;
-  provider: "openrouter";
-  modelId: string;
-  tuningJson: object | null;
+export type StoredCouncil = Readonly<{
+  id: number;
+  userId: number;
+  definition: CouncilDefinition;
+  createdAt: Date;
+  updatedAt: Date;
 }>;
 
 function requireInsertedRow<T>(rows: ReadonlyArray<T>, label: string): T {
@@ -17,112 +24,93 @@ function requireInsertedRow<T>(rows: ReadonlyArray<T>, label: string): T {
   return row;
 }
 
+function toStoredCouncil(row: typeof councils.$inferSelect): StoredCouncil {
+  const definition = parseCouncilPersistedDefinition(row.definitionJson);
+  return {
+    id: row.id,
+    userId: row.userId,
+    definition: parseCouncilDefinition({
+      name: row.name,
+      ...definition,
+    }),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toPersistedDefinition(definition: CouncilDefinition): CouncilPersistedDefinition {
+  return parseCouncilPersistedDefinition({
+    phasePrompts: definition.phasePrompts,
+    members: definition.members,
+  });
+}
+
 export async function listUserCouncils(userId: number) {
   const db = await getDb();
-  return db
+  const rows = await db
     .select()
     .from(councils)
     .where(eq(councils.userId, userId))
     .orderBy(asc(councils.createdAt));
+
+  return rows.map(toStoredCouncil);
 }
 
-export async function getUserCouncilWithMembers(input: { userId: number; councilId: number }) {
+export async function getUserCouncil(input: { userId: number; councilId: number }) {
   const db = await getDb();
-  const councilRows = await db
+  const rows = await db
     .select()
     .from(councils)
     .where(and(eq(councils.id, input.councilId), eq(councils.userId, input.userId)))
     .limit(1);
 
-  const council = councilRows[0];
-  if (!council) {
-    return null;
-  }
-
-  const members = await db
-    .select()
-    .from(councilMembers)
-    .where(eq(councilMembers.councilId, council.id))
-    .orderBy(asc(councilMembers.memberPosition));
-
-  return { council, members };
+  const row = rows[0];
+  return row ? toStoredCouncil(row) : null;
 }
 
-export async function createCouncil(input: {
-  userId: number;
-  name: string;
-  phase1Prompt: string;
-  phase2Prompt: string;
-  phase3Prompt: string;
-  members: ReadonlyArray<CouncilMemberAssignmentInput>;
-}) {
+export async function createCouncil(input: { userId: number; definition: CouncilDefinition }) {
   const db = await getDb();
-  return db.transaction(async (tx) => {
-    const insertedCouncil = await tx
-      .insert(councils)
-      .values({
-        userId: input.userId,
-        name: input.name,
-        phase1Prompt: input.phase1Prompt,
-        phase2Prompt: input.phase2Prompt,
-        phase3Prompt: input.phase3Prompt,
-      })
-      .returning({ id: councils.id });
+  const definition = parseCouncilDefinition(input.definition);
 
-    const councilId = requireInsertedRow(insertedCouncil, "councils").id;
+  const inserted = await db
+    .insert(councils)
+    .values({
+      userId: input.userId,
+      name: definition.name,
+      definitionJson: toPersistedDefinition(definition),
+    })
+    .returning({ id: councils.id });
 
-    await tx.insert(councilMembers).values(
-      input.members.map((member) => ({
-        councilId,
-        memberPosition: member.memberPosition,
-        provider: member.provider,
-        modelId: member.modelId,
-        tuningJson: member.tuningJson,
-      })),
-    );
-
-    return councilId;
-  });
+  return requireInsertedRow(inserted, "councils").id;
 }
 
-export async function updateCouncil(input: {
+export async function replaceCouncil(input: {
   userId: number;
   councilId: number;
-  name: string;
-  phase1Prompt: string;
-  phase2Prompt: string;
-  phase3Prompt: string;
-  members: ReadonlyArray<CouncilMemberAssignmentInput>;
+  definition: CouncilDefinition;
 }) {
   const db = await getDb();
-  await db.transaction(async (tx) => {
-    await tx
-      .update(councils)
-      .set({
-        name: input.name,
-        phase1Prompt: input.phase1Prompt,
-        phase2Prompt: input.phase2Prompt,
-        phase3Prompt: input.phase3Prompt,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(councils.id, input.councilId), eq(councils.userId, input.userId)));
+  const definition = parseCouncilDefinition(input.definition);
 
-    await tx.delete(councilMembers).where(eq(councilMembers.councilId, input.councilId));
-    await tx.insert(councilMembers).values(
-      input.members.map((member) => ({
-        councilId: input.councilId,
-        memberPosition: member.memberPosition,
-        provider: member.provider,
-        modelId: member.modelId,
-        tuningJson: member.tuningJson,
-      })),
-    );
-  });
+  const updated = await db
+    .update(councils)
+    .set({
+      name: definition.name,
+      definitionJson: toPersistedDefinition(definition),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(councils.id, input.councilId), eq(councils.userId, input.userId)))
+    .returning({ id: councils.id });
+
+  return updated.length > 0;
 }
 
 export async function deleteCouncil(input: { userId: number; councilId: number }) {
   const db = await getDb();
-  await db
+  const deleted = await db
     .delete(councils)
-    .where(and(eq(councils.id, input.councilId), eq(councils.userId, input.userId)));
+    .where(and(eq(councils.id, input.councilId), eq(councils.userId, input.userId)))
+    .returning({ id: councils.id });
+
+  return deleted.length > 0;
 }

@@ -1,4 +1,4 @@
-import type { SessionSnapshot } from "@the-seven/contracts";
+import type { CouncilMembers, PhasePrompts, SessionSnapshot } from "@the-seven/contracts";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -29,7 +29,11 @@ const SESSION_FAILURE_KINDS = [
 const JOB_STATES = ["queued", "leased", "completed", "failed"] as const;
 const ARTIFACT_KINDS = ["response", "review", "synthesis"] as const;
 const INGRESS_SOURCES = ["web", "cli", "api"] as const;
-const PROVIDERS = ["openrouter"] as const;
+
+export type CouncilDefinitionJson = Readonly<{
+  phasePrompts: PhasePrompts;
+  members: CouncilMembers;
+}>;
 
 export const userKindEnum = pgEnum("user_kind", USER_KINDS);
 export const sessionStatusEnum = pgEnum("session_status", SESSION_STATUSES);
@@ -37,7 +41,6 @@ export const sessionFailureKindEnum = pgEnum("session_failure_kind", SESSION_FAI
 export const jobStateEnum = pgEnum("job_state", JOB_STATES);
 export const artifactKindEnum = pgEnum("artifact_kind", ARTIFACT_KINDS);
 export const ingressSourceEnum = pgEnum("ingress_source", INGRESS_SOURCES);
-export const providerEnum = pgEnum("provider_kind", PROVIDERS);
 
 function createdAtColumn(name = "created_at") {
   return timestamp(name, { withTimezone: true, mode: "date" }).notNull().defaultNow();
@@ -52,18 +55,13 @@ export const users = pgTable(
   {
     id: serial("id").primaryKey(),
     kind: userKindEnum("kind").notNull(),
-    byokId: text("byok_id"),
-    email: text("email"),
+    principal: text("principal").notNull(),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
   (table) => [
-    uniqueIndex("users_byok_id_unique").on(table.byokId),
-    uniqueIndex("users_email_unique").on(table.email),
-    check(
-      "users_identity_kind_check",
-      sql`(${table.kind} = 'byok' and ${table.byokId} is not null and ${table.email} is null) or (${table.kind} = 'demo' and ${table.email} is not null and ${table.byokId} is null)`,
-    ),
+    uniqueIndex("users_kind_principal_unique").on(table.kind, table.principal),
+    check("users_principal_check", sql`length(trim(${table.principal})) > 0`),
   ],
 );
 
@@ -113,36 +111,25 @@ export const councils = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    phase1Prompt: text("phase1_prompt").notNull(),
-    phase2Prompt: text("phase2_prompt").notNull(),
-    phase3Prompt: text("phase3_prompt").notNull(),
+    definitionJson: jsonb("definition_json").$type<CouncilDefinitionJson>().notNull(),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
   (table) => [
     uniqueIndex("councils_user_id_name_unique").on(table.userId, table.name),
     index("councils_user_id_created_at_idx").on(table.userId, table.createdAt),
-  ],
-);
-
-export const councilMembers = pgTable(
-  "council_members",
-  {
-    id: serial("id").primaryKey(),
-    councilId: integer("council_id")
-      .notNull()
-      .references(() => councils.id, { onDelete: "cascade" }),
-    memberPosition: integer("member_position").notNull(),
-    provider: providerEnum("provider").notNull(),
-    modelId: text("model_id").notNull(),
-    tuningJson: jsonb("tuning_json"),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
-  },
-  (table) => [
-    uniqueIndex("council_members_council_member_unique").on(table.councilId, table.memberPosition),
-    index("council_members_council_id_idx").on(table.councilId),
-    check("council_members_member_position_check", sql`${table.memberPosition} between 1 and 7`),
+    check(
+      "councils_definition_json_shape_check",
+      sql`
+        jsonb_typeof(${table.definitionJson}) = 'object'
+        and jsonb_typeof(${table.definitionJson} -> 'phasePrompts') = 'object'
+        and case
+          when jsonb_typeof(${table.definitionJson} -> 'members') = 'array'
+          then jsonb_array_length(${table.definitionJson} -> 'members') = 7
+          else false
+        end
+      `,
+    ),
   ],
 );
 
@@ -297,15 +284,30 @@ export const catalogCache = pgTable(
     description: text("description").notNull(),
     contextLength: integer("context_length"),
     maxCompletionTokens: integer("max_completion_tokens"),
-    supportedParametersJson: jsonb("supported_parameters_json").notNull().default(sql`'[]'::jsonb`),
-    inputModalitiesJson: jsonb("input_modalities_json").notNull().default(sql`'[]'::jsonb`),
-    outputModalitiesJson: jsonb("output_modalities_json").notNull().default(sql`'[]'::jsonb`),
-    pricingJson: jsonb("pricing_json").notNull().default(sql`'{}'::jsonb`),
+    supportedParametersJson: jsonb("supported_parameters_json")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    inputModalitiesJson: jsonb("input_modalities_json")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    outputModalitiesJson: jsonb("output_modalities_json")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    pricingJson: jsonb("pricing_json")
+      .$type<Record<string, string | null>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     refreshedAt: timestamp("refreshed_at", { withTimezone: true, mode: "date" }).notNull(),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
-  (table) => [uniqueIndex("catalog_cache_model_id_unique").on(table.modelId)],
+  (table) => [
+    uniqueIndex("catalog_cache_model_id_unique").on(table.modelId),
+    index("catalog_cache_refreshed_at_idx").on(table.refreshedAt),
+  ],
 );
 
 export type User = typeof users.$inferSelect;
@@ -314,5 +316,4 @@ export type SessionArtifact = typeof sessionArtifacts.$inferSelect;
 export type ProviderCall = typeof providerCalls.$inferSelect;
 export type Job = typeof jobs.$inferSelect;
 export type Council = typeof councils.$inferSelect;
-export type CouncilMember = typeof councilMembers.$inferSelect;
 export type CatalogCacheEntry = typeof catalogCache.$inferSelect;

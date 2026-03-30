@@ -6,7 +6,7 @@ import {
   DEMO_RUN_LIMITS,
   type RateLimitSpec,
 } from "@the-seven/config";
-import { applyFixedWindowLimit, previewFixedWindowLimit } from "./rateLimits";
+import { admitFixedWindowLimit } from "./rateLimits";
 
 type ScopedLimit = Readonly<{
   scope: string;
@@ -37,9 +37,9 @@ function buildEmailScopes(input: {
   return scopes;
 }
 
-async function previewScopes(scopes: ReadonlyArray<ScopedLimit>, now: Date) {
+async function admitScopes(scopes: ReadonlyArray<ScopedLimit>, now: Date) {
   for (const scope of scopes) {
-    const limited = await previewFixedWindowLimit({
+    const limited = await admitFixedWindowLimit({
       scope: scope.scope,
       spec: scope.spec,
       now,
@@ -51,26 +51,12 @@ async function previewScopes(scopes: ReadonlyArray<ScopedLimit>, now: Date) {
   return null;
 }
 
-async function applyScopes(scopes: ReadonlyArray<ScopedLimit>, now: Date) {
-  for (const scope of scopes) {
-    const limited = await applyFixedWindowLimit({
-      scope: scope.scope,
-      spec: scope.spec,
-      now,
-    });
-    if (limited) {
-      return limited;
-    }
-  }
-  return null;
-}
-
-export async function previewDemoEmailRequestLimit(input: {
+export async function admitDemoEmailRequest(input: {
   email: string;
   ip: string | null;
   now: Date;
 }) {
-  return previewScopes(
+  return admitScopes(
     buildEmailScopes({
       kind: "email_request",
       limits: DEMO_EMAIL_REQUEST_LIMITS,
@@ -81,24 +67,8 @@ export async function previewDemoEmailRequestLimit(input: {
   );
 }
 
-export async function recordDemoEmailRequest(input: {
-  email: string;
-  ip: string | null;
-  now: Date;
-}) {
-  await applyScopes(
-    buildEmailScopes({
-      kind: "email_request",
-      limits: DEMO_EMAIL_REQUEST_LIMITS,
-      email: input.email,
-      ip: input.ip,
-    }),
-    input.now,
-  );
-}
-
-export async function applyDemoRunLimit(input: { email: string; ip: string | null; now: Date }) {
-  return applyScopes(
+export async function admitDemoRun(input: { email: string; ip: string | null; now: Date }) {
+  return admitScopes(
     buildEmailScopes({
       kind: "run",
       limits: DEMO_RUN_LIMITS,
@@ -109,12 +79,12 @@ export async function applyDemoRunLimit(input: { email: string; ip: string | nul
   );
 }
 
-export async function applyDemoConsumeLimit(input: { ip: string | null; now: Date }) {
+export async function admitDemoConsume(input: { ip: string | null; now: Date }) {
   const scopes: ScopedLimit[] = [
     { scope: scopeFor("consume", "global"), spec: DEMO_CONSUME_LIMITS.global },
   ];
   if (input.ip) {
     scopes.push({ scope: scopeFor("consume", `ip:${input.ip}`), spec: DEMO_CONSUME_LIMITS.perIp });
   }
-  return applyScopes(scopes, input.now);
+  return admitScopes(scopes, input.now);
 }

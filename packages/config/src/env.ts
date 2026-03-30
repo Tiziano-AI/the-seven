@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { z } from "zod";
 
 const nodeEnvSchema = z.enum(["development", "production", "test"]);
@@ -21,6 +23,12 @@ const baseServerSchema = z.object({
   SEVEN_DEMO_EMAIL_FROM: z.string().optional(),
 });
 
+const liveTestSchema = z.object({
+  SEVEN_BASE_URL: z.string().url().default("http://127.0.0.1:3000"),
+  SEVEN_BYOK_KEY: z.string().trim().min(1),
+  SEVEN_DEMO_TEST_EMAIL: z.string().trim().email(),
+});
+
 export type ServerEnv = Readonly<{
   nodeEnv: "development" | "production" | "test";
   port: number;
@@ -36,12 +44,57 @@ export type ServerEnv = Readonly<{
   }>;
 }>;
 
+export type CliEnv = Readonly<{
+  baseUrl: string;
+  byokKey: string | null;
+}>;
+
+export type LiveTestEnv = Readonly<{
+  baseUrl: string;
+  byokKey: string;
+  demoTestEmail: string;
+}>;
+
 export type OpenRouterAppHeaders = Readonly<{
   "HTTP-Referer": string;
   "X-Title": string;
 }>;
 
+declare global {
+  var __sevenCanonicalEnvLoaded: boolean | undefined;
+}
+
+function resolveWorkspaceRoot(startDirectory = process.cwd()): string {
+  let currentDirectory = path.resolve(startDirectory);
+
+  while (true) {
+    if (existsSync(path.join(currentDirectory, "pnpm-workspace.yaml"))) {
+      return currentDirectory;
+    }
+
+    const parentDirectory = path.dirname(currentDirectory);
+    if (parentDirectory === currentDirectory) {
+      throw new Error("Unable to locate workspace root from current working directory");
+    }
+    currentDirectory = parentDirectory;
+  }
+}
+
+function loadCanonicalEnvFile() {
+  if (globalThis.__sevenCanonicalEnvLoaded) {
+    return;
+  }
+
+  const envPath = path.join(resolveWorkspaceRoot(), ".env.local");
+  if (existsSync(envPath)) {
+    process.loadEnvFile(envPath);
+  }
+
+  globalThis.__sevenCanonicalEnvLoaded = true;
+}
+
 export function loadServerEnv(input: NodeJS.ProcessEnv = process.env): ServerEnv {
+  loadCanonicalEnvFile();
   const parsed = baseServerSchema.parse(input);
   const demoEnabled = parsed.SEVEN_DEMO_ENABLED === "1";
 
@@ -69,10 +122,8 @@ export function loadServerEnv(input: NodeJS.ProcessEnv = process.env): ServerEnv
   };
 }
 
-export function loadCliEnv(input: NodeJS.ProcessEnv = process.env): Readonly<{
-  baseUrl: string;
-  byokKey: string | null;
-}> {
+export function loadCliEnv(input: NodeJS.ProcessEnv = process.env): CliEnv {
+  loadCanonicalEnvFile();
   const parsed = z
     .object({
       SEVEN_BASE_URL: z.string().url().default("http://127.0.0.1:3000"),
@@ -83,6 +134,16 @@ export function loadCliEnv(input: NodeJS.ProcessEnv = process.env): Readonly<{
   return {
     baseUrl: parsed.SEVEN_BASE_URL,
     byokKey: parsed.SEVEN_BYOK_KEY ?? null,
+  };
+}
+
+export function loadLiveTestEnv(input: NodeJS.ProcessEnv = process.env): LiveTestEnv {
+  loadCanonicalEnvFile();
+  const parsed = liveTestSchema.parse(input);
+  return {
+    baseUrl: parsed.SEVEN_BASE_URL,
+    byokKey: parsed.SEVEN_BYOK_KEY,
+    demoTestEmail: parsed.SEVEN_DEMO_TEST_EMAIL,
   };
 }
 

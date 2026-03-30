@@ -5,7 +5,6 @@ import { runMigrationsForTarget } from "@the-seven/db/migrate";
 
 const EXPECTED_TABLES = [
   "catalog_cache",
-  "council_members",
   "councils",
   "demo_magic_links",
   "demo_sessions",
@@ -21,13 +20,14 @@ const EXPECTED_ENUMS = [
   "artifact_kind",
   "ingress_source",
   "job_state",
-  "provider_kind",
   "session_failure_kind",
   "session_status",
   "user_kind",
 ] as const;
 
 const EXPECTED_COLUMNS = {
+  users: ["principal"],
+  councils: ["definition_json"],
   sessions: ["snapshot_json", "trace_id", "status", "question_hash"],
   jobs: ["state", "credential_ciphertext", "lease_owner", "next_run_at"],
   provider_calls: ["request_total_chars", "total_cost_usd_micros", "error_status"],
@@ -108,7 +108,7 @@ async function listObjects(
 
 function requireMembersOnBuiltIns() {
   for (const council of Object.values(BUILT_IN_COUNCILS)) {
-    if (Object.keys(council.members).length !== 7) {
+    if (council.members.length !== 7) {
       throw new Error(`Built-in council "${council.slug}" does not define all 7 members`);
     }
   }
@@ -124,6 +124,22 @@ function requireExpectedSet(
   if (missing.length > 0) {
     throw new Error(`${label} missing: ${missing.join(", ")}`);
   }
+}
+
+function isConnectionFailure(error: unknown) {
+  if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
+    return ["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN"].includes(error.code);
+  }
+
+  return (
+    error instanceof Error && /connect ECONNREFUSED|getaddrinfo ENOTFOUND/i.test(error.message)
+  );
+}
+
+function formatDatabaseUnavailableMessage(connectionString: string) {
+  const url = new URL(connectionString);
+  const port = url.port || "5432";
+  return `Postgres not reachable on ${url.hostname}:${port}; run \`pnpm local:db:up\`.`;
 }
 
 async function verifyBootstrap(connectionString: string, schemaName: string) {
@@ -162,12 +178,19 @@ async function main() {
   const env = loadServerEnv();
   const schemaName = buildSchemaName();
 
-  await createSchema(env.databaseUrl, schemaName);
   try {
-    await runMigrationsForTarget(env.databaseUrl, schemaName);
-    await verifyBootstrap(env.databaseUrl, schemaName);
-  } finally {
-    await dropSchema(env.databaseUrl, schemaName);
+    await createSchema(env.databaseUrl, schemaName);
+    try {
+      await runMigrationsForTarget(env.databaseUrl, schemaName);
+      await verifyBootstrap(env.databaseUrl, schemaName);
+    } finally {
+      await dropSchema(env.databaseUrl, schemaName);
+    }
+  } catch (error) {
+    if (isConnectionFailure(error)) {
+      throw new Error(formatDatabaseUnavailableMessage(env.databaseUrl));
+    }
+    throw error;
   }
 
   process.stdout.write(`Bootstrap check passed for isolated schema ${schemaName}\n`);
