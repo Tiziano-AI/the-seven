@@ -10,6 +10,7 @@
     "apps/web/src/**/*.tsx",
     "apps/web/.next/types/**/*.ts",
     "apps/cli/src/**/*.ts",
+    "tools/**/*.ts",
     "packages/contracts/src/**/*.ts",
     "packages/contracts/src/**/*.tsx",
     "packages/config/src/**/*.ts",

@@ -31,6 +31,19 @@ async function parseJsonResponse(response: Response) {
   return text ? (JSON.parse(text) as unknown) : null;
 }
 
+function resolveRequestUrl(path: string) {
+  if (/^https?:\/\//.test(path)) {
+    return path;
+  }
+
+  if (typeof window !== "undefined") {
+    return path;
+  }
+
+  const baseUrl = process.env.SEVEN_BASE_URL ?? "http://127.0.0.1:3000";
+  return new URL(path, baseUrl).toString();
+}
+
 export async function apiRequest<T>(input: {
   path: string;
   method: "GET" | "POST" | "PUT" | "DELETE";
@@ -46,7 +59,7 @@ export async function apiRequest<T>(input: {
     headers.Authorization = input.authHeader;
   }
 
-  const response = await fetch(input.path, {
+  const response = await fetch(resolveRequestUrl(input.path), {
     method: input.method,
     headers,
     body: input.body ? JSON.stringify(input.body) : undefined,
