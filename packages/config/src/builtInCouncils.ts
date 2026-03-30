@@ -33,8 +33,8 @@ const COMMONS_COUNCIL_MODEL_IDS: Record<number, string> = {
   1: "qwen/qwen3.5-122b-a10b",
   2: "google/gemini-3.1-flash-lite-preview",
   3: "openai/gpt-5.4-nano",
-  4: "openai/gpt-oss-120b:free",
-  5: "nvidia/nemotron-3-super-120b-a12b:free",
+  4: "openai/gpt-oss-120b",
+  5: "nvidia/nemotron-3-super-120b-a12b",
   6: "kwaipilot/kat-coder-pro-v2",
   7: "minimax/minimax-m2.7",
 };
