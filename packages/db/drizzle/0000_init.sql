@@ -17,12 +17,6 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- CREATE TYPE "public"."provider_kind" AS ENUM('openrouter');
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
  CREATE TYPE "public"."session_failure_kind" AS ENUM(
   'server_restart',
   'phase1_inference_failed',
@@ -78,11 +72,10 @@ CREATE TABLE IF NOT EXISTS "rate_limit_buckets" (
 CREATE TABLE IF NOT EXISTS "users" (
   "id" serial PRIMARY KEY NOT NULL,
   "kind" "user_kind" NOT NULL,
-  "byok_id" text,
-  "email" text,
+  "principal" text NOT NULL,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT "users_identity_kind_check" CHECK (("users"."kind" = 'byok' and "users"."byok_id" is not null and "users"."email" is null) or ("users"."kind" = 'demo' and "users"."email" is not null and "users"."byok_id" is null))
+  CONSTRAINT "users_principal_check" CHECK (length(trim("users"."principal")) > 0)
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "demo_magic_links" (
@@ -109,23 +102,18 @@ CREATE TABLE IF NOT EXISTS "councils" (
   "id" serial PRIMARY KEY NOT NULL,
   "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE cascade,
   "name" text NOT NULL,
-  "phase1_prompt" text NOT NULL,
-  "phase2_prompt" text NOT NULL,
-  "phase3_prompt" text NOT NULL,
-  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
-  "updated_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "council_members" (
-  "id" serial PRIMARY KEY NOT NULL,
-  "council_id" integer NOT NULL REFERENCES "councils"("id") ON DELETE cascade,
-  "member_position" integer NOT NULL,
-  "provider" "provider_kind" NOT NULL,
-  "model_id" text NOT NULL,
-  "tuning_json" jsonb,
+  "definition_json" jsonb NOT NULL,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT "council_members_member_position_check" CHECK ("council_members"."member_position" between 1 and 7)
+  CONSTRAINT "councils_definition_json_shape_check" CHECK (
+    jsonb_typeof("councils"."definition_json") = 'object'
+    and jsonb_typeof("councils"."definition_json" -> 'phasePrompts') = 'object'
+    and case
+      when jsonb_typeof("councils"."definition_json" -> 'members') = 'array'
+      then jsonb_array_length("councils"."definition_json" -> 'members') = 7
+      else false
+    end
+  )
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "sessions" (
@@ -210,13 +198,13 @@ CREATE TABLE IF NOT EXISTS "jobs" (
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "catalog_cache_model_id_unique" ON "catalog_cache" USING btree ("model_id");
 --> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "catalog_cache_refreshed_at_idx" ON "catalog_cache" USING btree ("refreshed_at");
+--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "rate_limit_buckets_scope_window_unique" ON "rate_limit_buckets" USING btree ("scope", "window_start");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "rate_limit_buckets_scope_idx" ON "rate_limit_buckets" USING btree ("scope");
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "users_byok_id_unique" ON "users" USING btree ("byok_id");
---> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "users_email_unique" ON "users" USING btree ("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "users_kind_principal_unique" ON "users" USING btree ("kind", "principal");
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "demo_magic_links_token_hash_unique" ON "demo_magic_links" USING btree ("token_hash");
 --> statement-breakpoint
@@ -229,10 +217,6 @@ CREATE INDEX IF NOT EXISTS "demo_sessions_user_id_created_at_idx" ON "demo_sessi
 CREATE UNIQUE INDEX IF NOT EXISTS "councils_user_id_name_unique" ON "councils" USING btree ("user_id", "name");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "councils_user_id_created_at_idx" ON "councils" USING btree ("user_id", "created_at");
---> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "council_members_council_member_unique" ON "council_members" USING btree ("council_id", "member_position");
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "council_members_council_id_idx" ON "council_members" USING btree ("council_id");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "sessions_user_id_created_at_idx" ON "sessions" USING btree ("user_id", "created_at");
 --> statement-breakpoint

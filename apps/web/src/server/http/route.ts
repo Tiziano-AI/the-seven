@@ -2,10 +2,10 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
-import { applyIngressFloodLimit } from "../services/ingressLimits";
+import { admitIngressFloodLimit } from "../services/ingressLimits";
 import { createRequestContext } from "./context";
 import { jsonError, jsonSuccess } from "./envelopes";
-import { EdgeError } from "./errors";
+import { EdgeError, mapProviderErrorToEdgeError } from "./errors";
 
 export async function handleRoute(
   request: NextRequest,
@@ -21,7 +21,7 @@ export async function handleRoute(
   const ctx = await createRequestContext(request);
 
   try {
-    const limited = await applyIngressFloodLimit({
+    const limited = await admitIngressFloodLimit({
       ip: ctx.ip,
       now: ctx.now,
     });
@@ -56,6 +56,18 @@ export async function handleRoute(
         details: error.details,
         now: ctx.now,
         status: error.status,
+      });
+    }
+
+    const mappedProviderError = mapProviderErrorToEdgeError(error);
+    if (mappedProviderError) {
+      return jsonError({
+        traceId: ctx.traceId,
+        kind: mappedProviderError.kind,
+        message: mappedProviderError.message,
+        details: mappedProviderError.details,
+        now: ctx.now,
+        status: mappedProviderError.status,
       });
     }
 

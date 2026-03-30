@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { attachmentTextSchema } from "./attachments";
+import { councilMembersSchema } from "./councilDefinition";
 import { councilMemberTuningSchema } from "./councilMemberTuning";
 import { outputFormatsSchema, phasePromptsSchema } from "./phasePrompts";
 import { providerModelRefSchema } from "./providerModels";
@@ -14,7 +15,7 @@ export const sessionMemberSnapshotSchema = z.object({
 export const sessionCouncilSnapshotSchema = z.object({
   nameAtRun: z.string().min(1).max(120),
   phasePrompts: phasePromptsSchema,
-  members: z.array(sessionMemberSnapshotSchema).length(7),
+  members: councilMembersSchema,
 });
 
 export const sessionSnapshotSchema = z.object({

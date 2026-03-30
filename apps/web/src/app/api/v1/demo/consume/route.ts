@@ -4,14 +4,14 @@ import { EdgeError } from "@/server/http/errors";
 import { parseJsonBody } from "@/server/http/parse";
 import { handleRoute } from "@/server/http/route";
 import { consumeDemoAuthLink, DemoAuthError } from "@/server/services/demoAuth";
-import { applyDemoConsumeLimit } from "@/server/services/demoLimits";
+import { admitDemoConsume } from "@/server/services/demoLimits";
 
 export async function POST(request: NextRequest) {
   return handleRoute(request, {
     resource: "demo.consume",
     handler: async (ctx, rawRequest) => {
       const input = await parseJsonBody(rawRequest, demoConsumeBodySchema);
-      const limited = await applyDemoConsumeLimit({
+      const limited = await admitDemoConsume({
         ip: ctx.ip,
         now: ctx.now,
       });

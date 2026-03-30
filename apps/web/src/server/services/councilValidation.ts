@@ -1,7 +1,8 @@
 import "server-only";
 
-import type { CouncilMemberTuning } from "@the-seven/contracts";
+import type { CouncilMemberAssignment, CouncilMemberTuning } from "@the-seven/contracts";
 import { listUserCouncils } from "@the-seven/db";
+import { canonicalizeCouncilMembers } from "../domain/councilDefinition";
 import { EdgeError } from "../http/errors";
 import { validateModelId } from "./models";
 
@@ -15,7 +16,7 @@ export async function assertCouncilNameAvailable(input: {
     if (input.excludeCouncilId && council.id === input.excludeCouncilId) {
       return false;
     }
-    return council.name === input.name;
+    return council.definition.name === input.name;
   });
 
   if (conflict) {
@@ -75,17 +76,12 @@ function assertModelSupportsTuning(input: {
 }
 
 export async function validateCouncilMembers(
-  members: ReadonlyArray<
-    Readonly<{
-      memberPosition: number;
-      model: Readonly<{ provider: "openrouter"; modelId: string }>;
-      tuning: CouncilMemberTuning | null;
-    }>
-  >,
-) {
+  members: ReadonlyArray<CouncilMemberAssignment>,
+): Promise<ReadonlyArray<CouncilMemberAssignment>> {
+  const canonicalMembers = canonicalizeCouncilMembers(members);
   const seen = new Set<string>();
 
-  for (const member of members) {
+  for (const member of canonicalMembers) {
     if (seen.has(member.model.modelId)) {
       continue;
     }
@@ -103,7 +99,9 @@ export async function validateCouncilMembers(
       });
     }
 
-    for (const candidate of members.filter((item) => item.model.modelId === member.model.modelId)) {
+    for (const candidate of canonicalMembers.filter(
+      (item) => item.model.modelId === member.model.modelId,
+    )) {
       assertModelSupportsTuning({
         modelId: candidate.model.modelId,
         supportedParameters: validation.model.supportedParameters,
@@ -111,4 +109,6 @@ export async function validateCouncilMembers(
       });
     }
   }
+
+  return canonicalMembers;
 }

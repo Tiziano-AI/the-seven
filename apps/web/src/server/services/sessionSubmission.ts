@@ -14,13 +14,13 @@ import { hashQuestion } from "../domain/questionHash";
 import { buildSessionSnapshot } from "../domain/sessionSnapshot";
 import { EdgeError } from "../http/errors";
 import { getOutputFormats, resolveCouncilSnapshot } from "./councils";
-import { applyDemoRunLimit } from "./demoLimits";
+import { admitDemoRun } from "./demoLimits";
 
 type AuthenticatedActor = Readonly<{
   kind: "byok" | "demo";
   userId: number;
+  principal: string;
   openRouterKey: string;
-  email?: string;
 }>;
 
 function requireCommonsCouncil(ref: CouncilRef) {
@@ -49,17 +49,17 @@ function requireDemoSessionCouncil(councilNameAtRun: string) {
   });
 }
 
-async function applyDemoRunLimitIfNeeded(input: {
+async function admitDemoRunIfNeeded(input: {
   auth: AuthenticatedActor;
   ip: string | null;
   now: Date;
 }) {
-  if (input.auth.kind !== "demo" || !input.auth.email) {
+  if (input.auth.kind !== "demo") {
     return;
   }
 
-  const limited = await applyDemoRunLimit({
-    email: input.auth.email,
+  const limited = await admitDemoRun({
+    email: input.auth.principal,
     ip: input.ip,
     now: input.now,
   });
@@ -147,7 +147,7 @@ export async function submitSession(input: {
   if (input.auth.kind === "demo") {
     requireCommonsCouncil(input.councilRef);
   }
-  await applyDemoRunLimitIfNeeded({
+  await admitDemoRunIfNeeded({
     auth: input.auth,
     ip: input.ip,
     now: input.now,
@@ -206,7 +206,7 @@ export async function continueSession(input: {
   if (input.auth.kind === "demo") {
     requireDemoSessionCouncil(session.councilNameAtRun);
   }
-  await applyDemoRunLimitIfNeeded({
+  await admitDemoRunIfNeeded({
     auth: input.auth,
     ip: input.ip,
     now: input.now,
@@ -253,7 +253,7 @@ export async function rerunSession(input: {
   if (input.auth.kind === "demo") {
     requireCommonsCouncil(input.councilRef);
   }
-  await applyDemoRunLimitIfNeeded({
+  await admitDemoRunIfNeeded({
     auth: input.auth,
     ip: input.ip,
     now: input.now,

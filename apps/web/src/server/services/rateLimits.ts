@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { RateLimitSpec } from "@the-seven/config";
-import { getRateLimitBucket, incrementRateLimitBucket } from "@the-seven/db";
+import { admitRateLimitBucket } from "@the-seven/db";
 
 function buildDecision(input: {
   scope: string;
@@ -22,31 +22,12 @@ function buildDecision(input: {
   };
 }
 
-export async function previewFixedWindowLimit(input: {
+export async function admitFixedWindowLimit(input: {
   scope: string;
   spec: RateLimitSpec;
   now: Date;
 }) {
-  const bucket = await getRateLimitBucket({
-    scope: input.scope,
-    now: input.now,
-    windowSeconds: input.spec.windowSeconds,
-  });
-
-  return buildDecision({
-    scope: input.scope,
-    spec: input.spec,
-    bucketCount: bucket?.count ?? 0,
-    bucketWindowStart: bucket?.windowStart ?? input.now,
-  });
-}
-
-export async function applyFixedWindowLimit(input: {
-  scope: string;
-  spec: RateLimitSpec;
-  now: Date;
-}) {
-  const bucket = await incrementRateLimitBucket({
+  const bucket = await admitRateLimitBucket({
     scope: input.scope,
     now: input.now,
     windowSeconds: input.spec.windowSeconds,

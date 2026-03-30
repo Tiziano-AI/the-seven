@@ -10,6 +10,7 @@ export const MAX_HTTP_JSON_BYTES = 32 * 1024 * 1024;
 
 export const DEMO_AUTH_LINK_TTL_HOURS = 24;
 export const DEMO_SESSION_TTL_HOURS = 24;
+export const MODEL_CATALOG_TTL_HOURS = 24;
 
 export const DEMO_EMAIL_REQUEST_LIMITS = {
   perEmail: { limit: 2, windowSeconds: DAY_SECONDS },

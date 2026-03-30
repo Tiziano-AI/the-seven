@@ -1,4 +1,4 @@
-import { asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { asc, desc, eq, ilike, inArray, max, or } from "drizzle-orm";
 import { getDb } from "../client";
 import { catalogCache } from "../schema";
 
@@ -19,18 +19,17 @@ export async function replaceCatalogEntries(
   const db = await getDb();
   const normalizedEntries = Array.from(entries);
   await db.transaction(async (tx) => {
-    if (normalizedEntries.length > 0) {
-      await tx.delete(catalogCache).where(
-        inArray(
-          catalogCache.modelId,
-          normalizedEntries.map((entry) => entry.modelId),
-        ),
-      );
-    }
+    await tx.delete(catalogCache);
     if (normalizedEntries.length > 0) {
       await tx.insert(catalogCache).values(normalizedEntries);
     }
   });
+}
+
+export async function getCatalogLastRefreshAt() {
+  const db = await getDb();
+  const rows = await db.select({ refreshedAt: max(catalogCache.refreshedAt) }).from(catalogCache);
+  return rows[0]?.refreshedAt ?? null;
 }
 
 export async function getCatalogModelById(modelId: string) {

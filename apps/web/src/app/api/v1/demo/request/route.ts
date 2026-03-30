@@ -5,7 +5,7 @@ import { EdgeError } from "@/server/http/errors";
 import { parseJsonBody } from "@/server/http/parse";
 import { handleRoute } from "@/server/http/route";
 import { DemoAuthError, requestDemoAuthLink } from "@/server/services/demoAuth";
-import { previewDemoEmailRequestLimit, recordDemoEmailRequest } from "@/server/services/demoLimits";
+import { admitDemoEmailRequest } from "@/server/services/demoLimits";
 
 export async function POST(request: NextRequest) {
   return handleRoute(request, {
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      const limited = await previewDemoEmailRequestLimit({
+      const limited = await admitDemoEmailRequest({
         email,
         ip: ctx.ip,
         now: ctx.now,
@@ -44,17 +44,11 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const result = await requestDemoAuthLink({
+        return await requestDemoAuthLink({
           email,
           requestIp: ctx.ip,
           now: ctx.now,
         });
-        await recordDemoEmailRequest({
-          email,
-          ip: ctx.ip,
-          now: ctx.now,
-        });
-        return result;
       } catch (error) {
         if (error instanceof DemoAuthError) {
           if (error.kind === "demo_disabled") {
@@ -63,14 +57,6 @@ export async function POST(request: NextRequest) {
               message: "Demo mode is disabled",
               details: { reason: "demo_disabled" },
               status: 403,
-            });
-          }
-          if (error.kind === "email_send_failed") {
-            throw new EdgeError({
-              kind: "upstream_error",
-              message: error.message,
-              details: { service: "resend", status: error.status },
-              status: 502,
             });
           }
         }

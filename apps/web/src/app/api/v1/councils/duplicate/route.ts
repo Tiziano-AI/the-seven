@@ -1,6 +1,5 @@
 import { duplicateCouncilBodySchema } from "@the-seven/contracts";
 import type { NextRequest } from "next/server";
-import { EdgeError } from "@/server/http/errors";
 import { parseJsonBody } from "@/server/http/parse";
 import { requireByokAuth } from "@/server/http/requireAuth";
 import { handleRoute } from "@/server/http/route";
@@ -22,30 +21,18 @@ export async function POST(request: NextRequest) {
         name: input.name,
       });
 
-      try {
-        const snapshot = await resolveCouncilSnapshot({
+      const snapshot = await resolveCouncilSnapshot({
+        userId: auth.userId,
+        ref: input.source,
+      });
+      await validateCouncilMembers(snapshot.members);
+      return {
+        councilId: await duplicateCouncilFromSnapshot({
           userId: auth.userId,
-          ref: input.source,
-        });
-        await validateCouncilMembers(snapshot.members);
-        return {
-          councilId: await duplicateCouncilFromSnapshot({
-            userId: auth.userId,
-            name: input.name,
-            snapshot,
-          }),
-        };
-      } catch (error) {
-        if (error instanceof Error && error.message === "Council not found") {
-          throw new EdgeError({
-            kind: "not_found",
-            message: "Council not found",
-            details: { resource: "council" },
-            status: 404,
-          });
-        }
-        throw error;
-      }
+          name: input.name,
+          snapshot,
+        }),
+      };
     },
   });
 }

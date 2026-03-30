@@ -6,9 +6,20 @@ import { EdgeError } from "./errors";
 
 export async function parseJsonBody<T>(request: Request, schema: ZodType<T>): Promise<T> {
   try {
-    const json = (await request.json()) as unknown;
+    const text = await request.text();
+    const json = text.length === 0 ? null : (JSON.parse(text) as unknown);
     return schema.parse(json);
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new EdgeError({
+        kind: "invalid_input",
+        message: "Invalid JSON body",
+        details: {
+          issues: [{ path: "", message: "Request body must be valid JSON" }],
+        },
+        status: 400,
+      });
+    }
     if (error instanceof ZodError) {
       throw new EdgeError({
         kind: "invalid_input",

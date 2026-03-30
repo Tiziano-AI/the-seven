@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { attachmentUploadSchema } from "../domain/attachments";
-import { councilMemberTuningSchema } from "../domain/councilMemberTuning";
+import { councilDefinitionSchema } from "../domain/councilDefinition";
 import { councilRefSchema } from "../domain/councilRef";
 import { INGRESS_SOURCES } from "../domain/ingress";
-import { outputFormatsSchema, phasePromptsSchema } from "../domain/phasePrompts";
-import { providerModelRefSchema } from "../domain/providerModels";
+import { outputFormatsSchema } from "../domain/phasePrompts";
 import { sessionSnapshotSchema } from "../domain/sessionSnapshot";
 import { memberPositionSchema } from "../domain/sevenMembers";
 
@@ -46,16 +45,8 @@ export const councilsListPayloadSchema = z.object({
 
 export const councilDetailPayloadSchema = z.object({
   ref: councilRefSchema,
-  name: z.string(),
-  phasePrompts: phasePromptsSchema,
+  ...councilDefinitionSchema.shape,
   outputFormats: outputFormatsSchema,
-  members: z.array(
-    z.object({
-      memberPosition: memberPositionSchema,
-      model: providerModelRefSchema,
-      tuning: councilMemberTuningSchema.nullable(),
-    }),
-  ),
   editable: z.boolean(),
   deletable: z.boolean(),
 });
@@ -74,15 +65,7 @@ export const duplicateCouncilPayloadSchema = z.object({
 });
 
 export const updateCouncilBodySchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  phasePrompts: phasePromptsSchema,
-  members: z.array(
-    z.object({
-      memberPosition: memberPositionSchema,
-      model: providerModelRefSchema,
-      tuning: councilMemberTuningSchema.nullable(),
-    }),
-  ),
+  ...councilDefinitionSchema.shape,
 });
 
 export const successFlagPayloadSchema = z.object({

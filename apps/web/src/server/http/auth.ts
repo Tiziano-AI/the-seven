@@ -1,16 +1,16 @@
 import "server-only";
 
 import { loadServerEnv } from "@the-seven/config";
-import { getOrCreateUserByokId } from "@the-seven/db";
+import { getOrCreateUser } from "@the-seven/db";
 import type { NextRequest } from "next/server";
-import { deriveByokIdFromApiKey } from "../domain/byok";
+import { deriveByokPrincipalFromApiKey } from "../domain/byok";
 import { getDemoSessionContext } from "../services/demoAuth";
 
 export type AuthContext =
   | Readonly<{ kind: "none" }>
   | Readonly<{ kind: "invalid"; reason: "invalid_token" | "expired_token" }>
-  | Readonly<{ kind: "byok"; userId: number; byokId: string; openRouterKey: string }>
-  | Readonly<{ kind: "demo"; userId: number; email: string; openRouterKey: string }>;
+  | Readonly<{ kind: "byok"; userId: number; principal: string; openRouterKey: string }>
+  | Readonly<{ kind: "demo"; userId: number; principal: string; openRouterKey: string }>;
 
 type ParsedAuthorization =
   | Readonly<{ kind: "none" }>
@@ -46,12 +46,17 @@ export async function resolveAuthContext(request: NextRequest, now: Date): Promi
     if (!parsed.token) {
       return { kind: "invalid", reason: "invalid_token" };
     }
-    const byokId = deriveByokIdFromApiKey(parsed.token);
-    const user = await getOrCreateUserByokId(byokId);
+
+    const principal = deriveByokPrincipalFromApiKey(parsed.token);
+    const user = await getOrCreateUser({
+      kind: "byok",
+      principal,
+    });
+
     return {
       kind: "byok",
       userId: user.id,
-      byokId,
+      principal,
       openRouterKey: parsed.token,
     };
   }
@@ -72,7 +77,7 @@ export async function resolveAuthContext(request: NextRequest, now: Date): Promi
   return {
     kind: "demo",
     userId: session.userId,
-    email: session.email,
+    principal: session.principal,
     openRouterKey: env.demo.openRouterApiKey,
   };
 }
