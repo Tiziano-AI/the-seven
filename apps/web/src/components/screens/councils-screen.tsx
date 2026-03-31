@@ -192,7 +192,7 @@ export function CouncilsScreen() {
             <button
               key={council.name}
               type="button"
-              className="w-full rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-4 text-left transition hover:border-[var(--gold-soft)]"
+              className="panel panel-interactive w-full text-left"
               onClick={() => setSelectedRef(encodeRef(council.ref))}
             >
               <div className="text-sm font-semibold">{council.name}</div>
