@@ -192,12 +192,12 @@ export function HomeScreen({ initialDemoToken }: HomeScreenProps) {
     }
   }
 
-  return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
-      <div className="space-y-6">
-        {!auth.isAuthenticated ? (
-          <>
-            <Card className="p-6">
+  if (!auth.isAuthenticated) {
+    return (
+      <div className="mx-auto max-w-xl">
+        <Card className="p-6">
+          <div className="space-y-5">
+            <div>
               <Badge>Bring Your Own Key</Badge>
               <h1 className="mt-4 text-3xl font-semibold tracking-[-0.05em]">
                 Unlock a private council workspace.
@@ -207,168 +207,169 @@ export function HomeScreen({ initialDemoToken }: HomeScreenProps) {
                 plaintext transiently per request and stores durable worker credentials as encrypted
                 job blobs.
               </p>
-              <div className="mt-5 space-y-3">
-                {!hasStoredByok ? (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="byok-api-key">OpenRouter API Key</Label>
-                      <Input
-                        id="byok-api-key"
-                        type="password"
-                        value={apiKey}
-                        onChange={(event) => setApiKey(event.target.value)}
-                        placeholder="sk-or-v1-..."
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="byok-password">Local Password</Label>
-                      <Input
-                        id="byok-password"
-                        type="password"
-                        value={password}
-                        onChange={(event) => setPassword(event.target.value)}
-                        placeholder="At least 8 characters"
-                      />
-                    </div>
-                    <Button
-                      onClick={handleValidateAndStore}
-                      disabled={!apiKey || password.length < 8}
-                    >
-                      Validate and Unlock
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="unlock-password">Unlock Password</Label>
-                      <Input
-                        id="unlock-password"
-                        type="password"
-                        value={password}
-                        onChange={(event) => setPassword(event.target.value)}
-                        placeholder="Decrypt your stored key"
-                      />
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button onClick={handleUnlockStoredKey} disabled={!password}>
-                        Unlock Stored Key
-                      </Button>
-                      <Button variant="secondary" onClick={auth.resetEncryptedKey}>
-                        Use a Different Key
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </Card>
+            </div>
+            <div className="space-y-3">
+              {!hasStoredByok ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="byok-api-key">OpenRouter API Key</Label>
+                    <Input
+                      id="byok-api-key"
+                      type="password"
+                      value={apiKey}
+                      onChange={(event) => setApiKey(event.target.value)}
+                      placeholder="sk-or-v1-..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="byok-password">Local Password</Label>
+                    <Input
+                      id="byok-password"
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="At least 8 characters"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleValidateAndStore}
+                    disabled={!apiKey || password.length < 8}
+                  >
+                    Validate and Unlock
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="unlock-password">Unlock Password</Label>
+                    <Input
+                      id="unlock-password"
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="Decrypt your stored key"
+                    />
+                  </div>
+                  <Button onClick={handleUnlockStoredKey} disabled={!password}>
+                    Unlock Stored Key
+                  </Button>
+                  <button
+                    type="button"
+                    className="block text-sm text-[var(--text-dim)] underline hover:text-[var(--gold)]"
+                    onClick={() => {
+                      auth.resetEncryptedKey();
+                      setHasStoredByok(false);
+                    }}
+                  >
+                    Use a Different Key
+                  </button>
+                </>
+              )}
+            </div>
 
-            <Card className="p-6">
-              <Badge>Demo</Badge>
-              <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em]">
-                Try the Commons Council.
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">
+            <div className="flex items-center gap-3 text-sm text-[var(--text-dim)]">
+              <div className="h-px flex-1 bg-[var(--border)]" />
+              or try the demo
+              <div className="h-px flex-1 bg-[var(--border)]" />
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm leading-6 text-[var(--muted-foreground)]">
                 The demo flow sends a magic link, issues a 24-hour session, and locks the product to
                 the Commons Council.
               </p>
-              <div className="mt-5 space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="demo-email">Email</Label>
-                  <Input
-                    id="demo-email"
-                    type="email"
-                    value={demoEmail}
-                    onChange={(event) => setDemoEmail(event.target.value)}
-                    placeholder="you@example.com"
-                  />
-                </div>
-                <Button variant="secondary" onClick={handleRequestDemo} disabled={!demoEmail}>
-                  Send Magic Link
-                </Button>
-              </div>
-            </Card>
-          </>
-        ) : (
-          <Card className="p-6">
-            <Badge>{auth.mode === "demo" ? "Demo Ask Surface" : "Ask Surface"}</Badge>
-            <h1 className="mt-4 text-3xl font-semibold tracking-[-0.05em]">Ask the council.</h1>
-            <div className="mt-5 grid gap-4">
               <div className="space-y-2">
-                <Label htmlFor="ask-council">Council</Label>
+                <Label htmlFor="demo-email">Email</Label>
                 <Input
-                  id="ask-council"
-                  list="ask-council-options"
-                  value={selectedCouncil}
-                  onChange={(event) => setSelectedCouncil(event.target.value)}
-                />
-                <datalist id="ask-council-options">
-                  {availableCouncils.map((council) => (
-                    <option
-                      key={council.name}
-                      value={
-                        council.ref.kind === "built_in"
-                          ? `built_in:${council.ref.slug}`
-                          : `user:${council.ref.councilId}`
-                      }
-                    >
-                      {council.name}
-                    </option>
-                  ))}
-                </datalist>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ask-question">Question</Label>
-                <Textarea
-                  id="ask-question"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Describe the problem, decision, or design question."
+                  id="demo-email"
+                  type="email"
+                  value={demoEmail}
+                  onChange={(event) => setDemoEmail(event.target.value)}
+                  placeholder="you@example.com"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="ask-attachments">Attachments</Label>
-                <Input
-                  id="ask-attachments"
-                  type="file"
-                  multiple
-                  accept=".txt,.md,.markdown,.json,.yaml,.yml,.csv,.pdf,.docx,.pptx,.xlsx,.odt,.odp,.ods"
-                  onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
-                />
-                {selectedFiles.length > 0 ? (
-                  <ul className="space-y-1 text-sm text-[var(--muted-foreground)]">
-                    {selectedFiles.map((file) => (
-                      <li key={file.name}>{file.name}</li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-              <Button
-                onClick={handleSubmitQuestion}
-                disabled={submitting || !query.trim() || !selectedCouncilRef}
-              >
-                {submitting ? "Submitting…" : "Send to The Seven"}
+              <Button variant="secondary" onClick={handleRequestDemo} disabled={!demoEmail}>
+                Send Magic Link
               </Button>
             </div>
-          </Card>
-        )}
-      </div>
-
-      <div className="space-y-6">
-        <Card className="p-6">
-          <Badge>Active Session</Badge>
-          <p className="mt-4 text-sm leading-6 text-[var(--muted-foreground)]">
-            The latest run stays pinned here for quick polling and continue/rerun control.
-          </p>
+          </div>
         </Card>
-        <SessionInspector
-          authHeader={auth.authHeader}
-          sessionId={activeSessionId}
-          onSpawnedSession={(sessionId) => {
-            setActiveSessionId(sessionId);
-            writeActiveSessionId(sessionId);
-          }}
-        />
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-6">
+        <Badge>{auth.mode === "demo" ? "Demo Ask Surface" : "Ask Surface"}</Badge>
+        <h1 className="mt-4 text-3xl font-semibold tracking-[-0.05em]">Ask the council.</h1>
+        <div className="mt-5 grid gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="ask-council">Council</Label>
+            <Input
+              id="ask-council"
+              list="ask-council-options"
+              value={selectedCouncil}
+              onChange={(event) => setSelectedCouncil(event.target.value)}
+            />
+            <datalist id="ask-council-options">
+              {availableCouncils.map((council) => (
+                <option
+                  key={council.name}
+                  value={
+                    council.ref.kind === "built_in"
+                      ? `built_in:${council.ref.slug}`
+                      : `user:${council.ref.councilId}`
+                  }
+                >
+                  {council.name}
+                </option>
+              ))}
+            </datalist>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ask-question">Question</Label>
+            <Textarea
+              id="ask-question"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Describe the problem, decision, or design question."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ask-attachments">Attachments</Label>
+            <Input
+              id="ask-attachments"
+              type="file"
+              multiple
+              accept=".txt,.md,.markdown,.json,.yaml,.yml,.csv,.pdf,.docx,.pptx,.xlsx,.odt,.odp,.ods"
+              onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
+            />
+            {selectedFiles.length > 0 ? (
+              <ul className="space-y-1 text-sm text-[var(--muted-foreground)]">
+                {selectedFiles.map((file) => (
+                  <li key={file.name}>{file.name}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          <Button
+            onClick={handleSubmitQuestion}
+            disabled={submitting || !query.trim() || !selectedCouncilRef}
+          >
+            {submitting ? "Submitting…" : "Send to The Seven"}
+          </Button>
+        </div>
+      </Card>
+
+      <SessionInspector
+        authHeader={auth.authHeader}
+        sessionId={activeSessionId}
+        onSpawnedSession={(sessionId) => {
+          setActiveSessionId(sessionId);
+          writeActiveSessionId(sessionId);
+        }}
+      />
     </div>
   );
 }
