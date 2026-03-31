@@ -11,9 +11,10 @@ export function Label(props: FormLabelProps) {
       {...rest}
       htmlFor={htmlFor}
       className={cn(
-        "text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]",
+        "text-xs font-semibold uppercase tracking-[0.18em] text-[var(--gold)]",
         className,
       )}
+      style={{ fontFamily: "var(--font-display)" }}
     >
       {children}
     </label>
