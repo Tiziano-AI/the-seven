@@ -24,6 +24,8 @@ pnpm test:live
 pnpm test:e2e
 SEVEN_SKIP_DEMO_LIVE=1 pnpm test:live
 pnpm batch -- --file <path>
+railway link -p "The Seven"
+railway service status --all
 ```
 
 ## Local Development
@@ -73,4 +75,8 @@ pnpm batch -- --file <path>
 - Only `packages/config/src/env.ts` reads `process.env` directly.
 - Keep one canonical path per behavior. Delete retired surfaces in the same change set.
 - Styling is tokens-first; avoid hard-coded colors and inline styles.
+- Three built-in councils: Founding (flagship), Lantern (mid-tier), Commons (budget). Lantern lineup should track current mid-tier benchmarks.
+- Theme: OKLCH four-lane palette (violet/evergreen/wood/gold), dark-only. `globals.css` owns tokens, `@theme` bridges to Tailwind v4 utilities. `next/font/google` loads MedievalSharp (display), Raleway (body), Victor Mono (mono).
+- Home screen is ask-first: auth is a centered gate card, ask surface + session result are full-width after auth. Phase display is chronological (1→2→3), never reversed.
+- Destructive actions (Lock, End Demo, Delete Council) require `window.confirm()` gates.
 - Files stay within the repository guardrails: max 500 lines and 18 kB.
