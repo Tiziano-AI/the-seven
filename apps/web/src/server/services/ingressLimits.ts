@@ -5,10 +5,10 @@ import { admitFixedWindowLimit } from "./rateLimits";
 
 export async function admitIngressFloodLimit(input: { ip: string | null; now: Date }) {
   const scopes = [
-    { scope: "ingress:flood:global", spec: INGRESS_FLOOD_LIMITS.global },
     ...(input.ip
       ? [{ scope: `ingress:flood:ip:${input.ip}`, spec: INGRESS_FLOOD_LIMITS.perIp }]
       : []),
+    { scope: "ingress:flood:global", spec: INGRESS_FLOOD_LIMITS.global },
   ];
 
   for (const scope of scopes) {
