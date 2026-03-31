@@ -5,16 +5,34 @@ Guidance for contributors working in this repository.
 ## Commands
 
 ```bash
-pnpm dev
 pnpm run lint
 pnpm run check
 pnpm test
 pnpm run build
 pnpm run db:bootstrap:check
-pnpm batch -- --file <path>
-
 uv run --python 3.12 devtools/gate.py
+
+pnpm local:doctor
+pnpm local:bootstrap -- --install
+pnpm local:db:up
+pnpm local:db:down
+pnpm local:db:reset
+pnpm local:dev
+pnpm local:gate
+pnpm local:live
+pnpm test:live
+pnpm test:e2e
+SEVEN_SKIP_DEMO_LIVE=1 pnpm test:live
+pnpm batch -- --file <path>
 ```
+
+## Local Development
+
+- `.env.local` is the only canonical local secrets file. `loadServerEnv()` auto-loads it.
+- `db:bootstrap:check` calls `loadServerEnv()` — demo keys must be non-empty if `SEVEN_DEMO_ENABLED=1`.
+- Database is greenfield. `DROP DATABASE` + `CREATE DATABASE` is a valid reset. No back-compat shims.
+- Full restart cycle before live testing: kill server → reset DB → fresh test email → start server → run test.
+- A full live test runs two council sessions (21+ sequential LLM calls each) plus demo email flow. Budget 20-30 minutes.
 
 ## Architecture
 
@@ -35,13 +53,20 @@ uv run --python 3.12 devtools/gate.py
 ## Key Files
 
 - `ARCH.md` — canonical architecture and citations
+- `packages/config/src/builtInCouncils.ts` — built-in council model lineups and tuning defaults
 - `apps/web/src/server/workflow/orchestrateSession.ts` — three-phase council execution
 - `apps/web/src/server/workflow/jobSupervisor.ts` — durable job leasing and recovery
+- `apps/web/src/server/adapters/openrouter.ts` — provider adapter with tuning param filtering
 - `apps/web/src/components/sessions/session-inspector.tsx` — canonical run detail UI
 - `apps/cli/src/batch.ts` — batch client surface
+- `tools/local-dev.ts` — local operator CLI (doctor, bootstrap, db, dev, gate, live)
+- `tools/live-test.ts` — provider-backed smoke (BYOK + demo email + Playwright)
+- `compose.yaml` — local Postgres on 127.0.0.1:5432
 
 ## Conventions
 
+- OpenRouter models advertise different supported params. Tuning defaults (temp, topP, reasoning) are set globally; the adapter silently drops params the model doesn't support at call time.
+- Built-in council tuning is the canonical default for all councils (built-in, duplicated, and user-created).
 - Only `packages/config/src/env.ts` reads `process.env` directly.
 - Keep one canonical path per behavior. Delete retired surfaces in the same change set.
 - Styling is tokens-first; avoid hard-coded colors and inline styles.
