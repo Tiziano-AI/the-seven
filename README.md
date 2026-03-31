@@ -1,146 +1,124 @@
 # The Seven
 
-Multi-model LLM orchestration with peer review and synthesis.
+The Seven is a privacy-first multi-model council for hard questions.
 
-Ask a question. Six models respond independently. Then they critique each other. Then a seventh synthesizes the verdict. Use the free demo via magic link, or bring your own OpenRouter API key—we never store user keys.
+- Bring your own OpenRouter key, encrypt it locally, and keep it out of server storage.
+- Or use the demo flow: email magic link, 24-hour session, Commons Council only.
+- Every run snapshots a 7-member council, executes reply → critique → verdict, and preserves the full record.
+- User-defined councils persist as one aggregate definition with shared phase prompts and exactly seven member slots.
+- Identity is canonicalized as `users(kind, principal)`: BYOK principals are hashed API keys and demo principals are normalized emails.
 
----
+## Stack
 
-## How it works
+- Next App Router
+- React 19
+- Tailwind v4 + shadcn/ui
+- Zod
+- PostgreSQL + Drizzle + `pg`
+- Biome
 
-Every run convenes a 7-member council:
+## Workspace
 
-1. **Phase 1 — Replies**: Six reviewers (A–F) respond in parallel
-2. **Phase 2 — Critiques**: Each reviewer critiques the others
-3. **Phase 3 — Verdict**: One synthesizer (G) delivers the final answer
+- `apps/web` — product UI and `/api/v1`
+- `apps/cli` — batch client against `/api/v1`
+- `packages/contracts` — shared schemas and envelopes
+- `packages/config` — prompts, built-ins, env schema, limits
+- `packages/db` — Drizzle schema and persistence
 
-Councils are configurable: swap models per slot, tune prompts per phase, save lineups for reuse.
+## Runtime Contract
 
----
-
-## Built-in Councils
-
-Three councils ship as immutable templates—duplicate one to customize:
-
-| Council | Tier | Synthesizer |
-|---------|------|-------------|
-| **The Founding Council** | Frontier SOTA | GPT-5.2 Pro |
-| **The Lantern Council** | Fast mid-tier | Gemini 3 Flash |
-| **The Commons Council** | Free-tier only | GPT OSS 120B |
-
----
-
-## Security (BYOK)
-
-- Your OpenRouter API key is encrypted and stored in your browser—never on the server
-- The server uses your key per-request, then discards it
-- All provider traffic is server-side; your browser never calls OpenRouter directly
-- OpenRouter rate limits surface as HTTP 429 (error envelope kind `upstream_error`) during key validation and as run failureKind `openrouter_rate_limited` for sessions
-- A coarse ingress flood guard protects the API from abusive request bursts (may return `rate_limited`)
-
-## Demo mode (free)
-
-- Enter an email to receive a magic link (no password).
-- Demo sessions last 24 hours and are limited to the Commons Council (free-tier models).
-- Demo runs use a server-owned OpenRouter key; prompts and attachments behave the same as BYOK runs.
-- On theseven.ai, the demo uses our server-owned key; self-hosted demos must set `SEVEN_DEMO_OPENROUTER_KEY`.
-
----
-
-## Quick start
-
-```bash
-# Prerequisites: Node.js, pnpm. OpenRouter API key only for BYOK; demo uses a server-owned key.
-
-pnpm install
-pnpm dev
-```
-
-Open the app, enter your OpenRouter key (BYOK) or use demo mode (if enabled), pick a council (BYOK) or use Commons (demo), ask a question.
-
----
-
-## Configuration
-
-**Environment** (optional):
-
-```bash
-cp .env.example .env
-
-# Core
-SEVEN_DB_PATH=data/the-seven.db
-SEVEN_PUBLIC_ORIGIN=http://localhost:3000
-SEVEN_APP_NAME=The Seven
-
-# Demo mode (optional)
-SEVEN_DEMO_ENABLED=1
-SEVEN_DEMO_OPENROUTER_KEY=...
-SEVEN_DEMO_RESEND_API_KEY=...
-SEVEN_DEMO_EMAIL_FROM=hello@updates.theseven.ai
-
-# CLI (optional)
-SEVEN_BYOK_KEY=...
-```
-
-In production, set `SEVEN_PUBLIC_ORIGIN` to your public domain (e.g. `https://theseven.ai`) and use a Resend‑verified sender address (e.g. `hello@updates.theseven.ai`).
-`SEVEN_DEMO_OPENROUTER_KEY` is the server-owned OpenRouter key used only for demo runs.
-
-**Councils**:
-
-- Built-in councils are read-only templates
-- Duplicate one to create an editable copy (BYOK only)
-- Configure models per slot (A–G), prompts per phase, and optional tuning knobs (BYOK only)
-
----
+- UI routes: `/`, `/councils`, `/sessions`, `/sessions/[id]`
+- API routes: `/api/v1/**`
+- Auth:
+  - `Authorization: Bearer <openrouter_api_key>`
+  - `Authorization: Demo <demo_session_token>`
+- Edge semantics:
+  - malformed JSON returns `400 invalid_input`
+  - upstream OpenRouter and Resend failures return `upstream_error`
+- Rate limiting:
+  - all fixed-window limits use one atomic admit-and-count path
+  - accepted demo email requests consume quota before email delivery and are not refunded
 
 ## Development
 
 ```bash
-pnpm dev          # Start dev server
-pnpm db:migrate   # Apply baseline migration
-pnpm test         # Run tests
-pnpm check        # TypeScript check
-pnpm build        # Production build
-
-# Full gate (typecheck + tests + build)
-uv run --python 3.12 devtools/gate.py
+pnpm install
+pnpm local:doctor
+pnpm local:bootstrap -- --install
+cp .env.local.example .env.local
+pnpm local:db:up
+pnpm local:dev
 ```
 
-**Stack**: Express + HTTP JSON API, React 19 + Vite, SQLite + Drizzle ORM, Tailwind + shadcn/ui.
+Canonical local Mac path:
 
----
+- Docker Desktop provides the only supported local Postgres runtime.
+- `compose.yaml` owns the local database on `127.0.0.1:5432`.
+- `.env.local` is the only canonical local secrets file.
+- `pnpm local:*` is the only canonical local operator surface.
 
-## Batch CLI
-
-Run unattended batches using the existing HTTP API.
+Core `.env.local` keys:
 
 ```bash
-pnpm batch -- --file data/questions.jsonl --concurrency 3 --wait
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/the_seven
+SEVEN_JOB_CREDENTIAL_SECRET=replace-with-a-long-random-secret
+SEVEN_PUBLIC_ORIGIN=http://localhost:3000
+SEVEN_APP_NAME=The Seven
 ```
 
-**Input format** (JSONL, one object per line):
+`SEVEN_JOB_CREDENTIAL_SECRET` is required for durable background execution. It is used only for envelope encryption of short-lived job credentials and never stores plaintext API keys at rest.
+
+Optional live-provider `.env.local` keys:
+
+```bash
+SEVEN_BYOK_KEY=
+SEVEN_DEMO_ENABLED=1
+SEVEN_DEMO_OPENROUTER_KEY=
+SEVEN_DEMO_RESEND_API_KEY=
+SEVEN_DEMO_EMAIL_FROM=hello@example.com
+SEVEN_DEMO_TEST_EMAIL=
+```
+
+`SEVEN_DEMO_TEST_EMAIL` must point at a dedicated Resend-backed inbound mailbox that emits `email.received` webhooks and allows message retrieval through the Resend Receiving API.
+
+`SEVEN_DEMO_RESEND_API_KEY` must be a Resend API key with webhook-management and received-email access. Send-only restricted keys are not sufficient for `pnpm test:live` or `pnpm local:live`.
+
+On Node runtime boot, the app applies the single squashed init SQL before the durable worker starts. A blank compose-managed Postgres database is a valid starting state.
+
+CLI batch input is JSONL. Each line uses the canonical query shape:
 
 ```json
-{"question":"What is idempotency?","councils":["built_in:commons"]}
-{"question":"Compare X vs Y","councils":["built_in:commons","built_in:lantern"]}
+{"query":"Your question","councils":["built_in:founding"]}
 ```
 
-The CLI reads `SEVEN_BYOK_KEY` from `.env` and submits each question to `/api/query/submit`.
-Set `SEVEN_BASE_URL` to target a non-local server (defaults to `http://localhost:3000`).
+Canonical local commands:
 
----
+```bash
+pnpm local:doctor
+pnpm local:bootstrap -- --install
+pnpm local:db:up
+pnpm local:db:reset
+pnpm local:gate
+pnpm local:live
+```
 
-## Deployment
+## Validation
 
-Self-host anywhere that runs Node.js with a persistent volume for SQLite.
+```bash
+pnpm local:gate
+pnpm test:live
+pnpm run test:e2e
+uv run --python 3.12 devtools/gate.py --full
+```
 
-Current deployment target is Railway; `railway.toml` is included as a convenience and does not add runtime coupling:
-- Merge to main → production deploy
-- Open PR → ephemeral environment
+`pnpm local:gate` fails fast with an actionable Postgres error if the compose-managed database is not healthy.
 
----
+`pnpm local:live` starts the app locally, provisions a temporary Cloudflare quick tunnel plus Resend webhook for the demo inbox flow, runs the live provider smoke, runs Playwright against the externally started server, and then cleans up the tunnel, webhook, and app process.
 
 ## Docs
 
-- `ARCH.md` — architecture, contracts, security posture
-- `VISION.md` — product goals and non-goals
+- `ARCH.md` — canonical architecture
+- `docs/BOUNDARY_REPLACEMENT_MAP.md` — old-to-new surface map
+- `docs/RETIREMENT_MANIFEST.md` — same-change deletions
+- `docs/PACKAGE_POLICY.md` — package and workspace rules
+- `docs/VALIDATION_MATRIX.md` — verification requirements

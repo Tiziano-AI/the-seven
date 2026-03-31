@@ -1,12 +1,17 @@
 # Plan
 
-This file is the only place for planning/journaling/roadmaps in this repo.
+## Remaining Milestones
 
-Rules:
-
-- Track only remaining work. Delete completed items after landing.
-- Prefer outcome-oriented milestones over task lists.
-
-## Open milestones
-
-- Verify demo + BYOK auth flows in dev (reproduce prior failures or confirm resolved) and document outcome.
+- Ship the canonical local Mac operator surface:
+  - add `compose.yaml` for the local Postgres runtime
+  - add `tools/local-dev.ts` for doctor/bootstrap/db/dev/gate/live commands
+  - add `.env.local.example` and retire `.env`-driven runtime scripts
+- Ship the provider-backed local live suite:
+  - add `pnpm test:live`
+  - add temporary Resend webhook + inbound-message retrieval coverage
+  - run browser e2e against an externally started local app
+- Re-run validation on the canonical local stack:
+  - `pnpm local:doctor`
+  - `pnpm local:db:up`
+  - `pnpm run db:bootstrap:check`
+  - `uv run devtools/gate.py`

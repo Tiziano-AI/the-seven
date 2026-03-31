@@ -1,0 +1,15 @@
+{
+  "name": "@the-seven/db",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@the-seven/config": "workspace:*",
+    "@the-seven/contracts": "workspace:*",
+    "drizzle-orm": "0.45.1",
+    "pg": "8.20.0"
+  }
+}
