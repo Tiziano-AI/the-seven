@@ -2,7 +2,12 @@ import "server-only";
 
 import type { CouncilMemberTuning, MemberPosition } from "@the-seven/contracts";
 import { parseUsdAmountToMicros } from "@the-seven/contracts";
-import { createProviderCall } from "@the-seven/db";
+import {
+  createProviderCall,
+  listProviderCalls,
+  refreshSessionUsageTotals,
+  updateProviderCallCost,
+} from "@the-seven/db";
 import {
   callOpenRouter,
   fetchOpenRouterGeneration,
@@ -101,6 +106,56 @@ async function fetchGenerationBestEffort(apiKey: string, generationId: string) {
     return await fetchOpenRouterGeneration(apiKey, generationId);
   } catch {
     return null;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * After a session completes, OpenRouter needs time to compute billing.
+ * This function waits, then re-fetches generation data for all provider
+ * calls that are missing cost, and updates the DB.
+ */
+export async function backfillSessionCosts(input: { sessionId: number; apiKey: string }) {
+  const BILLING_DELAY_MS = 30_000;
+  const MAX_RETRIES = 2;
+  const RETRY_DELAY_MS = 15_000;
+
+  await sleep(BILLING_DELAY_MS);
+
+  for (let retry = 0; retry <= MAX_RETRIES; retry += 1) {
+    const calls = await listProviderCalls(input.sessionId);
+    const missing = calls.filter(
+      (call) => call.totalCostUsdMicros === null && call.responseId !== null,
+    );
+    if (missing.length === 0) {
+      break;
+    }
+
+    for (const call of missing) {
+      const responseId = call.responseId;
+      if (!responseId) continue;
+      try {
+        const gen = await fetchOpenRouterGeneration(input.apiKey, responseId);
+        const costMicros = parseUsdAmountToMicros(gen.total_cost);
+        if (costMicros !== null) {
+          await updateProviderCallCost(call.id, costMicros, gen.model ?? null);
+        }
+      } catch {
+        // Individual call cost fetch failed — continue with others
+      }
+    }
+
+    await refreshSessionUsageTotals(input.sessionId);
+
+    const updatedCalls = await listProviderCalls(input.sessionId);
+    const stillMissing = updatedCalls.filter((c) => c.totalCostUsdMicros === null);
+    if (stillMissing.length === 0 || retry === MAX_RETRIES) {
+      break;
+    }
+    await sleep(RETRY_DELAY_MS);
   }
 }
 
