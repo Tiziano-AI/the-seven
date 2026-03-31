@@ -22,7 +22,11 @@ import {
 } from "@the-seven/db";
 import { decryptJobCredential } from "../domain/jobCredential";
 import { buildSystemPromptForPhase, getSnapshotMember } from "../domain/sessionSnapshot";
-import { OpenRouterPhaseRateLimitError, runOpenRouterPhaseCall } from "./openrouterRun";
+import {
+  backfillSessionCosts,
+  OpenRouterPhaseRateLimitError,
+  runOpenRouterPhaseCall,
+} from "./openrouterRun";
 import { buildReviewPrompt, buildSynthesisPrompt } from "./prompts";
 
 type ResponseArtifact = Readonly<{
@@ -176,6 +180,7 @@ export async function orchestrateClaimedJob(input: {
       await refreshSessionUsageTotals(session.id);
       await markSessionCompleted(session.id);
       await markJobCompleted({ jobId: input.jobId, leaseOwner: input.leaseOwner });
+      void backfillSessionCosts({ sessionId: session.id, apiKey });
       return;
     }
 
@@ -368,6 +373,7 @@ export async function orchestrateClaimedJob(input: {
     await refreshSessionUsageTotals(session.id);
     await markSessionCompleted(session.id);
     await markJobCompleted({ jobId: input.jobId, leaseOwner: input.leaseOwner });
+    void backfillSessionCosts({ sessionId: session.id, apiKey });
   } catch (error) {
     await failSession({
       jobId: input.jobId,

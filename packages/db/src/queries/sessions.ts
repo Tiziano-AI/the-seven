@@ -223,6 +223,21 @@ export async function createProviderCall(input: {
   await db.insert(providerCalls).values(input);
 }
 
+export async function updateProviderCallCost(
+  callId: number,
+  totalCostUsdMicros: number,
+  billedModelId: string | null,
+) {
+  const db = await getDb();
+  await db
+    .update(providerCalls)
+    .set({
+      totalCostUsdMicros,
+      ...(billedModelId !== null ? { billedModelId } : {}),
+    })
+    .where(eq(providerCalls.id, callId));
+}
+
 export async function listProviderCalls(sessionId: number) {
   const db = await getDb();
   return db
