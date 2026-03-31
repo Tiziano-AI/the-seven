@@ -74,9 +74,11 @@ railway service status --all
 - Upstream adapter `parseJson` functions must catch `SyntaxError` and throw the adapter's typed error class. CDN/proxy layers return HTML on 5xx.
 - Only `packages/config/src/env.ts` reads `process.env` directly.
 - Keep one canonical path per behavior. Delete retired surfaces in the same change set.
-- Styling is tokens-first; avoid hard-coded colors and inline styles.
+- Styling is tokens-first via `@layer components` classes in `globals.css` (`.btn`, `.card`, `.control`, `.badge`, `.panel`, `.btn-nav`). UI primitives are thin wrappers that apply these classes. Avoid hard-coded colors, inline styles, and inline Tailwind for visual properties already covered by a CSS class.
 - Three built-in councils: Founding (flagship), Lantern (mid-tier), Commons (budget). Lantern lineup should track current mid-tier benchmarks.
-- Theme: OKLCH four-lane palette (violet/evergreen/wood/gold), dark-only. `globals.css` owns tokens, `@theme` bridges to Tailwind v4 utilities. `next/font/google` loads MedievalSharp (display), Raleway (body), Victor Mono (mono).
+- Theme: OKLCH four-lane palette (violet/evergreen/wood/gold), dark-only. `globals.css` owns tokens + `@layer components` classes, `@theme` bridges to Tailwind v4 utilities, `color-scheme: dark` on `:root` styles all native elements. `next/font/google` loads MedievalSharp (display/UI), Raleway (body), Victor Mono (mono).
 - Home screen is ask-first: auth is a centered gate card, ask surface + session result are full-width after auth. Phase display is chronological (1→2→3), never reversed.
 - Destructive actions (Lock, End Demo, Delete Council) require `window.confirm()` gates.
+- Council selectors use `<Select>` (native `<select>`) to show human-readable names. Model ID autocomplete in `model-slot-editor.tsx` uses `<Input list>` + `<datalist>` for free-text with suggestions. Do not use `<input list>` for fixed-option selectors — it shows raw `value` attributes instead of option labels.
+- Sonner `<Toaster>` in `providers.tsx` must have `theme="dark"`. Without it, toasts render with light backgrounds.
 - Files stay within the repository guardrails: max 500 lines and 18 kB.
