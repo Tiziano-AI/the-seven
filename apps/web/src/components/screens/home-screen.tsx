@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   consumeDemoLink,
@@ -306,26 +307,23 @@ export function HomeScreen({ initialDemoToken }: HomeScreenProps) {
         <div className="mt-5 grid gap-4">
           <div className="space-y-2">
             <Label htmlFor="ask-council">Council</Label>
-            <Input
+            <Select
               id="ask-council"
-              list="ask-council-options"
               value={selectedCouncil}
               onChange={(event) => setSelectedCouncil(event.target.value)}
-            />
-            <datalist id="ask-council-options">
-              {availableCouncils.map((council) => (
-                <option
-                  key={council.name}
-                  value={
-                    council.ref.kind === "built_in"
-                      ? `built_in:${council.ref.slug}`
-                      : `user:${council.ref.councilId}`
-                  }
-                >
-                  {council.name}
-                </option>
-              ))}
-            </datalist>
+            >
+              {availableCouncils.map((council) => {
+                const value =
+                  council.ref.kind === "built_in"
+                    ? `built_in:${council.ref.slug}`
+                    : `user:${council.ref.councilId}`;
+                return (
+                  <option key={value} value={value}>
+                    {council.name}
+                  </option>
+                );
+              })}
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="ask-question">Question</Label>
@@ -333,6 +331,12 @@ export function HomeScreen({ initialDemoToken }: HomeScreenProps) {
               id="ask-question"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                  event.preventDefault();
+                  void handleSubmitQuestion();
+                }
+              }}
               placeholder="Describe the problem, decision, or design question."
             />
           </div>

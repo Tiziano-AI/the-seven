@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { exportSessions, fetchSessions } from "@/lib/api";
 import { writeActiveSessionId } from "@/lib/storage";
 
@@ -122,19 +123,13 @@ export function SessionsScreen() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search query or council"
           />
-          <Input
-            list="status-options"
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            placeholder="all"
-          />
-          <datalist id="status-options">
-            <option value="all" />
-            <option value="pending" />
-            <option value="processing" />
-            <option value="completed" />
-            <option value="failed" />
-          </datalist>
+          <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+          </Select>
         </div>
         <div className="mt-5 space-y-3">
           {filteredSessions.map((session) => (
@@ -170,7 +165,11 @@ export function SessionsScreen() {
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <SessionStatusBadge status={session.status} failureKind={session.failureKind} />
                 <Badge>{session.totalTokens} tokens</Badge>
-                <Badge>{session.totalCost}</Badge>
+                <Badge>
+                  {session.totalCostIsPartial && session.totalCostUsdMicros === 0
+                    ? "cost pending"
+                    : `$${session.totalCost}`}
+                </Badge>
               </div>
             </button>
           ))}

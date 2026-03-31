@@ -7,7 +7,7 @@ export function AppProviders(props: Readonly<{ children: React.ReactNode }>) {
   return (
     <AuthProvider>
       {props.children}
-      <Toaster richColors position="top-right" />
+      <Toaster richColors position="top-right" theme="dark" />
     </AuthProvider>
   );
 }
