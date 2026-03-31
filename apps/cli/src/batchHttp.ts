@@ -53,10 +53,12 @@ function buildHeaders(apiKey: string, ingressVersion: string | null): HeadersIni
 
 async function readJson(response: Response): Promise<unknown> {
   const text = await response.text();
-  if (!text) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
     return null;
   }
-  return JSON.parse(text);
 }
 
 function invalidResponseError(status: number | null, message: string): BatchError {
