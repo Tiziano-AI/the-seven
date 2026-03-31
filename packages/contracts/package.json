@@ -1,0 +1,12 @@
+{
+  "name": "@the-seven/contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "zod": "4.3.6"
+  }
+}

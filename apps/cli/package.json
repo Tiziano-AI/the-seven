@@ -1,0 +1,10 @@
+{
+  "name": "@the-seven/cli",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@the-seven/contracts": "workspace:*",
+    "@the-seven/config": "workspace:*",
+    "zod": "4.3.6"
+  }
+}

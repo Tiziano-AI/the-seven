@@ -1,0 +1,13 @@
+{
+  "name": "@the-seven/config",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@the-seven/contracts": "workspace:*",
+    "zod": "4.3.6"
+  }
+}
