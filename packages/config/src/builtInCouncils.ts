@@ -20,13 +20,13 @@ const DEFAULT_MEMBER_MODELS: Record<number, ProviderModelSeed> = {
 };
 
 const LANTERN_COUNCIL_MODEL_IDS: Record<number, string> = {
-  1: "amazon/nova-2-lite-v1",
-  2: "x-ai/grok-4.1-fast",
-  3: "moonshotai/kimi-k2-thinking",
-  4: "openai/gpt-5.1-codex-mini",
-  5: "qwen/qwen3-vl-8b-thinking",
-  6: "mistralai/mistral-large-2512",
-  7: "google/gemini-3-flash-preview",
+  1: "deepseek/deepseek-v3.2-speciale",
+  2: "mistralai/mistral-medium-3.1",
+  3: "bytedance-seed/seed-2.0-lite",
+  4: "amazon/nova-pro-v1",
+  5: "x-ai/grok-4.1-fast",
+  6: "anthropic/claude-haiku-4.5",
+  7: "openai/gpt-5.4-mini",
 };
 
 const COMMONS_COUNCIL_MODEL_IDS: Record<number, string> = {
@@ -85,7 +85,8 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
   lantern: {
     slug: "lantern",
     name: "The Lantern Council",
-    description: "A lean lineup for rapid iteration. Gemini 3 Flash delivers the verdict.",
+    description:
+      "Mid-tier voices for fast, high-quality deliberation. GPT-5.4 Mini delivers the verdict.",
     phasePrompts: DEFAULT_PHASE_PROMPTS,
     members: buildCouncilMembers({
       1: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[1] },
