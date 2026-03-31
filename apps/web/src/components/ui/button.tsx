@@ -5,15 +5,18 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+  "inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-medium transition-all duration-200 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
   {
     variants: {
       variant: {
-        primary: "bg-[var(--accent)] text-[var(--accent-foreground)] hover:brightness-95",
-        secondary: "bg-[var(--panel-2)] text-[var(--foreground)] hover:bg-[var(--panel-3)]",
+        primary:
+          "bg-gradient-to-br from-[var(--violet)] to-[var(--gold)] border border-[var(--gold)] text-[var(--foreground)] shadow-[var(--shadow-deep)] hover:shadow-[var(--glow-violet),var(--shadow-deep)] hover:-translate-y-px hover:border-[var(--gold-bright)]",
+        secondary:
+          "bg-gradient-to-br from-[var(--evergreen-soft)] to-[var(--evergreen)] border border-[var(--evergreen)] text-[var(--foreground)] shadow-[var(--shadow-deep)] hover:shadow-[var(--glow-evergreen),var(--shadow-deep)] hover:-translate-y-px hover:border-[var(--evergreen-bright)]",
         ghost:
-          "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--panel-2)] hover:text-[var(--foreground)]",
-        danger: "bg-[var(--danger)] text-white hover:brightness-95",
+          "bg-transparent text-[var(--text-muted)] hover:bg-[var(--bg-soft)] hover:text-[var(--foreground)]",
+        danger:
+          "bg-[var(--destructive)] border border-[var(--destructive)] text-[var(--foreground)] hover:brightness-110",
       },
     },
     defaultVariants: {

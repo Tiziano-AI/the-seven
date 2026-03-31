@@ -6,9 +6,13 @@ export function Card(props: HTMLAttributes<HTMLDivElement>) {
     <div
       {...props}
       className={cn(
-        "rounded-[28px] border border-[var(--border)] bg-[var(--panel)] shadow-[0_20px_50px_rgba(17,24,39,0.08)]",
+        "rounded-[28px] border border-[var(--border)] bg-[var(--bg-soft)] shadow-[var(--shadow-lg)] backdrop-blur-[10px]",
         props.className,
       )}
+      style={{
+        background: "var(--gradient-panel)",
+        ...props.style,
+      }}
     />
   );
 }
