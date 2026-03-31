@@ -60,3 +60,12 @@ pids
 # Temporary folders
 tmp/
 temp/
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# Screenshot artifacts
+*.png
+
+# Planning artifacts
+track.md
