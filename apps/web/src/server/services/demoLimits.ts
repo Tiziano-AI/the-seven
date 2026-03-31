@@ -27,13 +27,12 @@ function buildEmailScopes(input: {
   email: string;
   ip: string | null;
 }) {
-  const scopes: ScopedLimit[] = [
-    { scope: scopeFor(input.kind, "global"), spec: input.limits.global },
-    { scope: scopeFor(input.kind, `email:${input.email}`), spec: input.limits.perEmail },
-  ];
+  const scopes: ScopedLimit[] = [];
   if (input.ip) {
     scopes.push({ scope: scopeFor(input.kind, `ip:${input.ip}`), spec: input.limits.perIp });
   }
+  scopes.push({ scope: scopeFor(input.kind, `email:${input.email}`), spec: input.limits.perEmail });
+  scopes.push({ scope: scopeFor(input.kind, "global"), spec: input.limits.global });
   return scopes;
 }
 
@@ -80,11 +79,10 @@ export async function admitDemoRun(input: { email: string; ip: string | null; no
 }
 
 export async function admitDemoConsume(input: { ip: string | null; now: Date }) {
-  const scopes: ScopedLimit[] = [
-    { scope: scopeFor("consume", "global"), spec: DEMO_CONSUME_LIMITS.global },
-  ];
+  const scopes: ScopedLimit[] = [];
   if (input.ip) {
     scopes.push({ scope: scopeFor("consume", `ip:${input.ip}`), spec: DEMO_CONSUME_LIMITS.perIp });
   }
+  scopes.push({ scope: scopeFor("consume", "global"), spec: DEMO_CONSUME_LIMITS.global });
   return admitScopes(scopes, input.now);
 }
