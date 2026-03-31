@@ -356,10 +356,7 @@ export function SessionInspector(props: {
           </div>
           <div className="space-y-4">
             {group.artifacts.map((artifact) => (
-              <div
-                key={artifact.id}
-                className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5"
-              >
+              <div key={artifact.id} className="panel p-5">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <Badge>{artifact.member.label}</Badge>
                   <Badge>{artifact.modelName}</Badge>

@@ -141,7 +141,7 @@ export function SessionsScreen() {
             <button
               key={session.id}
               type="button"
-              className="w-full rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-4 text-left transition hover:border-[var(--gold-soft)]"
+              className="panel panel-interactive w-full text-left"
               onClick={() => {
                 setSelectedSessionId(session.id);
                 writeActiveSessionId(session.id);
@@ -170,6 +170,7 @@ export function SessionsScreen() {
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <SessionStatusBadge status={session.status} failureKind={session.failureKind} />
                 <Badge>{session.totalTokens} tokens</Badge>
+                <Badge>{session.totalCost}</Badge>
               </div>
             </button>
           ))}
