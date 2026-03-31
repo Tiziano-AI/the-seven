@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../client";
 import { demoMagicLinks, demoSessions } from "../schema";
 
@@ -48,15 +48,18 @@ export async function markDemoMagicLinkUsed(input: {
   id: number;
   usedAt: Date;
   consumedIp: string | null;
-}) {
+}): Promise<boolean> {
   const db = await getDb();
-  await db
+  const updated = await db
     .update(demoMagicLinks)
     .set({
       usedAt: input.usedAt,
       consumedIp: input.consumedIp,
     })
-    .where(eq(demoMagicLinks.id, input.id));
+    .where(and(eq(demoMagicLinks.id, input.id), isNull(demoMagicLinks.usedAt)))
+    .returning({ id: demoMagicLinks.id });
+
+  return updated.length > 0;
 }
 
 export async function createDemoSession(input: {
