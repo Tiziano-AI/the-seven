@@ -103,11 +103,14 @@ export async function consumeDemoAuthLink(input: {
     throw new DemoAuthError({ kind: "link_expired", message: "Demo link expired" });
   }
 
-  await markDemoMagicLinkUsed({
+  const marked = await markDemoMagicLinkUsed({
     id: link.id,
     usedAt: input.now,
     consumedIp: input.consumedIp,
   });
+  if (!marked) {
+    throw new DemoAuthError({ kind: "link_used", message: "Demo link already used" });
+  }
 
   const sessionToken = createDemoToken();
   const sessionExpiresAt = addHours(input.now, DEMO_SESSION_TTL_HOURS);
