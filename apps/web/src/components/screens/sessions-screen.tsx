@@ -141,7 +141,7 @@ export function SessionsScreen() {
             <button
               key={session.id}
               type="button"
-              className="w-full rounded-[24px] border border-[var(--border)] bg-white/70 p-4 text-left transition hover:border-[var(--accent)]"
+              className="w-full rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-4 text-left transition hover:border-[var(--gold-soft)]"
               onClick={() => {
                 setSelectedSessionId(session.id);
                 writeActiveSessionId(session.id);

@@ -67,7 +67,7 @@ export function ModelSlotEditor(props: {
   };
 
   return (
-    <div className="rounded-[24px] border border-[var(--border)] bg-white/70 p-4">
+    <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-3 text-sm font-semibold">
         Member {String.fromCharCode(64 + props.member.memberPosition)}
       </div>
