@@ -35,7 +35,15 @@ export class ResendRequestFailedError extends Error {
 
 async function parseJson(response: Response): Promise<unknown> {
   const text = await response.text();
-  return text ? (JSON.parse(text) as unknown) : null;
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new ResendRequestFailedError({
+      status: response.status,
+      message: `Resend returned non-JSON response (status ${response.status})`,
+    });
+  }
 }
 
 export async function sendResendEmail(input: {

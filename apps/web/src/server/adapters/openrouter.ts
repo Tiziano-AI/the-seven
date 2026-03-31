@@ -158,7 +158,15 @@ function buildHeaders(apiKey?: string): HeadersInit {
 
 async function parseJson(response: Response): Promise<unknown> {
   const text = await response.text();
-  return text ? (JSON.parse(text) as unknown) : null;
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new OpenRouterRequestFailedError({
+      status: response.status,
+      message: `OpenRouter returned non-JSON response (status ${response.status})`,
+    });
+  }
 }
 
 async function requestJson(input: {
@@ -250,11 +258,9 @@ export async function callOpenRouter(
       return openRouterChatCompletionSchema.parse(data);
     } catch (error) {
       lastError = error;
-      if (
-        error instanceof OpenRouterRequestFailedError &&
-        attempt < 2 &&
-        isRetryableStatus(error.status)
-      ) {
+      const retryable =
+        !(error instanceof OpenRouterRequestFailedError) || isRetryableStatus(error.status);
+      if (attempt < 2 && retryable) {
         await sleepMs(backoffDelayMs(attempt));
         continue;
       }
@@ -296,11 +302,9 @@ export async function fetchOpenRouterGeneration(
       return openRouterGenerationResponseSchema.parse(data).data;
     } catch (error) {
       lastError = error;
-      if (
-        error instanceof OpenRouterRequestFailedError &&
-        attempt < 3 &&
-        isRetryableStatus(error.status)
-      ) {
+      const retryable =
+        !(error instanceof OpenRouterRequestFailedError) || isRetryableStatus(error.status);
+      if (attempt < 3 && retryable) {
         await sleepMs(backoffDelayMs(attempt));
         continue;
       }
