@@ -67,6 +67,9 @@ pnpm batch -- --file <path>
 
 - OpenRouter models advertise different supported params. Tuning defaults (temp, topP, reasoning) are set globally; the adapter silently drops params the model doesn't support at call time.
 - Built-in council tuning is the canonical default for all councils (built-in, duplicated, and user-created).
+- Rate limiter `admitFixedWindowLimit` always increments the counter atomically. Scope evaluation order matters: narrowest first (per-IP → per-email → global) so noisy principals don't drain global quota.
+- `startSessionProcessing` intentionally allows `processing → processing` transitions — this is the lease-reclaim path for crashed workers. The `WHERE lease_owner = ?` guard on completion/failure writes prevents data corruption.
+- Upstream adapter `parseJson` functions must catch `SyntaxError` and throw the adapter's typed error class. CDN/proxy layers return HTML on 5xx.
 - Only `packages/config/src/env.ts` reads `process.env` directly.
 - Keep one canonical path per behavior. Delete retired surfaces in the same change set.
 - Styling is tokens-first; avoid hard-coded colors and inline styles.
