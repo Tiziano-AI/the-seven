@@ -1,17 +1,120 @@
 @import "tailwindcss";
 
+/* ── Four-lane OKLCH medieval palette ─────────────────────────── */
+
 :root {
-  --background: #f7f2e8;
-  --foreground: #1f2b21;
-  --muted-foreground: #55645b;
-  --panel: rgba(255, 252, 247, 0.82);
-  --panel-2: rgba(232, 223, 208, 0.62);
-  --panel-3: rgba(218, 208, 193, 0.8);
-  --border: rgba(79, 93, 83, 0.16);
-  --accent: #204f3a;
-  --accent-foreground: #f6f1e8;
-  --danger: #b94c3a;
+  /* Backgrounds */
+  --bg: oklch(0.12 0.01 240);
+  --bg-soft: oklch(0.14 0.01 240);
+  --surface: oklch(0.16 0.01 240);
+  --surface-raised: oklch(0.2 0.015 280);
+
+  /* Violet lane */
+  --violet: oklch(0.28 0.15 290);
+  --violet-soft: oklch(0.65 0.2 285);
+  --violet-dim: oklch(0.22 0.12 290);
+
+  /* Evergreen lane */
+  --evergreen: oklch(0.58 0.1 180);
+  --evergreen-soft: oklch(0.2 0.04 180);
+  --evergreen-bright: oklch(0.62 0.12 175);
+
+  /* Wood lane */
+  --wood: oklch(0.22 0.04 40);
+  --wood-soft: oklch(0.35 0.06 40);
+  --wood-dim: oklch(0.18 0.03 40);
+
+  /* Gold lane */
+  --gold: oklch(0.7 0.12 75);
+  --gold-soft: oklch(0.52 0.1 70);
+  --gold-bright: oklch(0.75 0.14 75);
+
+  /* Text */
+  --foreground: oklch(0.98 0.01 0);
+  --text-muted: oklch(0.89 0.01 0);
+  --text-dim: oklch(0.72 0.01 0);
+  --muted-foreground: oklch(0.72 0.01 0);
+
+  /* Borders */
+  --border: oklch(0.7 0.12 75 / 0.55);
+  --border-input: oklch(0.78 0.14 75 / 0.98);
+
+  /* Semantic */
+  --destructive: oklch(0.55 0.18 35);
+  --ring: var(--violet-soft);
+
+  /* Fonts (set by next/font CSS variables) */
+  --font-display: var(--font-medieval), ui-serif, Georgia, serif;
+  --font-body: var(--font-raleway), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-victor), ui-monospace, SFMono-Regular, monospace;
+
+  /* Radius */
+  --radius: 1rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 1.75rem;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 0.05);
+  --shadow-base: 0 1px 3px 0 oklch(0 0 0 / 0.1), 0 1px 2px -1px oklch(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px oklch(0 0 0 / 0.1), 0 2px 4px -2px oklch(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px oklch(0 0 0 / 0.1), 0 4px 6px -4px oklch(0 0 0 / 0.1);
+  --shadow-deep: 0 0 34px oklch(0 0 0 / 1);
+
+  /* Glow */
+  --glow-violet: 0 0 20px var(--violet-soft), 0 0 40px var(--violet);
+  --glow-evergreen: 0 0 20px var(--evergreen-bright), 0 0 40px var(--evergreen);
+  --glow-gold: 0 0 20px var(--gold-bright), 0 0 40px var(--gold);
+  --glow-subtle: 0 0 10px oklch(0 0 0 / 0.3);
+
+  /* Gradients */
+  --gradient-field:
+    radial-gradient(circle at top, oklch(0.58 0.1 180 / 0.18), transparent 55%),
+    radial-gradient(circle at bottom, oklch(0.22 0.04 40 / 0.45), transparent 70%), var(--bg);
+  --gradient-panel:
+    radial-gradient(circle at top right, oklch(0.65 0.2 285 / 0.24), transparent 55%),
+    radial-gradient(circle at bottom left, oklch(0.7 0.12 75 / 0.25), transparent 55%),
+    var(--bg-soft);
+  --gradient-card:
+    radial-gradient(circle at top left, oklch(0.65 0.2 285 / 0.16), transparent 55%),
+    radial-gradient(circle at bottom right, oklch(0.58 0.1 180 / 0.16), transparent 55%),
+    radial-gradient(circle at bottom, oklch(0.35 0.06 40 / 0.22), transparent 65%);
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* ── Tailwind v4 theme bridge ─────────────────────────────────── */
+
+@theme {
+  --color-bg: var(--bg);
+  --color-bg-soft: var(--bg-soft);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-violet: var(--violet);
+  --color-violet-soft: var(--violet-soft);
+  --color-evergreen: var(--evergreen);
+  --color-evergreen-soft: var(--evergreen-soft);
+  --color-evergreen-bright: var(--evergreen-bright);
+  --color-wood: var(--wood);
+  --color-wood-soft: var(--wood-soft);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-bright: var(--gold-bright);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--text-muted);
+  --color-dim: var(--text-dim);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-border-input: var(--border-input);
+  --color-ring: var(--ring);
+}
+
+/* ── Base ─────────────────────────────────────────────────────── */
 
 * {
   box-sizing: border-box;
@@ -22,14 +125,12 @@ html {
 }
 
 body {
-  background: var(--background);
+  background: var(--gradient-field);
   color: var(--foreground);
   min-height: 100vh;
-  background-image:
-    radial-gradient(circle at top left, rgba(32, 79, 58, 0.16), transparent 32%),
-    radial-gradient(circle at bottom right, rgba(185, 76, 58, 0.14), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0));
-  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -42,4 +143,130 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+/* ── Headings ─────────────────────────────────────────────────── */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  color: var(--gold);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+/* ── Prose (markdown content) ─────────────────────────────────── */
+
+.prose {
+  color: var(--foreground);
+  font-family: var(--font-body);
+  line-height: 1.7;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-family: var(--font-display);
+  color: var(--gold);
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose strong {
+  color: var(--gold-bright);
+  font-weight: 600;
+}
+
+.prose code {
+  font-family: var(--font-mono);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.15em 0.4em;
+  font-size: 0.875em;
+}
+
+.prose pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+}
+
+.prose pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.prose th {
+  background: var(--surface);
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.prose blockquote {
+  border-left: 3px solid var(--gold-soft);
+  padding-left: 1rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.prose a {
+  color: var(--evergreen-bright);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.5rem;
+}
+
+.prose li {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5rem 0;
+}
+
+/* ── Animations ──────────────────────────────────────────────── */
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
 }
