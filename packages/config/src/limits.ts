@@ -6,7 +6,7 @@ export type RateLimitSpec = Readonly<{
 export const DAY_SECONDS = 24 * 60 * 60;
 export const MINUTE_SECONDS = 60;
 
-export const MAX_HTTP_JSON_BYTES = 32 * 1024 * 1024;
+export const MAX_REQUEST_BODY_BYTES = 512 * 1024;
 
 export const DEMO_AUTH_LINK_TTL_HOURS = 24;
 export const DEMO_SESSION_TTL_HOURS = 24;
