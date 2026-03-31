@@ -139,6 +139,9 @@ export function CouncilsScreen() {
     if (!auth.authHeader || !selectedCouncil || selectedCouncil.ref.kind !== "user") {
       return;
     }
+    if (!window.confirm("Delete this council? This cannot be undone.")) {
+      return;
+    }
     try {
       await deleteCouncil(auth.authHeader, selectedCouncil.ref);
       await refreshCouncils();
@@ -189,7 +192,7 @@ export function CouncilsScreen() {
             <button
               key={council.name}
               type="button"
-              className="w-full rounded-[24px] border border-[var(--border)] bg-white/70 p-4 text-left transition hover:border-[var(--accent)]"
+              className="w-full rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-4 text-left transition hover:border-[var(--gold-soft)]"
               onClick={() => setSelectedRef(encodeRef(council.ref))}
             >
               <div className="text-sm font-semibold">{council.name}</div>
