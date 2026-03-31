@@ -41,4 +41,36 @@ describe("parseJsonBody", () => {
       status: 400,
     });
   });
+
+  test("rejects oversized body via content-length header", async () => {
+    await expect(
+      parseJsonBody(
+        new Request("https://example.com", {
+          method: "POST",
+          headers: { "content-length": String(1024 * 1024) },
+          body: '{"name":"ok"}',
+        }),
+        payloadSchema,
+      ),
+    ).rejects.toMatchObject({
+      kind: "invalid_input",
+      status: 413,
+    });
+  });
+
+  test("rejects oversized body after reading", async () => {
+    const largeBody = `{"name":"${"x".repeat(600_000)}"}`;
+    await expect(
+      parseJsonBody(
+        new Request("https://example.com", {
+          method: "POST",
+          body: largeBody,
+        }),
+        payloadSchema,
+      ),
+    ).rejects.toMatchObject({
+      kind: "invalid_input",
+      status: 413,
+    });
+  });
 });
