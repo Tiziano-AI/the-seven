@@ -7,8 +7,8 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   continueSession,
@@ -271,8 +271,13 @@ export function SessionInspector(props: {
               <div>Ingress: {detail.session.ingressSource}</div>
               <div>Tokens: {detail.session.totalTokens}</div>
               <div>
-                Cost: {formatCost(detail.session.totalCostUsdMicros)}
-                {detail.session.totalCostIsPartial ? " (partial)" : ""}
+                Cost:{" "}
+                {detail.session.totalCostIsPartial && detail.session.totalCostUsdMicros === 0
+                  ? "pending"
+                  : formatCost(detail.session.totalCostUsdMicros)}
+                {detail.session.totalCostIsPartial && detail.session.totalCostUsdMicros > 0
+                  ? " (partial)"
+                  : ""}
               </div>
             </div>
           </div>
@@ -313,30 +318,23 @@ export function SessionInspector(props: {
           </div>
           <div className="space-y-2">
             <Label htmlFor={`${fieldPrefix}-rerun-council`}>Rerun Council</Label>
-            <Input
+            <Select
               id={`${fieldPrefix}-rerun-council`}
-              list="rerun-council-options"
               value={rerunCouncil}
               onChange={(event) => setRerunCouncil(event.target.value)}
-            />
-            <datalist id="rerun-council-options">
-              {availableCouncils.map((council) => (
-                <option
-                  key={council.name}
-                  value={
-                    council.ref.kind === "built_in"
-                      ? `built_in:${council.ref.slug}`
-                      : `user:${council.ref.councilId}`
-                  }
-                >
-                  {council.name}
-                </option>
-              ))}
-            </datalist>
-            <p className="text-sm text-[var(--muted-foreground)]">
-              Use `built_in:*` or `user:*` values. The datalist is populated from your available
-              councils.
-            </p>
+            >
+              {availableCouncils.map((council) => {
+                const value =
+                  council.ref.kind === "built_in"
+                    ? `built_in:${council.ref.slug}`
+                    : `user:${council.ref.councilId}`;
+                return (
+                  <option key={value} value={value}>
+                    {council.name}
+                  </option>
+                );
+              })}
+            </Select>
           </div>
         </div>
       </Card>

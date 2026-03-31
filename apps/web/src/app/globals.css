@@ -50,6 +50,8 @@
 /* ── Core palette ─────────────────────────────────────────────────── */
 
 :root {
+  color-scheme: dark;
+
   /* Backgrounds */
   --bg: oklch(0.12 0.01 240);
   --bg-soft: oklch(0.14 0.01 240);
@@ -255,7 +257,8 @@ h6 {
 
   .btn:disabled {
     cursor: not-allowed;
-    opacity: 0.6;
+    opacity: 0.5;
+    filter: grayscale(0.5);
     transform: none;
     box-shadow: none;
   }
@@ -319,7 +322,7 @@ h6 {
   .btn-outline {
     background: transparent;
     color: var(--foreground);
-    border: 1.5px solid var(--input-border);
+    border: 1px solid var(--input-border);
     box-shadow: none;
   }
 
@@ -362,6 +365,7 @@ h6 {
   }
 
   .panel-interactive:hover {
+    background: var(--surface);
     border-color: var(--gold-soft);
   }
 
