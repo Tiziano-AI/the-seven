@@ -10,13 +10,16 @@ export function SessionStatusBadge(props: {
       ? `failed · ${props.failureKind.replaceAll("_", " ")}`
       : props.status;
 
+  const isActive = props.status === "pending" || props.status === "processing";
+
   return (
     <Badge
       className={cn(
-        props.status === "completed" && "bg-emerald-100 text-emerald-800",
-        props.status === "processing" && "bg-amber-100 text-amber-800",
-        props.status === "pending" && "bg-slate-100 text-slate-700",
-        props.status === "failed" && "bg-rose-100 text-rose-800",
+        props.status === "completed" && "bg-[var(--evergreen)] text-[var(--bg)]",
+        props.status === "processing" && "bg-[var(--gold)] text-[var(--bg)]",
+        props.status === "pending" && "bg-[var(--wood-soft)] text-[var(--foreground)]",
+        props.status === "failed" && "bg-[var(--destructive)] text-[var(--foreground)]",
+        isActive && "animate-pulse-glow",
       )}
     >
       {label}

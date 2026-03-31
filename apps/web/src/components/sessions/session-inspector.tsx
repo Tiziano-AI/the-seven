@@ -18,6 +18,7 @@ import {
   fetchSessionDiagnostics,
   rerunSession,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { SessionStatusBadge } from "./status-badge";
 
 function downloadText(filename: string, text: string, type: string) {
@@ -114,9 +115,9 @@ export function SessionInspector(props: {
     }
 
     return [
-      { phase: 3, title: "Verdict" },
-      { phase: 2, title: "Critiques" },
       { phase: 1, title: "Replies" },
+      { phase: 2, title: "Critiques" },
+      { phase: 3, title: "Verdict" },
     ].map((group) => ({
       ...group,
       artifacts: detail.artifacts.filter((artifact) => artifact.phase === group.phase),
@@ -341,9 +342,14 @@ export function SessionInspector(props: {
       </Card>
 
       {phaseGroups.map((group) => (
-        <Card key={group.phase} className="p-6">
+        <Card key={group.phase} className={cn("p-6", group.phase === 3 && "border-[var(--gold)]")}>
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-xl font-semibold tracking-[-0.03em]">
+            <h3
+              className={cn(
+                "font-semibold tracking-[-0.03em]",
+                group.phase === 3 ? "text-2xl" : "text-xl",
+              )}
+            >
               Phase {group.phase} · {group.title}
             </h3>
             <Badge>{group.artifacts.length} artifact(s)</Badge>
@@ -352,7 +358,7 @@ export function SessionInspector(props: {
             {group.artifacts.map((artifact) => (
               <div
                 key={artifact.id}
-                className="rounded-[24px] border border-[var(--border)] bg-white/70 p-5"
+                className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5"
               >
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <Badge>{artifact.member.label}</Badge>
