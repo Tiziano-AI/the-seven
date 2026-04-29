@@ -29,16 +29,16 @@
     "db:bootstrap:check": "node --import tsx tools/db-bootstrap-check.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.8",
-    "@playwright/test": "1.58.2",
+    "@biomejs/biome": "2.4.10",
+    "@playwright/test": "1.59.1",
     "@the-seven/config": "workspace:*",
     "@the-seven/db": "workspace:*",
-    "@types/node": "25.5.0",
+    "@types/node": "25.5.2",
     "@types/pg": "8.20.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "tsx": "4.21.0",
-    "typescript": "5.9.3",
-    "vitest": "4.1.0"
+    "typescript": "6.0.2",
+    "vitest": "4.1.2"
   }
 }

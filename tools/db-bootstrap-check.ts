@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import { BUILT_IN_COUNCILS, loadServerEnv } from "@the-seven/config";
 import { closeDatabaseClient, createDatabaseClient, type DatabaseClient } from "@the-seven/db";
 import { runMigrationsForTarget } from "@the-seven/db/migrate";
+import {
+  formatCanonicalLocalPostgresBootstrapMessage,
+  isCanonicalLocalPostgresConnectionFailure,
+  readCanonicalLocalPostgresStatus,
+} from "./local-postgres";
 
 const EXPECTED_TABLES = [
   "catalog_cache",
@@ -126,22 +131,6 @@ function requireExpectedSet(
   }
 }
 
-function isConnectionFailure(error: unknown) {
-  if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
-    return ["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN"].includes(error.code);
-  }
-
-  return (
-    error instanceof Error && /connect ECONNREFUSED|getaddrinfo ENOTFOUND/i.test(error.message)
-  );
-}
-
-function formatDatabaseUnavailableMessage(connectionString: string) {
-  const url = new URL(connectionString);
-  const port = url.port || "5432";
-  return `Postgres not reachable on ${url.hostname}:${port}; run \`pnpm local:db:up\`.`;
-}
-
 async function verifyBootstrap(connectionString: string, schemaName: string) {
   const client = createDatabaseClient({
     connectionString,
@@ -187,8 +176,17 @@ async function main() {
       await dropSchema(env.databaseUrl, schemaName);
     }
   } catch (error) {
-    if (isConnectionFailure(error)) {
-      throw new Error(formatDatabaseUnavailableMessage(env.databaseUrl));
+    if (isCanonicalLocalPostgresConnectionFailure(error)) {
+      const status = await readCanonicalLocalPostgresStatus({
+        composeFilePath: new URL("./../compose.yaml", import.meta.url).pathname,
+        connectionString: env.databaseUrl,
+      });
+      throw new Error(
+        formatCanonicalLocalPostgresBootstrapMessage({
+          status,
+          error,
+        }),
+      );
     }
     throw error;
   }

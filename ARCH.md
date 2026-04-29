@@ -47,6 +47,19 @@ No runtime code remains in `client/`, `server/`, or `shared/`.
 - Formatting/linting/import organization: Biome only
 - External providers: one adapter per provider boundary
 
+## Toolchain Snapshot
+
+- Launch-candidate validation runs against:
+  - Biome `2.4.10`
+  - Playwright Test `1.59.1`
+  - TypeScript `6.0.2`
+  - Vitest `4.1.2`
+- Sources:
+  - `node_modules/@biomejs/biome/package.json:3`
+  - `node_modules/@playwright/test/package.json:3`
+  - `node_modules/typescript/package.json:5`
+  - `node_modules/vitest/package.json:4`
+
 ## Canonical Local Operator Surface
 
 - Local Mac development uses exactly one database/runtime substrate:
@@ -55,12 +68,21 @@ No runtime code remains in `client/`, `server/`, or `shared/`.
   - one `postgres:17-alpine` service published on `127.0.0.1:5432`
 - Repo-root `.env.local` is the only canonical local runtime secrets file.
 - Node-side tooling loads `.env.local` through the shared config/env loader before parsing runtime settings.
+- `tools/local-postgres.ts` is the shared local Postgres operator helper. It owns:
+  - canonical `DATABASE_URL` target parsing
+  - compose health inspection for `the-seven-postgres`
+  - host-port owner detection for `127.0.0.1:5432`
+  - actionable failure messaging for doctor and bootstrap flows
 - `tools/local-dev.ts` is the only local operator entrypoint. It owns:
   - workstation doctor/bootstrap
   - local database lifecycle
   - local app launch
   - local gate execution
   - full local live verification orchestration
+- `pnpm local:doctor`, `pnpm local:db:up`, and `pnpm run db:bootstrap:check` must fail fast when:
+  - `.env.local` is missing required launch-gate keys
+  - Playwright Chromium is not installed
+  - `DATABASE_URL` targets `127.0.0.1:5432` and that port is not owned by `the-seven-postgres`
 - `tools/live-test.ts` is the provider-backed smoke owner. It assumes the local app is already running and exercises:
   - BYOK auth validation
   - model validate/autocomplete
@@ -71,7 +93,7 @@ No runtime code remains in `client/`, `server/`, or `shared/`.
   - self-started local dev server for standalone `pnpm test:e2e`
   - externally started local server for `pnpm local:live`
 
-### Decision Basis
+### Operator Decision Basis
 
 - Node exposes built-in dotenv loading through `process.loadEnvFile`, which allows one repo-root `.env.local` loader without adding a new runtime dependency.
   - Source: `vendor:node:v25:https://nodejs.org/api/process.html#processloadenvfilepath`
@@ -93,7 +115,21 @@ No runtime code remains in `client/`, `server/`, or `shared/`.
   - Source: `vendor:resend:retrieve-received-email:https://resend.com/docs/api-reference/emails/retrieve-received-email`
 - Local live verification requires a Resend API key that can both manage webhooks and read received emails. Send-only restricted keys are not valid for the canonical local live path.
 
-### Decision Basis
+## Launch-Candidate Validation Bar
+
+- The launch-candidate closeout sequence is:
+  - `pnpm local:doctor`
+  - `pnpm local:db:up`
+  - `pnpm run db:bootstrap:check`
+  - `uv run --python 3.12 devtools/gate.py --full`
+  - `pnpm local:live`
+- Launch-candidate closeout is incomplete until:
+  - the canonical local Postgres container owns `127.0.0.1:5432`
+  - bootstrap succeeds on a blank `the_seven` database
+  - the repo gate is clean after the final code and doc change
+  - live provider smoke passes with real OpenRouter, Resend, and Cloudflare inputs
+
+### Runtime Stack Decision Basis
 
 - Next App Router is the canonical router/build/runtime for server and client composition, route handlers, and server/client component boundaries.
   - Source: [Next.js Server and Client Components](https://nextjs.org/docs/app/getting-started/server-and-client-components)

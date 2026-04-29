@@ -1,6 +1,6 @@
 # Validation Matrix
 
-This is the required verification pyramid for the rewrite.
+This is the required verification pyramid for the launch-candidate milestone.
 
 ## Unit and Domain
 
@@ -59,11 +59,13 @@ This is the required verification pyramid for the rewrite.
   - Node, pnpm, and uv
   - `psql` and `pg_isready`
   - Playwright browser availability
+  - `127.0.0.1:5432` is either free for `the-seven-postgres` or already owned by it
   - `.env.local` presence
-  - required live-test keys when provider-backed verification is requested
+  - launch-candidate live keys in `.env.local`
 - `pnpm local:bootstrap -- --install` installs missing Homebrew-managed prerequisites and Playwright browsers
-- `pnpm local:db:up` waits for a healthy compose-managed Postgres instance
+- `pnpm local:db:up` fails fast if another service owns `127.0.0.1:5432`, otherwise waits for a healthy compose-managed Postgres instance
 - `pnpm local:db:reset` destroys the named volume and returns a blank database
+- `pnpm run db:bootstrap:check` verifies the squashed init migration against an isolated schema and fails fast if the canonical compose-managed database is not the active Postgres owner
 
 ## Live
 
@@ -87,6 +89,7 @@ pnpm local:doctor
 pnpm local:db:up
 pnpm run db:bootstrap:check
 uv run --python 3.12 devtools/gate.py --full
+pnpm local:live
 ```
 
 All commands must pass on a blank compose-managed Postgres database with the current init migration.
