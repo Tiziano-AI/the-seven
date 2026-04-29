@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { chromium } from "@playwright/test";
 import { loadCliEnv, loadServerEnv } from "@the-seven/config";
+import {
+  ensureComposePostgresHealthy,
+  type OperatorCheckResult,
+  readCanonicalLocalPostgresStatus,
+  toCanonicalLocalPostgresCheck,
+  waitForComposePostgresHealthy,
+} from "./local-postgres";
 import { runCommand, runCommandOrThrow, sleep, stopChild } from "./process-utils";
-
-type CheckResult = Readonly<{
-  label: string;
-  ok: boolean;
-  detail: string;
-  fix: string | null;
-}>;
 
 const repoRoot = process.cwd();
 const composeFilePath = path.join(repoRoot, "compose.yaml");
@@ -21,9 +21,11 @@ const healthcheckTimeoutMs = 60_000;
 const appReadyTimeoutMs = 120_000;
 const brewFormulae = ["libpq", "cloudflared", "uv", "node", "pnpm"] as const;
 const brewCasks = ["docker"] as const;
+
 function buildComposeArgs(args: ReadonlyArray<string>) {
   return ["compose", "-f", composeFilePath, ...args];
 }
+
 function readEnvAssignments(filePath: string) {
   if (!existsSync(filePath)) {
     return new Map<string, string>();
@@ -39,16 +41,16 @@ function readEnvAssignments(filePath: string) {
       }),
   );
 }
-function formatCheck(result: CheckResult) {
+
+function formatCheck(result: OperatorCheckResult) {
   return `${result.ok ? "PASS" : "FAIL"} ${result.label}: ${result.detail}`;
 }
+
 function parseMajorVersion(input: string) {
   const match = input.match(/(\d+)/);
   return match ? Number.parseInt(match[1], 10) : null;
 }
-function localDbUnavailableMessage() {
-  return "Postgres not reachable on 127.0.0.1:5432; run `pnpm local:db:up`.";
-}
+
 function ensureEnvLocalExists() {
   if (existsSync(envLocalPath)) {
     return;
@@ -87,7 +89,7 @@ async function checkCommand(command: string, versionArgs: ReadonlyArray<string>,
       ok: false,
       detail: `${command} is not on PATH`,
       fix: `Run \`pnpm local:bootstrap -- --install\` to install ${command}.`,
-    } satisfies CheckResult;
+    } satisfies OperatorCheckResult;
   }
 
   const result = await runCommand(command, versionArgs);
@@ -97,7 +99,7 @@ async function checkCommand(command: string, versionArgs: ReadonlyArray<string>,
     detail: result.stdout || result.stderr || `${command} is available`,
     fix:
       result.code === 0 ? null : `Run \`pnpm local:bootstrap -- --install\` to repair ${command}.`,
-  } satisfies CheckResult;
+  } satisfies OperatorCheckResult;
 }
 
 async function checkNodeVersion() {
@@ -107,7 +109,7 @@ async function checkNodeVersion() {
     ok: typeof major === "number" && major >= 22,
     detail: process.version,
     fix: typeof major === "number" && major >= 22 ? null : "Install Node 22+ with Homebrew.",
-  } satisfies CheckResult;
+  } satisfies OperatorCheckResult;
 }
 
 async function checkDocker() {
@@ -117,7 +119,7 @@ async function checkDocker() {
       ok: false,
       detail: "docker is not on PATH",
       fix: "Install Docker Desktop or run `pnpm local:bootstrap -- --install`.",
-    } satisfies CheckResult;
+    } satisfies OperatorCheckResult;
   }
 
   const info = await runCommand("docker", ["info"]);
@@ -127,7 +129,7 @@ async function checkDocker() {
       ok: false,
       detail: info.stderr || "Docker daemon is unavailable",
       fix: "Start Docker Desktop and rerun the command.",
-    } satisfies CheckResult;
+    } satisfies OperatorCheckResult;
   }
 
   const compose = await runCommand("docker", ["compose", "version"]);
@@ -139,7 +141,7 @@ async function checkDocker() {
       compose.code === 0
         ? null
         : "Install Docker Desktop with Compose support or run `pnpm local:bootstrap -- --install`.",
-  } satisfies CheckResult;
+  } satisfies OperatorCheckResult;
 }
 
 async function checkPlaywrightBrowser() {
@@ -151,7 +153,7 @@ async function checkPlaywrightBrowser() {
         ok: false,
         detail: `Chromium is missing at ${executablePath}`,
         fix: "Run `pnpm exec playwright install chromium` or `pnpm local:bootstrap -- --install`.",
-      } satisfies CheckResult;
+      } satisfies OperatorCheckResult;
     }
 
     return {
@@ -159,14 +161,14 @@ async function checkPlaywrightBrowser() {
       ok: true,
       detail: executablePath,
       fix: null,
-    } satisfies CheckResult;
+    } satisfies OperatorCheckResult;
   } catch (error) {
     return {
       label: "playwright browser",
       ok: false,
       detail: error instanceof Error ? error.message : "Chromium is unavailable",
       fix: "Run `pnpm exec playwright install chromium` or `pnpm local:bootstrap -- --install`.",
-    } satisfies CheckResult;
+    } satisfies OperatorCheckResult;
   }
 }
 
@@ -177,7 +179,7 @@ function checkEnvFilePresence() {
       ok: true,
       detail: ".env.local is present",
       fix: null,
-    } satisfies CheckResult;
+    } satisfies OperatorCheckResult;
   }
 
   const detail = existsSync(envLegacyPath)
@@ -188,7 +190,7 @@ function checkEnvFilePresence() {
     ok: false,
     detail,
     fix: "Create `.env.local` from `.env.local.example` before running local commands.",
-  } satisfies CheckResult;
+  } satisfies OperatorCheckResult;
 }
 
 function checkEnvKeys() {
@@ -219,10 +221,26 @@ function checkEnvKeys() {
       issues.length === 0
         ? null
         : "Fill the missing keys in `.env.local` using `.env.local.example` as the template.",
-  } satisfies CheckResult;
+  } satisfies OperatorCheckResult;
 }
 
 async function collectDoctorChecks() {
+  const databaseStatus = readEnvAssignments(envLocalPath).get("DATABASE_URL");
+  const localPostgresCheck =
+    typeof databaseStatus === "string" && databaseStatus.trim().length > 0
+      ? toCanonicalLocalPostgresCheck(
+          await readCanonicalLocalPostgresStatus({
+            composeFilePath,
+            connectionString: databaseStatus,
+          }),
+        )
+      : ({
+          label: "local postgres port",
+          ok: false,
+          detail: "DATABASE_URL is missing from .env.local",
+          fix: "Set DATABASE_URL in `.env.local` before running local commands.",
+        } satisfies OperatorCheckResult);
+
   return [
     await checkCommand("brew", ["--version"], "brew"),
     await checkDocker(),
@@ -233,9 +251,10 @@ async function collectDoctorChecks() {
     await checkCommand("psql", ["--version"], "psql"),
     await checkCommand("pg_isready", ["--version"], "pg_isready"),
     await checkPlaywrightBrowser(),
+    localPostgresCheck,
     checkEnvFilePresence(),
     checkEnvKeys(),
-  ] satisfies ReadonlyArray<CheckResult>;
+  ] satisfies ReadonlyArray<OperatorCheckResult>;
 }
 
 async function runDoctor(showFixes: boolean) {
@@ -265,49 +284,20 @@ async function ensureDockerReady() {
   }
 }
 
-async function composeContainerId() {
-  const result = await runCommand("docker", buildComposeArgs(["ps", "-q", "postgres"]));
-  return result.code === 0 ? result.stdout.trim() : "";
-}
-
-async function readComposeHealthStatus() {
-  const containerId = await composeContainerId();
-  if (!containerId) {
-    return "missing";
-  }
-
-  const result = await runCommand("docker", [
-    "inspect",
-    "--format",
-    "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",
-    containerId,
-  ]);
-  if (result.code !== 0) {
-    return "missing";
-  }
-  return result.stdout.trim() || "unknown";
-}
-
 async function waitForComposeHealth() {
-  const deadline = Date.now() + healthcheckTimeoutMs;
-  while (Date.now() < deadline) {
-    const status = await readComposeHealthStatus();
-    if (status === "healthy") {
-      return;
-    }
-    await sleep(1_000);
-  }
-
-  throw new Error(localDbUnavailableMessage());
+  await waitForComposePostgresHealthy({
+    composeFilePath,
+    connectionString: loadServerEnv().databaseUrl,
+    healthcheckTimeoutMs,
+    sleep,
+  });
 }
 
 async function ensureComposeDbHealthy() {
-  const status = await readComposeHealthStatus();
-  if (status === "healthy") {
-    return;
-  }
-
-  throw new Error(localDbUnavailableMessage());
+  await ensureComposePostgresHealthy({
+    composeFilePath,
+    connectionString: loadServerEnv().databaseUrl,
+  });
 }
 
 async function waitForHttpReady(baseUrl: string) {
@@ -376,6 +366,14 @@ async function installPrerequisites() {
 
 async function runDbUp() {
   await ensureDockerReady();
+  const diagnosis = await readCanonicalLocalPostgresStatus({
+    composeFilePath,
+    connectionString: loadServerEnv().databaseUrl,
+  });
+  const portCheck = toCanonicalLocalPostgresCheck(diagnosis);
+  if (!portCheck.ok) {
+    throw new Error(`${portCheck.detail}; ${portCheck.fix}`);
+  }
   await runCommandOrThrow("docker", buildComposeArgs(["up", "-d", "postgres"]));
   await waitForComposeHealth();
   console.log("Postgres is healthy on 127.0.0.1:5432.");

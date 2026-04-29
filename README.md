@@ -43,9 +43,9 @@ The Seven is a privacy-first multi-model council for hard questions.
 
 ```bash
 pnpm install
+cp .env.local.example .env.local
 pnpm local:doctor
 pnpm local:bootstrap -- --install
-cp .env.local.example .env.local
 pnpm local:db:up
 pnpm local:dev
 ```
@@ -83,6 +83,12 @@ SEVEN_DEMO_TEST_EMAIL=
 
 `SEVEN_DEMO_RESEND_API_KEY` must be a Resend API key with webhook-management and received-email access. Send-only restricted keys are not sufficient for `pnpm test:live` or `pnpm local:live`.
 
+`pnpm local:doctor` validates the launch-candidate operator surface. It fails if:
+
+- `.env.local` is missing required launch-gate keys,
+- Playwright Chromium is not installed,
+- or `127.0.0.1:5432` is already owned by another process or Docker container instead of `the-seven-postgres`.
+
 On Node runtime boot, the app applies the single squashed init SQL before the durable worker starts. A blank compose-managed Postgres database is a valid starting state.
 
 CLI batch input is JSONL. Each line uses the canonical query shape:
@@ -105,13 +111,14 @@ pnpm local:live
 ## Validation
 
 ```bash
-pnpm local:gate
-pnpm test:live
-pnpm run test:e2e
+pnpm local:doctor
+pnpm local:db:up
+pnpm run db:bootstrap:check
 uv run --python 3.12 devtools/gate.py --full
+pnpm local:live
 ```
 
-`pnpm local:gate` fails fast with an actionable Postgres error if the compose-managed database is not healthy.
+`pnpm local:db:up` and `pnpm run db:bootstrap:check` now fail fast with an actionable message if the canonical compose-managed Postgres cannot own `127.0.0.1:5432`.
 
 `pnpm local:live` starts the app locally, provisions a temporary Cloudflare quick tunnel plus Resend webhook for the demo inbox flow, runs the live provider smoke, runs Playwright against the externally started server, and then cleans up the tunnel, webhook, and app process.
 
