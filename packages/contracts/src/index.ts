@@ -12,4 +12,5 @@ export * from "./domain/strings";
 export * from "./domain/usage";
 export * from "./http/envelopes";
 export * from "./http/errors";
+export * from "./http/registry";
 export * from "./http/schemas";

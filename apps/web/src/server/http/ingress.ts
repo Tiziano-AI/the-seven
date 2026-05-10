@@ -1,7 +1,8 @@
 import "server-only";
 
-import { parseIngressSource } from "@the-seven/contracts";
+import { invalidInputDetails, parseIngressSource } from "@the-seven/contracts";
 import type { NextRequest } from "next/server";
+import { EdgeError } from "./errors";
 
 export type IngressContext = Readonly<{
   source: "web" | "cli" | "api";
@@ -9,11 +10,37 @@ export type IngressContext = Readonly<{
 }>;
 
 export function parseIngressHeaders(request: NextRequest): IngressContext {
-  const source = parseIngressSource(request.headers.get("x-seven-ingress")) ?? "web";
+  const rawSource = request.headers.get("x-seven-ingress");
+  const source = rawSource === null ? "web" : parseIngressSource(rawSource);
+  if (!source) {
+    throw new EdgeError({
+      kind: "invalid_input",
+      message: "Invalid ingress source",
+      details: invalidInputDetails([
+        { path: "headers.x-seven-ingress", message: "Ingress source must be web, cli, or api" },
+      ]),
+      status: 400,
+    });
+  }
+
   const versionRaw = request.headers.get("x-seven-ingress-version");
   const version = versionRaw?.trim();
+  if (version && (/[\r\n]/.test(version) || version.length > 120)) {
+    throw new EdgeError({
+      kind: "invalid_input",
+      message: "Invalid ingress version",
+      details: invalidInputDetails([
+        {
+          path: "headers.x-seven-ingress-version",
+          message: "Ingress version must be single-line and at most 120 characters",
+        },
+      ]),
+      status: 400,
+    });
+  }
+
   return {
     source,
-    version: version ? version.slice(0, 120) : null,
+    version: version || null,
   };
 }

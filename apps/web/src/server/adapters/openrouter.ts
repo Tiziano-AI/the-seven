@@ -1,10 +1,11 @@
 import "server-only";
 
-import { buildOpenRouterAppHeaders, loadServerEnv } from "@the-seven/config";
+import { buildOpenRouterAppHeaders, serverRuntime } from "@the-seven/config";
 import type { CouncilMemberTuningInput } from "@the-seven/contracts";
 import { z } from "zod";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const OPENROUTER_REQUEST_TIMEOUT_MS = 120_000;
 const IS_TEST = process.env.NODE_ENV === "test";
 
 export type OpenRouterMessage = Readonly<{
@@ -30,6 +31,12 @@ export type OpenRouterTuningOptions = Readonly<{
   verbosity?: string;
   include_reasoning?: boolean;
   reasoning?: Readonly<{ effort?: string }>;
+}>;
+
+export type MaterializedOpenRouterTuning = Readonly<{
+  options: OpenRouterTuningOptions;
+  sentParameters: string[];
+  deniedParameters: string[];
 }>;
 
 const openRouterUsageSchema = z.object({
@@ -84,6 +91,7 @@ const openRouterErrorBodySchema = z
   .object({
     error: z
       .object({
+        code: z.union([z.string(), z.number()]).optional(),
         message: z.string().optional(),
       })
       .optional(),
@@ -122,11 +130,13 @@ export type OpenRouterModel = z.infer<typeof openRouterModelsResponseSchema>["da
 
 export class OpenRouterRequestFailedError extends Error {
   readonly status: number | null;
+  readonly code: string | null;
 
-  constructor(input: { status: number | null; message: string }) {
+  constructor(input: { status: number | null; code?: string | number | null; message: string }) {
     super(input.message);
     this.name = "OpenRouterRequestFailedError";
     this.status = input.status;
+    this.code = input.code === undefined || input.code === null ? null : String(input.code);
   }
 }
 
@@ -147,7 +157,7 @@ function normalizeRequest(input: OpenRouterRequest): Record<string, unknown> {
 
 function buildHeaders(apiKey?: string): HeadersInit {
   const headers: Record<string, string> = {
-    ...buildOpenRouterAppHeaders(loadServerEnv()),
+    ...buildOpenRouterAppHeaders(serverRuntime()),
     "Content-Type": "application/json",
   };
   if (apiKey) {
@@ -175,11 +185,28 @@ async function requestJson(input: {
   method?: "GET" | "POST";
   body?: unknown;
 }): Promise<unknown> {
-  const response = await fetch(`${OPENROUTER_BASE_URL}${input.path}`, {
-    method: input.method ?? "GET",
-    headers: buildHeaders(input.apiKey),
-    body: input.body ? JSON.stringify(input.body) : undefined,
-  });
+  let response: Response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, OPENROUTER_REQUEST_TIMEOUT_MS);
+
+  try {
+    response = await fetch(`${OPENROUTER_BASE_URL}${input.path}`, {
+      method: input.method ?? "GET",
+      headers: buildHeaders(input.apiKey),
+      body: input.body ? JSON.stringify(input.body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "transport failure";
+    throw new OpenRouterRequestFailedError({
+      status: null,
+      message: `OpenRouter request failed before response: ${message}`,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const data = await parseJson(response);
   if (response.ok) {
@@ -192,6 +219,7 @@ async function requestJson(input: {
     : response.statusText;
   throw new OpenRouterRequestFailedError({
     status: response.status,
+    code: parsed.success ? parsed.data.error?.code : null,
     message: `OpenRouter request failed (status ${response.status}): ${message}`,
   });
 }
@@ -219,24 +247,77 @@ function isRetryableStatus(status: number | null): boolean {
   return status === 408 || status === 409 || status === 429 || (status >= 500 && status <= 599);
 }
 
-export function normalizeCouncilMemberTuningInput(
-  tuning: CouncilMemberTuningInput | null | undefined,
-  supportedParameters?: ReadonlyArray<string>,
-): OpenRouterTuningOptions {
-  const supports = (param: string) => !supportedParameters || supportedParameters.includes(param);
+function materializeParam(input: {
+  parameter: string;
+  supported: ReadonlySet<string>;
+  present: boolean;
+  apply: () => OpenRouterTuningOptions;
+}): MaterializedOpenRouterTuning {
+  if (!input.present) {
+    return { options: {}, sentParameters: [], deniedParameters: [] };
+  }
+  if (!input.supported.has(input.parameter)) {
+    return {
+      options: {},
+      sentParameters: [],
+      deniedParameters: [input.parameter],
+    };
+  }
   return {
-    ...(typeof tuning?.temperature === "number" && supports("temperature")
-      ? { temperature: tuning.temperature }
-      : {}),
-    ...(typeof tuning?.topP === "number" && supports("top_p") ? { top_p: tuning.topP } : {}),
-    ...(typeof tuning?.seed === "number" && supports("seed") ? { seed: tuning.seed } : {}),
-    ...(tuning?.verbosity && supports("verbosity") ? { verbosity: tuning.verbosity } : {}),
-    ...(typeof tuning?.includeReasoning === "boolean" && supports("include_reasoning")
-      ? { include_reasoning: tuning.includeReasoning }
-      : {}),
-    ...(tuning?.reasoningEffort && supports("reasoning")
-      ? { reasoning: { effort: tuning.reasoningEffort } }
-      : {}),
+    options: input.apply(),
+    sentParameters: [input.parameter],
+    deniedParameters: [],
+  };
+}
+
+export function materializeCouncilMemberTuningInput(
+  tuning: CouncilMemberTuningInput | null | undefined,
+  supportedParameters: ReadonlyArray<string>,
+): MaterializedOpenRouterTuning {
+  const supported = new Set(supportedParameters);
+  const rows = [
+    materializeParam({
+      parameter: "temperature",
+      supported,
+      present: typeof tuning?.temperature === "number",
+      apply: () => ({ temperature: tuning?.temperature ?? undefined }),
+    }),
+    materializeParam({
+      parameter: "top_p",
+      supported,
+      present: typeof tuning?.topP === "number",
+      apply: () => ({ top_p: tuning?.topP ?? undefined }),
+    }),
+    materializeParam({
+      parameter: "seed",
+      supported,
+      present: typeof tuning?.seed === "number",
+      apply: () => ({ seed: tuning?.seed ?? undefined }),
+    }),
+    materializeParam({
+      parameter: "verbosity",
+      supported,
+      present: Boolean(tuning?.verbosity),
+      apply: () => ({ verbosity: tuning?.verbosity ?? undefined }),
+    }),
+    materializeParam({
+      parameter: "include_reasoning",
+      supported,
+      present: typeof tuning?.includeReasoning === "boolean",
+      apply: () => ({ include_reasoning: tuning?.includeReasoning ?? undefined }),
+    }),
+    materializeParam({
+      parameter: "reasoning",
+      supported,
+      present: Boolean(tuning?.reasoningEffort),
+      apply: () => ({ reasoning: { effort: tuning?.reasoningEffort ?? undefined } }),
+    }),
+  ];
+
+  return {
+    options: Object.assign({}, ...rows.map((row) => row.options)),
+    sentParameters: rows.flatMap((row) => row.sentParameters),
+    deniedParameters: rows.flatMap((row) => row.deniedParameters),
   };
 }
 
@@ -278,7 +359,7 @@ export async function fetchOpenRouterModels(): Promise<OpenRouterModel[]> {
 
 export async function validateOpenRouterApiKey(apiKey: string): Promise<boolean> {
   try {
-    await requestJson({ path: "/auth/key", apiKey });
+    await requestJson({ path: "/key", apiKey });
     return true;
   } catch (error) {
     if (error instanceof OpenRouterRequestFailedError && error.status === 401) {

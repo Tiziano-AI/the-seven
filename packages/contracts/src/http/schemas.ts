@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { attachmentUploadSchema } from "../domain/attachments";
+import { attachmentUploadSchema, MAX_ATTACHMENT_COUNT } from "../domain/attachments";
 import { councilDefinitionSchema } from "../domain/councilDefinition";
 import { councilRefSchema } from "../domain/councilRef";
 import { INGRESS_SOURCES } from "../domain/ingress";
@@ -21,13 +21,8 @@ export const demoRequestPayloadSchema = z.object({
   email: z.string().trim().email(),
 });
 
-export const demoConsumeBodySchema = z.object({
-  token: z.string().trim().min(1),
-});
-
 export const demoConsumePayloadSchema = z.object({
   email: z.string().trim().email(),
-  token: z.string().trim().min(1),
   expiresAt: z.number().int(),
 });
 
@@ -112,18 +107,17 @@ export const modelAutocompletePayloadSchema = z.object({
 export const querySubmitBodySchema = z.object({
   query: z.string().trim().min(1),
   councilRef: councilRefSchema,
-  attachments: z.array(attachmentUploadSchema).optional(),
+  attachments: z.array(attachmentUploadSchema).max(MAX_ATTACHMENT_COUNT).optional(),
 });
 
-export const queryContinueBodySchema = z.object({
-  sessionId: z.number().int().positive(),
-});
+export const queryContinueBodySchema = z.object({}).strict();
 
-export const queryRerunBodySchema = z.object({
-  sessionId: z.number().int().positive(),
-  councilRef: councilRefSchema,
-  queryOverride: z.string().trim().min(1).optional(),
-});
+export const queryRerunBodySchema = z
+  .object({
+    councilRef: councilRefSchema,
+    queryOverride: z.string().trim().min(1).optional(),
+  })
+  .strict();
 
 export const submitPayloadSchema = z.object({
   sessionId: z.number().int().positive(),
@@ -175,6 +169,10 @@ export const providerCallSchema = z.object({
   memberPosition: memberPositionSchema,
   requestModelId: z.string(),
   requestModelName: z.string(),
+  catalogRefreshedAt: timestampSchema.nullable(),
+  supportedParameters: z.array(z.string()),
+  sentParameters: z.array(z.string()),
+  deniedParameters: z.array(z.string()),
   responseModel: z.string().nullable(),
   billedModelId: z.string().nullable(),
   requestSystemChars: z.number().int(),
@@ -193,6 +191,8 @@ export const providerCallSchema = z.object({
   choiceErrorMessage: z.string().nullable(),
   choiceErrorCode: z.number().int().nullable(),
   errorStatus: z.number().int().nullable(),
+  errorCode: z.string().nullable(),
+  billingLookupStatus: z.string(),
   responseId: z.string().nullable(),
   createdAt: timestampSchema,
 });

@@ -1,7 +1,6 @@
-import { decodeCouncilRef, updateCouncilBodySchema } from "@the-seven/contracts";
+import { forbiddenDetails, routeContract } from "@the-seven/contracts";
 import type { NextRequest } from "next/server";
 import { EdgeError } from "@/server/http/errors";
-import { parseJsonBody } from "@/server/http/parse";
 import { requireAuth, requireByokAuth } from "@/server/http/requireAuth";
 import { handleRoute } from "@/server/http/route";
 import {
@@ -15,32 +14,19 @@ import {
   validateCouncilMembers,
 } from "@/server/services/councilValidation";
 
-function decodeLocator(locator: string) {
-  const decoded = decodeCouncilRef(locator);
-  if (!decoded) {
-    throw new EdgeError({
-      kind: "invalid_input",
-      message: "Invalid council reference",
-      details: { issues: [{ path: "locator", message: "Invalid council reference" }] },
-      status: 400,
-    });
-  }
-  return decoded;
-}
-
 export async function GET(request: NextRequest, context: { params: Promise<{ locator: string }> }) {
   return handleRoute(request, {
-    resource: "councils.get",
-    handler: async (ctx) => {
+    route: routeContract("councils.get"),
+    params: context.params,
+    handler: async (ctx, _request, input) => {
       const auth = requireAuth(ctx.auth);
-      const params = await context.params;
-      const ref = decodeLocator(params.locator);
+      const ref = input.params.locator;
 
       if (auth.kind === "demo" && (ref.kind !== "built_in" || ref.slug !== "commons")) {
         throw new EdgeError({
           kind: "forbidden",
           message: "Demo mode only allows Commons Council",
-          details: { reason: "demo_council_only" },
+          details: forbiddenDetails("demo_council_only"),
           status: 403,
         });
       }
@@ -61,32 +47,31 @@ export async function GET(request: NextRequest, context: { params: Promise<{ loc
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ locator: string }> }) {
   return handleRoute(request, {
-    resource: "councils.update",
-    handler: async (ctx, rawRequest) => {
+    route: routeContract("councils.update"),
+    params: context.params,
+    handler: async (ctx, _request, input) => {
       const auth = requireByokAuth(ctx.auth);
-      const params = await context.params;
-      const ref = decodeLocator(params.locator);
+      const ref = input.params.locator;
       if (ref.kind !== "user") {
         throw new EdgeError({
           kind: "forbidden",
           message: "Built-in councils are not editable",
-          details: { reason: "built_in_read_only" },
+          details: forbiddenDetails("built_in_read_only"),
           status: 403,
         });
       }
 
-      const input = await parseJsonBody(rawRequest, updateCouncilBodySchema);
       await assertCouncilNameAvailable({
         userId: auth.userId,
-        name: input.name,
+        name: input.body.name,
         excludeCouncilId: ref.councilId,
       });
-      const members = await validateCouncilMembers(input.members);
+      const members = await validateCouncilMembers(input.body.members);
       await replaceCouncil({
         userId: auth.userId,
         councilId: ref.councilId,
-        name: input.name,
-        phasePrompts: input.phasePrompts,
+        name: input.body.name,
+        phasePrompts: input.body.phasePrompts,
         members,
       });
       return { success: true };
@@ -99,16 +84,16 @@ export async function DELETE(
   context: { params: Promise<{ locator: string }> },
 ) {
   return handleRoute(request, {
-    resource: "councils.delete",
-    handler: async (ctx) => {
+    route: routeContract("councils.delete"),
+    params: context.params,
+    handler: async (ctx, _request, input) => {
       const auth = requireByokAuth(ctx.auth);
-      const params = await context.params;
-      const ref = decodeLocator(params.locator);
+      const ref = input.params.locator;
       if (ref.kind !== "user") {
         throw new EdgeError({
           kind: "forbidden",
           message: "Built-in councils are not deletable",
-          details: { reason: "built_in_read_only" },
+          details: forbiddenDetails("built_in_read_only"),
           status: 403,
         });
       }

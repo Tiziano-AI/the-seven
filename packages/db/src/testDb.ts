@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { loadServerEnv } from "@the-seven/config";
+import { serverRuntime } from "@the-seven/config";
 import {
   closeDatabaseClient,
   configureDbForTests,
@@ -73,7 +73,7 @@ async function dropSchemaBestEffort(connectionString: string, schemaName: string
 
 export async function setupTestDatabase(): Promise<string> {
   await teardownTestDatabase();
-  const connectionString = loadServerEnv().databaseUrl;
+  const connectionString = serverRuntime().databaseUrl;
 
   for (let attempt = 1; attempt <= TEST_DB_MAX_ATTEMPTS; attempt += 1) {
     const schemaName = buildTestSchemaName();
@@ -108,7 +108,7 @@ export async function teardownTestDatabase(): Promise<void> {
 
   const schemaName = activeTestSchemaName;
   activeTestSchemaName = null;
-  const connectionString = loadServerEnv().databaseUrl;
+  const connectionString = serverRuntime().databaseUrl;
 
   for (let attempt = 1; attempt <= TEST_DB_MAX_ATTEMPTS; attempt += 1) {
     try {

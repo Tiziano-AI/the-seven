@@ -1,4 +1,4 @@
-import { loadServerEnv } from "@the-seven/config";
+import { serverRuntime } from "@the-seven/config";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool, type PoolConfig } from "pg";
 import * as schema from "./schema";
@@ -56,7 +56,7 @@ function buildDatabaseTarget(): DatabaseTarget {
     return testDatabaseTarget;
   }
 
-  const env = loadServerEnv();
+  const env = serverRuntime();
   return {
     connectionString: env.databaseUrl,
     schemaName: null,

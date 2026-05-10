@@ -1,21 +1,30 @@
 import "server-only";
 
-import { loadServerEnv } from "@the-seven/config";
+import { serverRuntime } from "@the-seven/config";
 import { getOrCreateUser } from "@the-seven/db";
 import type { NextRequest } from "next/server";
+import { validateOpenRouterApiKey } from "../adapters/openrouter";
 import { deriveByokPrincipalFromApiKey } from "../domain/byok";
 import { getDemoSessionContext } from "../services/demoAuth";
+
+export const DEMO_SESSION_COOKIE = "seven_demo_session";
 
 export type AuthContext =
   | Readonly<{ kind: "none" }>
   | Readonly<{ kind: "invalid"; reason: "invalid_token" | "expired_token" }>
   | Readonly<{ kind: "byok"; userId: number; principal: string; openRouterKey: string }>
-  | Readonly<{ kind: "demo"; userId: number; principal: string; openRouterKey: string }>;
+  | Readonly<{
+      kind: "demo";
+      userId: number;
+      principal: string;
+      openRouterKey: string;
+      expiresAt: number;
+    }>;
 
 type ParsedAuthorization =
   | Readonly<{ kind: "none" }>
   | Readonly<{ kind: "byok"; token: string }>
-  | Readonly<{ kind: "demo"; token: string }>;
+  | Readonly<{ kind: "invalid" }>;
 
 function parseAuthorizationHeader(value: string | null): ParsedAuthorization {
   const trimmed = value?.trim();
@@ -28,22 +37,26 @@ function parseAuthorizationHeader(value: string | null): ParsedAuthorization {
     return { kind: "byok", token: bearer[1].trim() };
   }
 
-  const demo = trimmed.match(/^Demo\s+(.+)$/i);
-  if (demo?.[1]) {
-    return { kind: "demo", token: demo[1].trim() };
-  }
-
-  return { kind: "none" };
+  return { kind: "invalid" };
 }
 
 export async function resolveAuthContext(request: NextRequest, now: Date): Promise<AuthContext> {
   const parsed = parseAuthorizationHeader(request.headers.get("authorization"));
-  if (parsed.kind === "none") {
+  if (parsed.kind === "invalid") {
+    return { kind: "invalid", reason: "invalid_token" };
+  }
+
+  const demoCookie = request.cookies.get(DEMO_SESSION_COOKIE)?.value.trim();
+  if (parsed.kind === "none" && !demoCookie) {
     return { kind: "none" };
   }
 
   if (parsed.kind === "byok") {
     if (!parsed.token) {
+      return { kind: "invalid", reason: "invalid_token" };
+    }
+    const valid = await validateOpenRouterApiKey(parsed.token);
+    if (!valid) {
       return { kind: "invalid", reason: "invalid_token" };
     }
 
@@ -61,12 +74,12 @@ export async function resolveAuthContext(request: NextRequest, now: Date): Promi
     };
   }
 
-  const env = loadServerEnv();
+  const env = serverRuntime();
   if (!env.demo.enabled || !env.demo.openRouterApiKey) {
     return { kind: "invalid", reason: "invalid_token" };
   }
 
-  const session = await getDemoSessionContext({ token: parsed.token, now });
+  const session = await getDemoSessionContext({ token: demoCookie ?? "", now });
   if (session.kind === "missing") {
     return { kind: "invalid", reason: "invalid_token" };
   }
@@ -79,5 +92,6 @@ export async function resolveAuthContext(request: NextRequest, now: Date): Promi
     userId: session.userId,
     principal: session.principal,
     openRouterKey: env.demo.openRouterApiKey,
+    expiresAt: session.expiresAt,
   };
 }

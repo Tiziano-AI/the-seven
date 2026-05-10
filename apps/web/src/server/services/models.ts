@@ -135,6 +135,27 @@ export async function validateModelId(modelId: string) {
       };
 }
 
+export async function getModelCapability(modelId: string) {
+  const now = new Date();
+  await ensureCatalogFresh(now);
+
+  let found = await getCatalogModelById(modelId);
+  if (!found) {
+    await refreshModelCatalogOnce();
+    found = await getCatalogModelById(modelId);
+  }
+
+  if (!found) {
+    return null;
+  }
+
+  return {
+    modelId: found.modelId,
+    supportedParameters: found.supportedParametersJson,
+    refreshedAt: found.refreshedAt,
+  };
+}
+
 export async function autocompleteModels(query: string, limit: number) {
   const now = new Date();
   await ensureCatalogFresh(now);

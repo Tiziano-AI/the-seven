@@ -3,6 +3,12 @@ import "server-only";
 import { BUILT_IN_COUNCILS } from "@the-seven/config";
 import type { CouncilRef, IngressSource } from "@the-seven/contracts";
 import {
+  forbiddenDetails,
+  invalidInputDetails,
+  notFoundDetails,
+  rateLimitedDetails,
+} from "@the-seven/contracts";
+import {
   createSessionWithJob,
   enqueueSessionJob,
   getSessionById,
@@ -11,6 +17,7 @@ import {
 import { decodeAttachmentToText } from "../domain/attachments";
 import { encryptJobCredential } from "../domain/jobCredential";
 import { hashQuestion } from "../domain/questionHash";
+import { redactRateLimitScope } from "../domain/redaction";
 import { buildSessionSnapshot } from "../domain/sessionSnapshot";
 import { EdgeError } from "../http/errors";
 import { getOutputFormats, resolveCouncilSnapshot } from "./councils";
@@ -31,7 +38,7 @@ function requireCommonsCouncil(ref: CouncilRef) {
   throw new EdgeError({
     kind: "forbidden",
     message: "Demo mode only allows Commons Council",
-    details: { reason: "demo_council_only" },
+    details: forbiddenDetails("demo_council_only"),
     status: 403,
   });
 }
@@ -44,7 +51,7 @@ function requireDemoSessionCouncil(councilNameAtRun: string) {
   throw new EdgeError({
     kind: "forbidden",
     message: "Demo mode only allows Commons Council",
-    details: { reason: "demo_council_only" },
+    details: forbiddenDetails("demo_council_only"),
     status: 403,
   });
 }
@@ -67,12 +74,12 @@ async function admitDemoRunIfNeeded(input: {
     throw new EdgeError({
       kind: "rate_limited",
       message: "Demo run rate limit exceeded",
-      details: {
-        scope: limited.scope,
+      details: rateLimitedDetails({
+        scope: redactRateLimitScope(limited.scope),
         limit: limited.limit,
         windowSeconds: limited.windowSeconds,
         resetAt: new Date(limited.resetAtMs).toISOString(),
-      },
+      }),
       status: 429,
     });
   }
@@ -88,7 +95,7 @@ async function decodeAttachments(
       throw new EdgeError({
         kind: "invalid_input",
         message: result.error.message,
-        details: { issues: [{ path: "attachments", message: result.error.message }] },
+        details: invalidInputDetails([{ path: "attachments", message: result.error.message }]),
         status: 400,
       });
     }
@@ -125,7 +132,7 @@ async function resolveSnapshot(input: {
       throw new EdgeError({
         kind: "not_found",
         message: "Council not found",
-        details: { resource: "council" },
+        details: notFoundDetails("council"),
         status: 404,
       });
     }
@@ -172,7 +179,7 @@ export async function submitSession(input: {
     ingressSource: input.ingressSource,
     ingressVersion: input.ingressVersion,
     traceId: input.traceId,
-    credentialCiphertext: encryptJobCredential(input.auth.openRouterKey),
+    buildCredentialCiphertext: (context) => encryptJobCredential(input.auth.openRouterKey, context),
   });
 
   return { sessionId };
@@ -189,7 +196,7 @@ export async function continueSession(input: {
     throw new EdgeError({
       kind: "not_found",
       message: "Session not found",
-      details: { resource: "session" },
+      details: notFoundDetails("session"),
       status: 404,
     });
   }
@@ -198,7 +205,7 @@ export async function continueSession(input: {
     throw new EdgeError({
       kind: "invalid_input",
       message: `Only failed sessions can be continued (status is "${session.status}")`,
-      details: { issues: [{ path: "status", message: "Session not in failed state" }] },
+      details: invalidInputDetails([{ path: "status", message: "Session not in failed state" }]),
       status: 400,
     });
   }
@@ -215,7 +222,7 @@ export async function continueSession(input: {
   await setSessionPending(session.id);
   await enqueueSessionJob({
     sessionId: session.id,
-    credentialCiphertext: encryptJobCredential(input.auth.openRouterKey),
+    buildCredentialCiphertext: (context) => encryptJobCredential(input.auth.openRouterKey, context),
   });
   return { sessionId: session.id };
 }
@@ -236,7 +243,7 @@ export async function rerunSession(input: {
     throw new EdgeError({
       kind: "not_found",
       message: "Session not found",
-      details: { resource: "session" },
+      details: notFoundDetails("session"),
       status: 404,
     });
   }
@@ -245,7 +252,7 @@ export async function rerunSession(input: {
     throw new EdgeError({
       kind: "invalid_input",
       message: `Only terminal sessions can be rerun (status is "${session.status}")`,
-      details: { issues: [{ path: "status", message: "Session not in terminal state" }] },
+      details: invalidInputDetails([{ path: "status", message: "Session not in terminal state" }]),
       status: 400,
     });
   }
@@ -279,7 +286,7 @@ export async function rerunSession(input: {
     ingressSource: input.ingressSource,
     ingressVersion: input.ingressVersion,
     traceId: input.traceId,
-    credentialCiphertext: encryptJobCredential(input.auth.openRouterKey),
+    buildCredentialCiphertext: (context) => encryptJobCredential(input.auth.openRouterKey, context),
   });
 
   return { sessionId: rerunSessionId };

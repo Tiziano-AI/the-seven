@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { CouncilMemberAssignment } from "@the-seven/contracts";
+import { type CouncilMemberAssignment, invalidInputDetails } from "@the-seven/contracts";
 import { listUserCouncils } from "@the-seven/db";
 import { canonicalizeCouncilMembers } from "../domain/councilDefinition";
 import { EdgeError } from "../http/errors";
@@ -23,7 +23,7 @@ export async function assertCouncilNameAvailable(input: {
     throw new EdgeError({
       kind: "invalid_input",
       message: "Council name already exists",
-      details: { issues: [{ path: "name", message: "Council name already exists" }] },
+      details: invalidInputDetails([{ path: "name", message: "Council name already exists" }]),
       status: 400,
     });
   }
@@ -46,9 +46,9 @@ export async function validateCouncilMembers(
       throw new EdgeError({
         kind: "invalid_input",
         message: `Unknown model ${member.model.modelId}`,
-        details: {
-          issues: [{ path: "members", message: `Unknown model ${member.model.modelId}` }],
-        },
+        details: invalidInputDetails([
+          { path: "members", message: `Unknown model ${member.model.modelId}` },
+        ]),
         status: 400,
       });
     }

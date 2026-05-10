@@ -208,6 +208,19 @@ export const providerCalls = pgTable(
     requestSystemChars: integer("request_system_chars").notNull(),
     requestUserChars: integer("request_user_chars").notNull(),
     requestTotalChars: integer("request_total_chars").notNull(),
+    catalogRefreshedAt: timestamp("catalog_refreshed_at", { withTimezone: true, mode: "date" }),
+    supportedParametersJson: jsonb("supported_parameters_json")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    sentParametersJson: jsonb("sent_parameters_json")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    deniedParametersJson: jsonb("denied_parameters_json")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     requestStartedAt: timestamp("request_started_at", { withTimezone: true, mode: "date" }),
     responseCompletedAt: timestamp("response_completed_at", { withTimezone: true, mode: "date" }),
     latencyMs: integer("latency_ms"),
@@ -224,6 +237,8 @@ export const providerCalls = pgTable(
     choiceErrorMessage: text("choice_error_message"),
     choiceErrorCode: integer("choice_error_code"),
     errorStatus: integer("error_status"),
+    errorCode: text("error_code"),
+    billingLookupStatus: text("billing_lookup_status").notNull().default("not_requested"),
     createdAt: createdAtColumn(),
   },
   (table) => [

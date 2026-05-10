@@ -1,6 +1,10 @@
 import {
+  buildRoutePath,
   type ErrorEnvelope,
   errorEnvelopeSchema,
+  type RouteContract,
+  type RoutePathParams,
+  type RouteSuccessPayload,
   successEnvelopeSchema,
 } from "@the-seven/contracts";
 import type { z } from "zod";
@@ -44,31 +48,47 @@ function resolveRequestUrl(path: string) {
   return new URL(path, baseUrl).toString();
 }
 
-export async function apiRequest<T>(input: {
-  path: string;
-  method: "GET" | "POST" | "PUT" | "DELETE";
+function parseSchema<Schema extends z.ZodType>(schema: Schema, input: unknown): Schema["_output"] {
+  return schema.parse(input);
+}
+
+export async function apiRequest<Contract extends RouteContract>(input: {
+  route: Contract;
+  params?: RoutePathParams;
   body?: unknown;
   authHeader?: string | null;
-  payloadSchema: z.ZodType<T>;
-}) {
+}): Promise<RouteSuccessPayload<Contract>> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     "X-Seven-Ingress": "web",
   };
   if (input.authHeader) {
     headers.Authorization = input.authHeader;
   }
 
-  const response = await fetch(resolveRequestUrl(input.path), {
-    method: input.method,
+  let body: string | undefined;
+  if (input.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify(input.route.bodySchema.parse(input.body));
+  } else if (!input.route.bodySchema.safeParse({}).success) {
+    input.route.bodySchema.parse(input.body);
+  }
+
+  const response = await fetch(resolveRequestUrl(buildRoutePath(input.route, input.params)), {
+    method: input.route.method,
     headers,
-    body: input.body ? JSON.stringify(input.body) : undefined,
+    body,
+    credentials: "same-origin",
   });
 
   const data = await parseJsonResponse(response);
   if (response.ok) {
     const envelope = successEnvelopeSchema.parse(data);
-    return input.payloadSchema.parse(envelope.result.payload);
+    if (envelope.result.resource !== input.route.resource) {
+      throw new Error(
+        `API resource mismatch: expected ${input.route.resource}, received ${envelope.result.resource}`,
+      );
+    }
+    return parseSchema(input.route.successPayloadSchema, envelope.result.payload);
   }
 
   const errorEnvelope = errorEnvelopeSchema.parse(data);

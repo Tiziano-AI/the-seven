@@ -4,17 +4,17 @@ import { jobs } from "../schema";
 
 export async function enqueueSessionJob(input: {
   sessionId: number;
-  credentialCiphertext: string;
+  buildCredentialCiphertext: (context: { sessionId: number; jobId: number }) => string;
 }) {
   const db = await getDb();
   const now = new Date();
-  await db
+  const rows = await db
     .insert(jobs)
     .values({
       sessionId: input.sessionId,
       state: "queued",
       attemptCount: 0,
-      credentialCiphertext: input.credentialCiphertext,
+      credentialCiphertext: null,
       leaseOwner: null,
       leaseExpiresAt: null,
       nextRunAt: now,
@@ -26,14 +26,31 @@ export async function enqueueSessionJob(input: {
       target: jobs.sessionId,
       set: {
         state: "queued",
-        credentialCiphertext: input.credentialCiphertext,
+        credentialCiphertext: null,
         leaseOwner: null,
         leaseExpiresAt: null,
         nextRunAt: now,
         lastError: null,
         updatedAt: now,
       },
-    });
+    })
+    .returning({ id: jobs.id });
+
+  const jobId = rows[0]?.id;
+  if (!jobId) {
+    throw new Error("Expected job row for enqueue");
+  }
+
+  await db
+    .update(jobs)
+    .set({
+      credentialCiphertext: input.buildCredentialCiphertext({
+        sessionId: input.sessionId,
+        jobId,
+      }),
+      updatedAt: now,
+    })
+    .where(eq(jobs.id, jobId));
 }
 
 export async function claimRunnableJobs(input: {

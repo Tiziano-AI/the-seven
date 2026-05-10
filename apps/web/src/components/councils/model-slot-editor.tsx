@@ -1,23 +1,13 @@
 "use client";
 
+import type { CouncilMemberAssignment } from "@the-seven/contracts";
 import { useEffect, useId, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { autocompleteModels } from "@/lib/api";
 
-export type EditableCouncilMember = Readonly<{
-  memberPosition: number;
-  model: { provider: "openrouter"; modelId: string };
-  tuning: {
-    temperature: number | null;
-    topP: number | null;
-    seed: number | null;
-    verbosity: string | null;
-    reasoningEffort: string | null;
-    includeReasoning: boolean | null;
-  } | null;
-}>;
+export type EditableCouncilMember = CouncilMemberAssignment;
 
 export function ModelSlotEditor(props: {
   authHeader: string;

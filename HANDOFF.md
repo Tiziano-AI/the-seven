@@ -1,38 +1,55 @@
 # Handoff
 
-Launch-candidate hardening is partially complete and currently blocked by a local environment conflict.
+Launch-quality greenfield refactor plus the 2026-05-10 dependency refresh are
+implemented and validated.
 
-- Research findings:
-  - The canonical local database target is `127.0.0.1:5432` via compose-managed container `the-seven-postgres`.
-  - The current host-port owner is unrelated Docker container `agents-postgres-1`.
-  - The host Postgres instance reachable on `127.0.0.1:5432` does not contain database `the_seven`.
-- Current state:
-  - Launch-gate docs are updated in `README.md`, `ARCH.md`, `PLAN.md`, and `docs/VALIDATION_MATRIX.md`.
-  - Local operator tooling now fails fast with actionable `5432` owner diagnostics through `tools/local-postgres.ts`.
-  - Added tests cover continue, rerun, partial-artifact resume, demo token request and consume, Commons-only enforcement, and session detail/export mapping.
-  - Split `apps/web/src/app/globals.css` into imported theme, base, component, and prose stylesheets so the repo-wide owned-file guardrail passes before runtime verification begins.
-  - User dependency updates are preserved and installed:
-    - Biome `2.4.10`
-    - Playwright Test `1.59.1`
-    - TypeScript `6.0.2`
-    - Vitest `4.1.2`
-- Gate evidence:
-  - pass: `pnpm lint`
-  - pass: `pnpm check`
-  - pass: `pnpm test`
-  - pass: `pnpm build`
-  - fail: `pnpm local:doctor`
-  - fail: `pnpm local:db:up`
-  - fail: `pnpm run db:bootstrap:check`
-  - fail: `uv run --python 3.12 devtools/gate.py --full`
-  - fail: `pnpm local:live`
-- Blocker:
-  - `127.0.0.1:5432 is owned by Docker container agents-postgres-1; Stop or reconfigure agents-postgres-1 so the-seven-postgres can bind 127.0.0.1:5432.`
-- Next actions:
-  - Free or remap `127.0.0.1:5432` so `the-seven-postgres` can bind the canonical local target.
-  - Rerun:
-    - `pnpm local:doctor`
-    - `pnpm local:db:up`
-    - `pnpm run db:bootstrap:check`
-    - `uv run --python 3.12 devtools/gate.py --full`
-    - `pnpm local:live`
+## Current State
+
+- Fresh OpenRouter catalog probe on 2026-05-10 returned status 200 and 367
+  models. Built-ins use the current Founding, Lantern, and Commons rosters
+  documented in `ARCH.md`; stale and expiring model IDs are not compatibility
+  aliases.
+- Commons uses `z-ai/glm-4.7-flash` in slot 6. The prior
+  `nvidia/nemotron-3-super-120b-a12b` slot is retired because live proof hit an
+  OpenRouter choice `502` network-loss error.
+- `tiz-home --json secrets doctor` passes with `/Users/tiziano/.secrets/ALL.env`
+  as the master pool and `/Users/tiziano/.secrets/the-seven.env` as the
+  generated app slice. `.env.local` is a symlink to that slice. Secret root mode
+  is `0700`; secret files are `0600`; `needs_sync=false`.
+- `pnpm local:live` is repeatable in the same local database because it clears
+  only proof-owned demo rate-limit buckets for the configured demo test inbox,
+  loopback IP scopes, and demo proof global scopes before requesting a fresh
+  magic link. Runtime route-level rate limits remain product behavior.
+- The dependency refresh uses Biome `2.4.15`, Vitest `4.1.5`, TypeScript
+  `6.0.3`, `@types/node` `25.6.2`, and the matching Biome schema URL.
+
+## Validation
+
+- `pnpm local:doctor` passed.
+- `pnpm local:db:up` passed.
+- `pnpm run db:bootstrap:check` passed.
+- `uv run --python 3.12 devtools/gate.py --full` passed with lint, typecheck,
+  20 Vitest files / 70 tests, production build, bootstrap check, and Playwright
+  smoke.
+- `pnpm local:doctor --live` passed.
+- `pnpm local:live` passed end to end:
+  - BYOK auth validation, model validation, autocomplete, and council CRUD
+    passed.
+  - BYOK session `9` completed with 6 phase-1 responses, 6 phase-2 reviews, 1
+    synthesis, completed provider diagnostics for all phases, and no
+    provider-call errors.
+  - Demo magic-link request, Resend received-email lookup, consume redirect,
+    HttpOnly demo cookie session, and demo session submit passed.
+  - Demo session `10` completed with 6 phase-1 responses, 6 phase-2 reviews, 1
+    synthesis, completed provider diagnostics for all phases, and no
+    provider-call errors.
+  - Browser smoke passed for home, demo-authenticated councils page, and the
+    completed demo session page.
+
+## Resume Instructions
+
+- No blocked launch-proof work remains in this handoff.
+- If provider catalog or model quality changes, refresh `ARCH.md`,
+  `packages/config/src/builtInCouncils.ts`, and
+  `packages/config/src/builtInCouncils.test.ts` together before rerunning the
+  validation commands above.

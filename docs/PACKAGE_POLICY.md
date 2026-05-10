@@ -19,13 +19,13 @@ The rewrite keeps one modern, coherent toolchain. New packages require a stronge
 - Prefer one package owner per concern.
 - Remove packages immediately when their last rendered/runtime usage disappears.
 
-## Explicitly Retired Package Classes
+## Package Admission Boundaries
 
-- alternate server frameworks
-- alternate client bundlers
-- parallel formatter/linter stacks
-- dead shadcn-generated wrappers and their backing dependencies
-- transport helpers that duplicate native `fetch`
+- Server HTTP ingress stays on Next route handlers.
+- Web bundling stays on the Next toolchain.
+- Formatting and linting stay on Biome.
+- Rendered UI primitives stay in `apps/web/src/components`.
+- HTTP transport stays on native `fetch`.
 
 ## Workspace Rules
 

@@ -31,7 +31,7 @@ export async function createSessionWithJob(input: {
   ingressSource: "web" | "cli" | "api";
   ingressVersion: string | null;
   traceId: string;
-  credentialCiphertext: string;
+  buildCredentialCiphertext: (context: { sessionId: number; jobId: number }) => string;
 }) {
   const db = await getDb();
   return db.transaction(async (tx) => {
@@ -53,16 +53,28 @@ export async function createSessionWithJob(input: {
 
     const sessionId = requireRow(inserted, "sessions").id;
 
-    await tx.insert(jobs).values({
-      sessionId,
-      state: "queued",
-      attemptCount: 0,
-      credentialCiphertext: input.credentialCiphertext,
-      leaseOwner: null,
-      leaseExpiresAt: null,
-      nextRunAt: new Date(),
-      lastError: null,
-    });
+    const insertedJob = await tx
+      .insert(jobs)
+      .values({
+        sessionId,
+        state: "queued",
+        attemptCount: 0,
+        credentialCiphertext: null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        nextRunAt: new Date(),
+        lastError: null,
+      })
+      .returning({ id: jobs.id });
+
+    const jobId = requireRow(insertedJob, "jobs").id;
+    await tx
+      .update(jobs)
+      .set({
+        credentialCiphertext: input.buildCredentialCiphertext({ sessionId, jobId }),
+        updatedAt: new Date(),
+      })
+      .where(eq(jobs.id, jobId));
 
     return sessionId;
   });
@@ -202,6 +214,10 @@ export async function createProviderCall(input: {
   requestSystemChars: number;
   requestUserChars: number;
   requestTotalChars: number;
+  catalogRefreshedAt: Date | null;
+  supportedParametersJson: string[];
+  sentParametersJson: string[];
+  deniedParametersJson: string[];
   requestStartedAt: Date | null;
   responseCompletedAt: Date | null;
   latencyMs: number | null;
@@ -218,6 +234,8 @@ export async function createProviderCall(input: {
   choiceErrorMessage: string | null;
   choiceErrorCode: number | null;
   errorStatus: number | null;
+  errorCode: string | null;
+  billingLookupStatus: string;
 }) {
   const db = await getDb();
   await db.insert(providerCalls).values(input);
@@ -227,12 +245,14 @@ export async function updateProviderCallCost(
   callId: number,
   totalCostUsdMicros: number,
   billedModelId: string | null,
+  billingLookupStatus = "succeeded",
 ) {
   const db = await getDb();
   await db
     .update(providerCalls)
     .set({
       totalCostUsdMicros,
+      billingLookupStatus,
       ...(billedModelId !== null ? { billedModelId } : {}),
     })
     .where(eq(providerCalls.id, callId));

@@ -5,6 +5,7 @@ import {
   formatUsdFromMicros,
   isMemberPosition,
   memberForPosition,
+  notFoundDetails,
   type SessionSnapshot,
   sessionSnapshotSchema,
 } from "@the-seven/contracts";
@@ -67,7 +68,7 @@ async function requireOwnedSession(userId: number, sessionId: number) {
     throw new EdgeError({
       kind: "not_found",
       message: "Session not found",
-      details: { resource: "session" },
+      details: notFoundDetails("session"),
       status: 404,
     });
   }
@@ -136,6 +137,10 @@ export async function getSessionDetail(userId: number, sessionId: number) {
       memberPosition: call.memberPosition,
       requestModelId: call.requestModelId,
       requestModelName: modelNames.get(call.requestModelId) ?? call.requestModelId,
+      catalogRefreshedAt: call.catalogRefreshedAt?.toISOString() ?? null,
+      supportedParameters: call.supportedParametersJson,
+      sentParameters: call.sentParametersJson,
+      deniedParameters: call.deniedParametersJson,
       responseModel: call.responseModel,
       billedModelId: call.billedModelId,
       requestSystemChars: call.requestSystemChars,
@@ -154,6 +159,8 @@ export async function getSessionDetail(userId: number, sessionId: number) {
       choiceErrorMessage: call.choiceErrorMessage ?? null,
       choiceErrorCode: call.choiceErrorCode ?? null,
       errorStatus: call.errorStatus ?? null,
+      errorCode: call.errorCode ?? null,
+      billingLookupStatus: call.billingLookupStatus,
       responseId: call.responseId ?? null,
       createdAt: call.createdAt.toISOString(),
     })),
