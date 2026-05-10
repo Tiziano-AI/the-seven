@@ -75,7 +75,7 @@ railway service status --all
 - Only `packages/config/src/env.ts` reads `process.env` directly.
 - Keep one canonical path per behavior. Delete conflicting old surfaces in the same change set.
 - Styling is tokens-first via `@layer components` classes in `globals.css` (`.btn`, `.card`, `.control`, `.badge`, `.panel`, `.btn-nav`). UI primitives are thin wrappers that apply these classes. Avoid hard-coded colors, inline styles, and inline Tailwind for visual properties already covered by a CSS class.
-- Three built-in councils: Founding (BYOK best-of-best), Lantern (deliberate mid-tier bridge), Commons (paid low-cost demo). Commons is not a free-model showcase and should not use `:free`, `~latest`, or preview aliases.
+- Three built-in councils: Founding (BYOK best-of-best; provider diversity is only a tie-breaker), Lantern (deliberate mid-tier bridge), Commons (paid low-cost demo). All 21 built-in model IDs are distinct across the tier clusters. Commons is not a free-model showcase and should not use `:free`, `~latest`, or preview aliases.
 - Theme: OKLCH four-lane palette (violet/evergreen/wood/gold), dark-only. `globals.css` owns tokens + `@layer components` classes, `@theme` bridges to Tailwind v4 utilities, `color-scheme: dark` on `:root` styles all native elements. `next/font/google` loads MedievalSharp (display/UI), Raleway (body), Victor Mono (mono).
 - Home screen is ask-first: auth is a centered gate card, ask surface + session result are full-width after auth. Phase display is chronological (1→2→3), never reversed.
 - Destructive actions (Lock, End Demo, Delete Council) require `window.confirm()` gates.

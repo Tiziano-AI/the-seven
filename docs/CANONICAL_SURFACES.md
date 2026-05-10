@@ -48,8 +48,10 @@ app is not.
 
 - Built-in councils use current OpenRouter model IDs and model-specific tuning
   defaults from `packages/config/src/builtInCouncils.ts`.
-- Founding is the BYOK best-of-best roster, Lantern is the declared mid-tier
-  bridge, and Commons is the paid low-cost demo roster.
+- Founding is the BYOK best-of-best roster. Provider diversity is only a
+  tie-breaker after current quality evidence; Lantern is the declared mid-tier
+  bridge, Commons is the paid low-cost demo roster, and all 21 built-in model
+  IDs are distinct across the three tier clusters.
 - Commons uses nonzero-priced model IDs and excludes `:free`, `~latest`,
   preview aliases, and expiring catalog rows.
 - Runtime provider execution snapshots catalog-supported parameters before each

@@ -257,14 +257,21 @@ map to typed upstream diagnostics instead of hanging a job indefinitely.
 - Source: `vendor:openrouter:2026-05-10:https://openrouter.ai/docs/guides/best-practices/reasoning-tokens`
 - Source: `vendor:openrouter:2026-05-10:https://openrouter.ai/api/v1/models`
 
-Fresh catalog probe on 2026-05-10 returned status 200 and 367 models. The
-built-in roster policy is positive and tier-owned:
+Fresh catalog probe on 2026-05-10 returned status 200 and 367 models. A
+bounded BYOK chat-completion probe on 2026-05-10 completed for the selected
+Founding, Lantern, and Commons model IDs through OpenRouter. Artificial Analysis
+on 2026-05-10 ranks GPT-5.5 with xhigh reasoning as the leading intelligence
+row, followed by Claude Opus 4.7, Gemini 3.1 Pro Preview, and the current Kimi,
+MiMo, Grok, Qwen, Sonnet, and DeepSeek frontier cluster. The built-in roster
+policy is positive and tier-owned:
 
 - Founding is the BYOK flagship. It uses the best current OpenRouter-accessible
-  models across major frontier providers; price is not a selection constraint.
+  model IDs available for broad reasoning. Price is not a selection constraint.
+  The seven slots are distinct; provider diversity is a tie-breaker only and
+  never justifies omitting a stronger current model.
 - Lantern is the deliberate mid-tier bridge. It uses strong current models that
-  are materially cheaper or faster than Founding while preserving provider
-  diversity. It sends medium reasoning effort by default.
+  sit below the flagship set while preserving distinct model IDs and useful
+  provider breadth. It sends medium reasoning effort by default.
 - Commons is the demo council. It is paid, cheap, reliable, and good enough to
   sell the product; it is not a free-model showcase and it does not use `:free`,
   `~latest`, or preview model aliases. Commons sends low reasoning effort by
@@ -276,25 +283,29 @@ Current built-in rosters:
 
 | Tier | Member 1 | Member 2 | Member 3 | Member 4 | Member 5 | Member 6 | Synthesizer |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Founding | `google/gemini-3.1-pro-preview` | `anthropic/claude-opus-4.7` | `x-ai/grok-4.3` | `deepseek/deepseek-v4-pro` | `xiaomi/mimo-v2.5-pro` | `moonshotai/kimi-k2.6` | `openai/gpt-5.5-pro` |
-| Lantern | `deepseek/deepseek-v4-pro` | `qwen/qwen3.6-plus` | `xiaomi/mimo-v2.5` | `minimax/minimax-m2.7` | `z-ai/glm-5.1` | `mistralai/mistral-medium-3-5` | `anthropic/claude-sonnet-4.6` |
+| Founding | `openai/gpt-5.5` | `anthropic/claude-opus-4.7` | `google/gemini-3.1-pro-preview` | `moonshotai/kimi-k2.6` | `xiaomi/mimo-v2.5-pro` | `x-ai/grok-4.3` | `openai/gpt-5.5-pro` |
+| Lantern | `qwen/qwen3.6-max-preview` | `deepseek/deepseek-v4-pro` | `x-ai/grok-4.20` | `qwen/qwen3.6-plus` | `z-ai/glm-5.1` | `mistralai/mistral-medium-3-5` | `anthropic/claude-sonnet-4.6` |
 | Commons | `google/gemini-3.1-flash-lite` | `deepseek/deepseek-v4-flash` | `qwen/qwen3.6-35b-a3b` | `minimax/minimax-m2.7` | `mistralai/mistral-small-2603` | `arcee-ai/trinity-large-thinking` | `openai/gpt-5.4-nano` |
 
 The 2026-05-10 catalog rows for these IDs expose text input/output, nonzero
 prompt and completion pricing, no expiration date, context windows from 196k to
-1.05M tokens, and model-specific `supported_parameters`. Bounded BYOK
+1.05M tokens, and model-specific `supported_parameters`. The 21 built-in model
+IDs are distinct across the three tier clusters. Bounded BYOK
 chat-completion probes on 2026-05-10 completed for every selected ID through
 the OpenRouter `/api/v1/chat/completions` endpoint. Commons latency probes use
 the app-compatible low-reasoning tuning shape, Lantern uses medium reasoning,
 and Founding keeps xhigh reasoning for the flagship council.
 OpenRouter's programming collection ranks current Kimi, Opus, DeepSeek, Sonnet,
-MiniMax, and Grok rows among its current programming leaders, while Artificial
-Analysis reports fresh May 2026 evaluations for GPT-5.5, GPT-5.5 Pro,
-Claude Opus 4.7, Grok 4.3, MiniMax M2.7, Mistral Medium 3.5, and DeepSeek V4
-families.
+MiniMax, and Grok rows among its current programming leaders. Artificial
+Analysis reports fresh May 2026 evaluations where GPT-5.5 with xhigh reasoning
+leads the intelligence table, Claude Opus 4.7 and Gemini 3.1 Pro Preview are
+the next flagship rows, and Kimi K2.6, MiMo-V2.5-Pro, and Grok 4.3 remain in
+the leading broad-model cluster. Qwen Max, DeepSeek V4 Pro, GLM 5.1, Qwen Plus,
+Mistral Medium 3.5, and Sonnet 4.6 form the stronger distinct mid-tier cluster
+instead of duplicating Founding defaults.
 
 - Source: `vendor:openrouter:2026-05-10:https://openrouter.ai/collections/programming`
-- Source: `vendor:artificialanalysis:2026-05-10:https://artificialanalysis.ai/`
+- Source: `vendor:artificialanalysis:2026-05-10:https://artificialanalysis.ai/leaderboards/models`
 
 Retired built-in IDs are not aliases. `openai/gpt-5.4`,
 `openai/gpt-5.4-mini`, `anthropic/claude-opus-4.6`, `z-ai/glm-5`,
@@ -304,13 +315,14 @@ Retired built-in IDs are not aliases. `openai/gpt-5.4`,
 `anthropic/claude-haiku-4.5`, `google/gemini-3.1-flash-lite-preview`,
 `kwaipilot/kat-coder-pro-v2`, `bytedance-seed/seed-2.0-lite`,
 `amazon/nova-premier-v1`, `amazon/nova-lite-v1`,
-`meta-llama/llama-4-scout`, `x-ai/grok-4.20`, `x-ai/grok-4.1-fast`,
-`google/gemini-3-flash-preview`, `qwen/qwen3.6-max-preview`,
-`qwen/qwen3.6-flash`, `stepfun/step-3.5-flash`, and
+`meta-llama/llama-4-scout`, `x-ai/grok-4.1-fast`,
+`google/gemini-3-flash-preview`, `qwen/qwen3.6-flash`,
+`xiaomi/mimo-v2.5`, `stepfun/step-3.5-flash`,
 `nvidia/nemotron-3-super-120b-a12b`, and `z-ai/glm-4.7-flash` are removed from
 built-ins because current catalog, live proof, and quality signals expose
 stronger successors, cleaner tier fits, preview risk, expiration risk, empty
-content, or provider reliability risk.
+content, provider reliability risk, or insufficient launch-confidence for a
+canonical default.
 
 API-key admission uses OpenRouter `/key` validation before a BYOK user row is
 created. Invalid keys deny as `unauthorized`; provider transport failures deny

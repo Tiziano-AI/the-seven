@@ -11,20 +11,20 @@ import { DEFAULT_PHASE_PROMPTS } from "./prompts";
 export type ProviderModelSeed = Readonly<{ modelId: string; modelName: string }>;
 
 const FOUNDING_COUNCIL_MODEL_IDS: Record<number, string> = {
-  1: "google/gemini-3.1-pro-preview",
+  1: "openai/gpt-5.5",
   2: "anthropic/claude-opus-4.7",
-  3: "x-ai/grok-4.3",
-  4: "deepseek/deepseek-v4-pro",
+  3: "google/gemini-3.1-pro-preview",
+  4: "moonshotai/kimi-k2.6",
   5: "xiaomi/mimo-v2.5-pro",
-  6: "moonshotai/kimi-k2.6",
+  6: "x-ai/grok-4.3",
   7: "openai/gpt-5.5-pro",
 };
 
 const LANTERN_COUNCIL_MODEL_IDS: Record<number, string> = {
-  1: "deepseek/deepseek-v4-pro",
-  2: "qwen/qwen3.6-plus",
-  3: "xiaomi/mimo-v2.5",
-  4: "minimax/minimax-m2.7",
+  1: "qwen/qwen3.6-max-preview",
+  2: "deepseek/deepseek-v4-pro",
+  3: "x-ai/grok-4.20",
+  4: "qwen/qwen3.6-plus",
   5: "z-ai/glm-5.1",
   6: "mistralai/mistral-medium-3-5",
   7: "anthropic/claude-sonnet-4.6",
@@ -70,6 +70,7 @@ const LANTERN_DEFAULT_TUNING = {
 function defaultTuningForModel(modelId: string, baseTuning: CouncilMemberTuning) {
   if (
     modelId === "anthropic/claude-opus-4.7" ||
+    modelId === "openai/gpt-5.5" ||
     modelId === "openai/gpt-5.4-nano" ||
     modelId === "openai/gpt-5.5-pro"
   ) {

@@ -9,6 +9,13 @@ implemented and validated.
   models. Built-ins use the current Founding, Lantern, and Commons rosters
   documented in `ARCH.md`; stale and expiring model IDs are not compatibility
   aliases.
+- Founding is frontier-first, not provider-diversity filler. The 2026-05-10
+  roster includes `openai/gpt-5.5` as a voting member and `openai/gpt-5.5-pro`
+  as synthesizer. The 21 built-in model IDs are distinct across the three tier
+  clusters. Kimi K2.6 and MiMo-V2.5-Pro remain in Founding because current
+  Artificial Analysis and OpenRouter programming evidence keep them in the
+  leading broad-model cluster; lower-ranked successors move to Lantern or
+  Commons instead of duplicating Founding defaults.
 - Commons uses `arcee-ai/trinity-large-thinking` in slot 6 and low reasoning
   effort for every built-in Commons member. Lantern uses medium reasoning
   effort and Founding uses xhigh reasoning effort. The prior
@@ -38,19 +45,22 @@ implemented and validated.
 - `pnpm local:db:up` passed.
 - `pnpm run db:bootstrap:check` passed.
 - `uv run --python 3.12 devtools/gate.py --full` passed with lint, typecheck,
-  20 Vitest files / 71 tests, production build, bootstrap check, and Playwright
+  20 Vitest files / 72 tests, production build, bootstrap check, and Playwright
   smoke.
 - `pnpm local:doctor --live` passed.
-- Latest `pnpm local:live` passed end to end after the Commons slot-6
-  production reliability fix and tier-owned reasoning policy:
+- Direct OpenRouter BYOK probes on 2026-05-10 completed for all 21 selected
+  built-in model IDs with tier-owned reasoning efforts. The 21 selected IDs are
+  distinct across Founding, Lantern, and Commons.
+- Latest `pnpm local:live` passed end to end after the distinct roster refresh
+  and tier-owned reasoning policy:
   - BYOK auth validation, model validation, autocomplete, and council CRUD
     passed.
-  - BYOK session `1` completed with 6 phase-1 responses, 6 phase-2 reviews, 1
+  - BYOK session `3` completed with 6 phase-1 responses, 6 phase-2 reviews, 1
     synthesis, completed provider diagnostics for all phases, and no
     provider-call errors.
   - Demo magic-link request, Resend received-email lookup, consume redirect,
     HttpOnly demo cookie session, and demo session submit passed.
-  - Demo session `2` completed with 6 phase-1 responses, 6 phase-2 reviews, 1
+  - Demo session `4` completed with 6 phase-1 responses, 6 phase-2 reviews, 1
     synthesis, completed provider diagnostics for all phases, and no
     provider-call errors.
   - Browser smoke passed for home, demo-authenticated councils page, and the
@@ -58,8 +68,6 @@ implemented and validated.
 
 ## Resume Instructions
 
-- Commit, push, deploy Railway, and rerun
-  `SEVEN_BASE_URL=https://theseven.ai pnpm test:live` for public launch proof.
 - If provider catalog or model quality changes, refresh `ARCH.md`,
   `packages/config/src/builtInCouncils.ts`, and
   `packages/config/src/builtInCouncils.test.ts` together before rerunning the
