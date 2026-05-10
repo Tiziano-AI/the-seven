@@ -254,6 +254,7 @@ map to typed upstream diagnostics instead of hanging a job indefinitely.
 
 - Source: `vendor:openrouter:2026-05-10:https://openrouter.ai/docs/guides/overview/models`
 - Source: `vendor:openrouter:2026-05-10:https://openrouter.ai/docs/api-reference/chat-completion`
+- Source: `vendor:openrouter:2026-05-10:https://openrouter.ai/docs/guides/best-practices/reasoning-tokens`
 - Source: `vendor:openrouter:2026-05-10:https://openrouter.ai/api/v1/models`
 
 Fresh catalog probe on 2026-05-10 returned status 200 and 367 models. The
@@ -263,10 +264,13 @@ built-in roster policy is positive and tier-owned:
   models across major frontier providers; price is not a selection constraint.
 - Lantern is the deliberate mid-tier bridge. It uses strong current models that
   are materially cheaper or faster than Founding while preserving provider
-  diversity.
+  diversity. It sends medium reasoning effort by default.
 - Commons is the demo council. It is paid, cheap, reliable, and good enough to
   sell the product; it is not a free-model showcase and it does not use `:free`,
-  `~latest`, or preview model aliases.
+  `~latest`, or preview model aliases. Commons sends low reasoning effort by
+  default because the product already runs multi-phase deliberation; xhigh
+  per-member demo calls multiply latency and cost without being the demo
+  contract.
 
 Current built-in rosters:
 
@@ -274,14 +278,15 @@ Current built-in rosters:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Founding | `google/gemini-3.1-pro-preview` | `anthropic/claude-opus-4.7` | `x-ai/grok-4.3` | `deepseek/deepseek-v4-pro` | `xiaomi/mimo-v2.5-pro` | `moonshotai/kimi-k2.6` | `openai/gpt-5.5-pro` |
 | Lantern | `deepseek/deepseek-v4-pro` | `qwen/qwen3.6-plus` | `xiaomi/mimo-v2.5` | `minimax/minimax-m2.7` | `z-ai/glm-5.1` | `mistralai/mistral-medium-3-5` | `anthropic/claude-sonnet-4.6` |
-| Commons | `google/gemini-3.1-flash-lite` | `deepseek/deepseek-v4-flash` | `qwen/qwen3.6-35b-a3b` | `minimax/minimax-m2.7` | `mistralai/mistral-small-2603` | `z-ai/glm-4.7-flash` | `openai/gpt-5.4-nano` |
+| Commons | `google/gemini-3.1-flash-lite` | `deepseek/deepseek-v4-flash` | `qwen/qwen3.6-35b-a3b` | `minimax/minimax-m2.7` | `mistralai/mistral-small-2603` | `arcee-ai/trinity-large-thinking` | `openai/gpt-5.4-nano` |
 
 The 2026-05-10 catalog rows for these IDs expose text input/output, nonzero
 prompt and completion pricing, no expiration date, context windows from 196k to
 1.05M tokens, and model-specific `supported_parameters`. Bounded BYOK
 chat-completion probes on 2026-05-10 completed for every selected ID through
-the OpenRouter `/api/v1/chat/completions` endpoint using the app-compatible
-tuning shape.
+the OpenRouter `/api/v1/chat/completions` endpoint. Commons latency probes use
+the app-compatible low-reasoning tuning shape, Lantern uses medium reasoning,
+and Founding keeps xhigh reasoning for the flagship council.
 OpenRouter's programming collection ranks current Kimi, Opus, DeepSeek, Sonnet,
 MiniMax, and Grok rows among its current programming leaders, while Artificial
 Analysis reports fresh May 2026 evaluations for GPT-5.5, GPT-5.5 Pro,
@@ -302,9 +307,10 @@ Retired built-in IDs are not aliases. `openai/gpt-5.4`,
 `meta-llama/llama-4-scout`, `x-ai/grok-4.20`, `x-ai/grok-4.1-fast`,
 `google/gemini-3-flash-preview`, `qwen/qwen3.6-max-preview`,
 `qwen/qwen3.6-flash`, `stepfun/step-3.5-flash`, and
-`nvidia/nemotron-3-super-120b-a12b` are removed from built-ins because current
-catalog, live proof, and quality signals expose stronger successors, cleaner
-tier fits, preview risk, expiration risk, or provider reliability risk.
+`nvidia/nemotron-3-super-120b-a12b`, and `z-ai/glm-4.7-flash` are removed from
+built-ins because current catalog, live proof, and quality signals expose
+stronger successors, cleaner tier fits, preview risk, expiration risk, empty
+content, or provider reliability risk.
 
 API-key admission uses OpenRouter `/key` validation before a BYOK user row is
 created. Invalid keys deny as `unauthorized`; provider transport failures deny

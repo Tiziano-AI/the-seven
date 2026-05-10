@@ -36,7 +36,7 @@ const COMMONS_COUNCIL_MODEL_IDS: Record<number, string> = {
   3: "qwen/qwen3.6-35b-a3b",
   4: "minimax/minimax-m2.7",
   5: "mistralai/mistral-small-2603",
-  6: "z-ai/glm-4.7-flash",
+  6: "arcee-ai/trinity-large-thinking",
   7: "openai/gpt-5.4-nano",
 };
 
@@ -57,22 +57,37 @@ const FULL_DEFAULT_TUNING = {
   includeReasoning: null,
 } as const satisfies CouncilMemberTuning;
 
-const MODEL_TUNING_DEFAULTS: Record<string, CouncilMemberTuning> = {
-  "anthropic/claude-opus-4.7": { ...FULL_DEFAULT_TUNING, temperature: null, topP: null },
-  "openai/gpt-5.4-nano": { ...FULL_DEFAULT_TUNING, temperature: null, topP: null },
-  "openai/gpt-5.5-pro": { ...FULL_DEFAULT_TUNING, temperature: null, topP: null },
-};
+const COMMONS_DEFAULT_TUNING = {
+  ...FULL_DEFAULT_TUNING,
+  reasoningEffort: "low",
+} as const satisfies CouncilMemberTuning;
 
-function defaultTuningForModel(modelId: string) {
-  return MODEL_TUNING_DEFAULTS[modelId] ?? FULL_DEFAULT_TUNING;
+const LANTERN_DEFAULT_TUNING = {
+  ...FULL_DEFAULT_TUNING,
+  reasoningEffort: "medium",
+} as const satisfies CouncilMemberTuning;
+
+function defaultTuningForModel(modelId: string, baseTuning: CouncilMemberTuning) {
+  if (
+    modelId === "anthropic/claude-opus-4.7" ||
+    modelId === "openai/gpt-5.4-nano" ||
+    modelId === "openai/gpt-5.5-pro"
+  ) {
+    return { ...baseTuning, temperature: null, topP: null };
+  }
+
+  return baseTuning;
 }
 
-function buildCouncilMembers(models: Record<number, ProviderModelRef>): CouncilMembers {
+function buildCouncilMembers(
+  models: Record<number, ProviderModelRef>,
+  baseTuning: CouncilMemberTuning,
+): CouncilMembers {
   return parseCouncilMembers(
     MEMBER_POSITIONS.map((memberPosition) => ({
       memberPosition,
       model: models[memberPosition],
-      tuning: defaultTuningForModel(models[memberPosition].modelId),
+      tuning: defaultTuningForModel(models[memberPosition].modelId, baseTuning),
     })),
   );
 }
@@ -83,45 +98,54 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
     name: "The Founding Council",
     description: "The BYOK best-of-best roster. GPT-5.5 Pro delivers the verdict.",
     phasePrompts: DEFAULT_PHASE_PROMPTS,
-    members: buildCouncilMembers({
-      1: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[1] },
-      2: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[2] },
-      3: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[3] },
-      4: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[4] },
-      5: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[5] },
-      6: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[6] },
-      7: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[7] },
-    }),
+    members: buildCouncilMembers(
+      {
+        1: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[1] },
+        2: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[2] },
+        3: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[3] },
+        4: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[4] },
+        5: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[5] },
+        6: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[6] },
+        7: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[7] },
+      },
+      FULL_DEFAULT_TUNING,
+    ),
   },
   lantern: {
     slug: "lantern",
     name: "The Lantern Council",
     description: "Deliberate mid-tier bridge voices. Claude Sonnet 4.6 delivers the verdict.",
     phasePrompts: DEFAULT_PHASE_PROMPTS,
-    members: buildCouncilMembers({
-      1: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[1] },
-      2: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[2] },
-      3: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[3] },
-      4: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[4] },
-      5: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[5] },
-      6: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[6] },
-      7: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[7] },
-    }),
+    members: buildCouncilMembers(
+      {
+        1: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[1] },
+        2: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[2] },
+        3: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[3] },
+        4: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[4] },
+        5: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[5] },
+        6: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[6] },
+        7: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[7] },
+      },
+      LANTERN_DEFAULT_TUNING,
+    ),
   },
   commons: {
     slug: "commons",
     name: "The Commons Council",
     description: "Paid low-cost demo voices. GPT-5.4 Nano delivers the verdict.",
     phasePrompts: DEFAULT_PHASE_PROMPTS,
-    members: buildCouncilMembers({
-      1: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[1] },
-      2: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[2] },
-      3: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[3] },
-      4: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[4] },
-      5: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[5] },
-      6: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[6] },
-      7: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[7] },
-    }),
+    members: buildCouncilMembers(
+      {
+        1: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[1] },
+        2: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[2] },
+        3: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[3] },
+        4: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[4] },
+        5: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[5] },
+        6: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[6] },
+        7: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[7] },
+      },
+      COMMONS_DEFAULT_TUNING,
+    ),
   },
 };
 

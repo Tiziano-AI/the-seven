@@ -35,9 +35,10 @@ The Seven is a privacy-first multi-model council for hard questions.
 - UI routes: `/`, `/councils`, `/sessions`, `/sessions/[sessionId]`
 - API routes: `/api/v1/**`
 - Built-ins:
-  - Founding: current best-of-best BYOK roster
-  - Lantern: deliberate mid-tier bridge roster
-  - Commons: paid low-cost demo roster with no free or preview aliases
+  - Founding: current best-of-best BYOK roster with xhigh reasoning effort
+  - Lantern: deliberate mid-tier bridge roster with medium reasoning effort
+  - Commons: paid low-cost demo roster with low reasoning effort and no free or
+    preview aliases
 - Auth:
   - BYOK: `Authorization: Bearer <openrouter_api_key>`
   - Demo: `HttpOnly` cookie set by `GET /api/v1/demo/consume`

@@ -23,6 +23,11 @@ const OPENROUTER_CATALOG_2026_05_10: Record<string, CatalogFixture> = {
     completionUsdPerMillion: 15,
     supportedParameters: SUPPORTS_FULL_DEFAULT,
   },
+  "arcee-ai/trinity-large-thinking": {
+    promptUsdPerMillion: 0.22,
+    completionUsdPerMillion: 0.85,
+    supportedParameters: SUPPORTS_FULL_DEFAULT,
+  },
   "deepseek/deepseek-v4-flash": {
     promptUsdPerMillion: 0.14,
     completionUsdPerMillion: 0.28,
@@ -103,11 +108,6 @@ const OPENROUTER_CATALOG_2026_05_10: Record<string, CatalogFixture> = {
     completionUsdPerMillion: 3.5,
     supportedParameters: SUPPORTS_FULL_DEFAULT,
   },
-  "z-ai/glm-4.7-flash": {
-    promptUsdPerMillion: 0.06,
-    completionUsdPerMillion: 0.4,
-    supportedParameters: SUPPORTS_FULL_DEFAULT,
-  },
 };
 
 const EXPECTED_ROSTERS = {
@@ -117,7 +117,7 @@ const EXPECTED_ROSTERS = {
     "qwen/qwen3.6-35b-a3b",
     "minimax/minimax-m2.7",
     "mistralai/mistral-small-2603",
-    "z-ai/glm-4.7-flash",
+    "arcee-ai/trinity-large-thinking",
     "openai/gpt-5.4-nano",
   ],
   founding: [
@@ -197,6 +197,20 @@ describe("built-in council rosters", () => {
           expect(supported.has(parameter)).toBe(true);
         }
       }
+    }
+  });
+
+  test("built-in tiers declare tier-owned reasoning effort", () => {
+    for (const member of BUILT_IN_COUNCILS.commons.members) {
+      expect(member.tuning?.reasoningEffort).toBe("low");
+    }
+
+    for (const member of BUILT_IN_COUNCILS.lantern.members) {
+      expect(member.tuning?.reasoningEffort).toBe("medium");
+    }
+
+    for (const member of BUILT_IN_COUNCILS.founding.members) {
+      expect(member.tuning?.reasoningEffort).toBe("xhigh");
     }
   });
 });
