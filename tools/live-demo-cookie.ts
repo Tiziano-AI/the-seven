@@ -281,12 +281,28 @@ function assertSessionArtifacts(
   assert(detail.artifacts.length > 0, "Expected artifacts for a completed session.");
 }
 
+function isLoopbackHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function resolveProofOrigin(input: { baseUrl: string; publicOrigin: string }) {
+  const base = new URL(input.baseUrl);
+  if (isLoopbackHost(base.hostname)) {
+    return new URL(input.publicOrigin).origin;
+  }
+  return base.origin;
+}
+
 export async function runDemoSmoke(input: {
   liveEnv: LiveProofRuntime;
   serverEnv: ServerRuntime;
   commonsRef: { kind: "built_in"; slug: "commons" };
 }) {
   const { liveEnv, serverEnv, commonsRef } = input;
+  const proofOrigin = resolveProofOrigin({
+    baseUrl: liveEnv.baseUrl,
+    publicOrigin: serverEnv.publicOrigin,
+  });
 
   console.log("Live smoke: demo request + consume");
   await assertResendInboundAccess(serverEnv);
@@ -306,7 +322,7 @@ export async function runDemoSmoke(input: {
   });
   const demoSession = await consumeDemoLink({
     baseUrl: liveEnv.baseUrl,
-    publicOrigin: serverEnv.publicOrigin,
+    publicOrigin: proofOrigin,
     email: liveEnv.demoTestEmail,
     receivedEmail,
   });
@@ -316,21 +332,21 @@ export async function runDemoSmoke(input: {
     "Is a council of 7 AI models more likely to produce a better answer than a single top-tier model given the same question? Under what conditions does multi-model deliberation add value versus just adding cost and latency?";
   const demoRun = await createDemoSessionRun({
     baseUrl: liveEnv.baseUrl,
-    publicOrigin: serverEnv.publicOrigin,
+    publicOrigin: proofOrigin,
     cookieHeader: demoSession.cookieHeader,
     query: demoQuestion,
     councilRef: commonsRef,
   });
   const demoDetail = await waitForTerminalDemoSession({
     baseUrl: liveEnv.baseUrl,
-    publicOrigin: serverEnv.publicOrigin,
+    publicOrigin: proofOrigin,
     cookieHeader: demoSession.cookieHeader,
     sessionId: demoRun.sessionId,
     label: "Demo session",
   });
   const demoDiagnostics = await fetchDemoSessionDiagnostics({
     baseUrl: liveEnv.baseUrl,
-    publicOrigin: serverEnv.publicOrigin,
+    publicOrigin: proofOrigin,
     cookieHeader: demoSession.cookieHeader,
     sessionId: demoRun.sessionId,
   });
