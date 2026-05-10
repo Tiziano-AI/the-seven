@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import readline from "node:readline";
-import { loadCliEnv } from "@the-seven/config";
+import { cliRuntime } from "@the-seven/config";
 import { type CouncilRef, decodeCouncilRef } from "@the-seven/contracts";
 import { z } from "zod";
 import {
@@ -111,7 +111,7 @@ export function usage() {
   ].join("\n");
 }
 
-export function parseArgs(args: ReadonlyArray<string>, env = loadCliEnv()): ParseArgsResult {
+export function parseArgs(args: ReadonlyArray<string>, env = cliRuntime()): ParseArgsResult {
   let filePath: string | null = null;
   let baseUrl = env.baseUrl;
   let concurrency = DEFAULT_CONCURRENCY;
@@ -420,7 +420,7 @@ export async function runBatch(input: {
   return summarizeResults(finalized, input.options, startedAt);
 }
 
-export async function runCli(args: ReadonlyArray<string>, env = loadCliEnv()) {
+export async function runCli(args: ReadonlyArray<string>, env = cliRuntime()) {
   const parsedArgs = parseArgs(args, env);
   if (!parsedArgs.ok) {
     process.stderr.write(`${parsedArgs.error}\n${usage()}\n`);

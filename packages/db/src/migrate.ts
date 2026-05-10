@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { loadServerEnv } from "@the-seven/config";
+import { serverRuntime } from "@the-seven/config";
 import { closeDatabaseClient, createDatabaseClient } from "./client";
 
 function resolveRepoRoot(startDirectory = process.cwd()): string {
@@ -72,7 +72,7 @@ async function runIsolatedSchemaInitSql(
 }
 
 export async function runMigrations(): Promise<void> {
-  const env = loadServerEnv();
+  const env = serverRuntime();
   await runIsolatedSchemaInitSql(env.databaseUrl, null);
 }
 

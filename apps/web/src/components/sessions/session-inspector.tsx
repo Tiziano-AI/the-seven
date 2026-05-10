@@ -39,6 +39,7 @@ function formatCost(micros: number | null) {
 }
 
 export function SessionInspector(props: {
+  authenticated: boolean;
   authHeader: string | null;
   sessionId: number | null;
   onSpawnedSession?: (sessionId: number) => void;
@@ -57,7 +58,7 @@ export function SessionInspector(props: {
   >([]);
 
   useEffect(() => {
-    if (!props.authHeader || !props.sessionId) {
+    if (!props.authenticated || !props.sessionId) {
       setDetail(null);
       setDiagnostics(null);
       return;
@@ -90,11 +91,11 @@ export function SessionInspector(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.authHeader, props.sessionId]);
+  }, [props.authHeader, props.authenticated, props.sessionId]);
 
   useEffect(() => {
     const authHeader = props.authHeader;
-    if (!authHeader || !detail) {
+    if (!props.authenticated || !detail) {
       return;
     }
     if (detail.session.status !== "pending" && detail.session.status !== "processing") {
@@ -107,7 +108,7 @@ export function SessionInspector(props: {
         .catch(() => undefined);
     }, 1500);
     return () => clearInterval(interval);
-  }, [detail, props.authHeader]);
+  }, [detail, props.authHeader, props.authenticated]);
 
   const phaseGroups = useMemo(() => {
     if (!detail) {
@@ -125,7 +126,7 @@ export function SessionInspector(props: {
   }, [detail]);
 
   async function handleContinue() {
-    if (!props.authHeader || !detail) {
+    if (!props.authenticated || !detail) {
       return;
     }
 
@@ -140,7 +141,7 @@ export function SessionInspector(props: {
   }
 
   async function handleRerun() {
-    if (!props.authHeader || !detail) {
+    if (!props.authenticated || !detail) {
       return;
     }
 
@@ -179,7 +180,7 @@ export function SessionInspector(props: {
   }
 
   async function handleLoadDiagnostics() {
-    if (!props.authHeader || !detail) {
+    if (!props.authenticated || !detail) {
       return;
     }
     setLoadingDiagnostics(true);
@@ -193,7 +194,7 @@ export function SessionInspector(props: {
   }
 
   async function handleExport() {
-    if (!props.authHeader || !detail) {
+    if (!props.authenticated || !detail) {
       return;
     }
 
@@ -208,7 +209,7 @@ export function SessionInspector(props: {
   }
 
   useEffect(() => {
-    if (!props.authHeader) {
+    if (!props.authenticated) {
       return;
     }
     void fetchCouncils(props.authHeader)
@@ -224,9 +225,9 @@ export function SessionInspector(props: {
         }
       })
       .catch(() => undefined);
-  }, [props.authHeader, rerunCouncil]);
+  }, [props.authHeader, props.authenticated, rerunCouncil]);
 
-  if (!props.authHeader) {
+  if (!props.authenticated) {
     return (
       <Card className="p-6">
         <p className="text-sm text-[var(--muted-foreground)]">

@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { getDb } from "../client";
 import { rateLimitBuckets } from "../schema";
 
@@ -43,4 +43,18 @@ export async function admitRateLimitBucket(input: {
     .returning();
 
   return requireRow(rows, "rate_limit_buckets.admit");
+}
+
+export async function deleteRateLimitBucketsForScopes(scopes: readonly string[]) {
+  if (scopes.length === 0) {
+    return 0;
+  }
+
+  const db = await getDb();
+  const deleted = await db
+    .delete(rateLimitBuckets)
+    .where(inArray(rateLimitBuckets.scope, scopes))
+    .returning({ id: rateLimitBuckets.id });
+
+  return deleted.length;
 }

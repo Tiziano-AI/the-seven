@@ -1,6 +1,6 @@
 import "server-only";
 
-import { DEMO_AUTH_LINK_TTL_HOURS, DEMO_SESSION_TTL_HOURS, loadServerEnv } from "@the-seven/config";
+import { DEMO_AUTH_LINK_TTL_HOURS, DEMO_SESSION_TTL_HOURS, serverRuntime } from "@the-seven/config";
 import {
   createDemoMagicLink,
   createDemoSession,
@@ -9,7 +9,6 @@ import {
   getOrCreateUser,
   getUserById,
   markDemoMagicLinkUsed,
-  touchDemoSession,
 } from "@the-seven/db";
 import { sendResendEmail } from "../adapters/resend";
 import { createDemoToken, hashDemoToken } from "../domain/demoTokens";
@@ -42,7 +41,7 @@ export async function requestDemoAuthLink(input: {
   requestIp: string | null;
   now: Date;
 }) {
-  const env = loadServerEnv();
+  const env = serverRuntime();
   if (!env.demo.enabled || !env.demo.resendApiKey || !env.demo.emailFrom) {
     throw new DemoAuthError({ kind: "demo_disabled", message: "Demo mode is disabled" });
   }
@@ -63,7 +62,7 @@ export async function requestDemoAuthLink(input: {
     createdAt: input.now,
   });
 
-  const link = `${env.publicOrigin.replace(/\/+$/, "")}/?demo_token=${linkToken.token}`;
+  const link = `${env.publicOrigin.replace(/\/+$/, "")}/api/v1/demo/consume?token=${linkToken.token}`;
   const email = buildDemoEmail({ email: principal, link });
 
   await sendResendEmail({
@@ -86,7 +85,7 @@ export async function consumeDemoAuthLink(input: {
   consumedIp: string | null;
   now: Date;
 }) {
-  const env = loadServerEnv();
+  const env = serverRuntime();
   if (!env.demo.enabled) {
     throw new DemoAuthError({ kind: "demo_disabled", message: "Demo mode is disabled" });
   }
@@ -148,10 +147,10 @@ export async function getDemoSessionContext(input: { token: string; now: Date })
     return { kind: "missing" } as const;
   }
 
-  await touchDemoSession({ id: session.id, lastUsedAt: input.now });
   return {
     kind: "active",
     userId: user.id,
     principal: user.principal,
+    expiresAt: session.expiresAt.getTime(),
   } as const;
 }

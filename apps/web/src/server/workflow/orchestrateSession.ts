@@ -21,6 +21,7 @@ import {
   startSessionProcessing,
 } from "@the-seven/db";
 import { decryptJobCredential } from "../domain/jobCredential";
+import { redactErrorMessage } from "../domain/redaction";
 import { buildSystemPromptForPhase, getSnapshotMember } from "../domain/sessionSnapshot";
 import {
   backfillSessionCosts,
@@ -53,7 +54,7 @@ async function failSession(input: {
   await markJobFailed({
     jobId: input.jobId,
     leaseOwner: input.leaseOwner,
-    lastError: input.error instanceof Error ? input.error.message : "Unknown orchestration failure",
+    lastError: redactErrorMessage(input.error, "Unknown orchestration failure"),
   });
 }
 
@@ -144,7 +145,10 @@ export async function orchestrateClaimedJob(input: {
 
   let apiKey: string;
   try {
-    apiKey = decryptJobCredential(input.credentialCiphertext);
+    apiKey = decryptJobCredential(input.credentialCiphertext, {
+      sessionId: input.sessionId,
+      jobId: input.jobId,
+    });
   } catch (error) {
     await failSession({
       jobId: input.jobId,

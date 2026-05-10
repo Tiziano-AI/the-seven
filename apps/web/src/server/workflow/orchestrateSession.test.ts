@@ -209,6 +209,10 @@ describe("orchestrateClaimedJob", () => {
       credentialCiphertext: "ciphertext",
     });
 
+    expect(credentialMocks.decryptJobCredential).toHaveBeenCalledWith("ciphertext", {
+      sessionId: 41,
+      jobId: 7,
+    });
     const phaseOneCalls = runMocks.runOpenRouterPhaseCall.mock.calls.filter(
       ([input]) => input.phase === 1,
     );

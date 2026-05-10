@@ -21,6 +21,7 @@ export function SessionDetailScreen(props: { sessionId: number }) {
 
   return (
     <SessionInspector
+      authenticated={auth.isAuthenticated}
       authHeader={auth.authHeader}
       sessionId={props.sessionId}
       onSpawnedSession={(sessionId) => router.push(`/sessions/${sessionId}`)}

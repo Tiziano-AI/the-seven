@@ -1,9 +1,16 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { chromium } from "@playwright/test";
-import { loadCliEnv, loadServerEnv } from "@the-seven/config";
+import { cliRuntime, serverRuntime } from "@the-seven/config";
+import {
+  checkEnvFileMode,
+  checkEnvFilePresence,
+  checkEnvProfile,
+  checkLegacyEnvRuntimeKeys,
+  readEnvAssignments,
+} from "./env-doctor";
 import {
   ensureComposePostgresHealthy,
   type OperatorCheckResult,
@@ -19,27 +26,11 @@ const envLocalPath = path.join(repoRoot, ".env.local");
 const envLegacyPath = path.join(repoRoot, ".env");
 const healthcheckTimeoutMs = 60_000;
 const appReadyTimeoutMs = 120_000;
-const brewFormulae = ["libpq", "cloudflared", "uv", "node", "pnpm"] as const;
+const brewFormulae = ["libpq", "uv", "node", "pnpm"] as const;
 const brewCasks = ["docker"] as const;
 
 function buildComposeArgs(args: ReadonlyArray<string>) {
   return ["compose", "-f", composeFilePath, ...args];
-}
-
-function readEnvAssignments(filePath: string) {
-  if (!existsSync(filePath)) {
-    return new Map<string, string>();
-  }
-  return new Map(
-    readFileSync(filePath, "utf8")
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0 && !line.startsWith("#") && line.includes("="))
-      .map((line) => {
-        const separatorIndex = line.indexOf("=");
-        return [line.slice(0, separatorIndex), line.slice(separatorIndex + 1)];
-      }),
-  );
 }
 
 function formatCheck(result: OperatorCheckResult) {
@@ -61,7 +52,7 @@ function ensureEnvLocalExists() {
   throw new Error(`Missing .env.local.${legacyHint}`);
 }
 function buildAppCommand() {
-  const env = loadServerEnv();
+  const env = serverRuntime();
   return {
     command: "pnpm",
     args: [
@@ -172,59 +163,7 @@ async function checkPlaywrightBrowser() {
   }
 }
 
-function checkEnvFilePresence() {
-  if (existsSync(envLocalPath)) {
-    return {
-      label: ".env.local",
-      ok: true,
-      detail: ".env.local is present",
-      fix: null,
-    } satisfies OperatorCheckResult;
-  }
-
-  const detail = existsSync(envLegacyPath)
-    ? ".env.local is missing; legacy .env is present"
-    : ".env.local is missing";
-  return {
-    label: ".env.local",
-    ok: false,
-    detail,
-    fix: "Create `.env.local` from `.env.local.example` before running local commands.",
-  } satisfies OperatorCheckResult;
-}
-
-function checkEnvKeys() {
-  const assignments = readEnvAssignments(envLocalPath);
-  const requiredNonEmptyKeys = [
-    "DATABASE_URL",
-    "SEVEN_JOB_CREDENTIAL_SECRET",
-    "SEVEN_PUBLIC_ORIGIN",
-    "SEVEN_APP_NAME",
-    "SEVEN_BYOK_KEY",
-    "SEVEN_DEMO_OPENROUTER_KEY",
-    "SEVEN_DEMO_RESEND_API_KEY",
-    "SEVEN_DEMO_EMAIL_FROM",
-    "SEVEN_DEMO_TEST_EMAIL",
-  ];
-  const missing = requiredNonEmptyKeys.filter((key) => {
-    const value = assignments.get(key);
-    return typeof value !== "string" || value.trim().length === 0;
-  });
-  const demoEnabled = assignments.get("SEVEN_DEMO_ENABLED") === "1";
-  const issues = demoEnabled ? missing : [...missing, "SEVEN_DEMO_ENABLED must be 1"];
-  return {
-    label: ".env.local keys",
-    ok: issues.length === 0,
-    detail:
-      issues.length === 0 ? "all required local and live keys are present" : issues.join(", "),
-    fix:
-      issues.length === 0
-        ? null
-        : "Fill the missing keys in `.env.local` using `.env.local.example` as the template.",
-  } satisfies OperatorCheckResult;
-}
-
-async function collectDoctorChecks() {
+async function collectDoctorChecks(live: boolean) {
   const databaseStatus = readEnvAssignments(envLocalPath).get("DATABASE_URL");
   const localPostgresCheck =
     typeof databaseStatus === "string" && databaseStatus.trim().length > 0
@@ -247,18 +186,19 @@ async function collectDoctorChecks() {
     await checkNodeVersion(),
     await checkCommand("pnpm", ["--version"], "pnpm"),
     await checkCommand("uv", ["--version"], "uv"),
-    await checkCommand("cloudflared", ["--version"], "cloudflared"),
     await checkCommand("psql", ["--version"], "psql"),
     await checkCommand("pg_isready", ["--version"], "pg_isready"),
     await checkPlaywrightBrowser(),
     localPostgresCheck,
-    checkEnvFilePresence(),
-    checkEnvKeys(),
+    checkEnvFilePresence({ envLocalPath, envLegacyPath }),
+    checkEnvFileMode(envLocalPath),
+    checkLegacyEnvRuntimeKeys(envLegacyPath),
+    checkEnvProfile({ envLocalPath, live }),
   ] satisfies ReadonlyArray<OperatorCheckResult>;
 }
 
-async function runDoctor(showFixes: boolean) {
-  const checks = await collectDoctorChecks();
+async function runDoctor(showFixes: boolean, live = false) {
+  const checks = await collectDoctorChecks(live);
   for (const result of checks) {
     console.log(formatCheck(result));
   }
@@ -287,7 +227,7 @@ async function ensureDockerReady() {
 async function waitForComposeHealth() {
   await waitForComposePostgresHealthy({
     composeFilePath,
-    connectionString: loadServerEnv().databaseUrl,
+    connectionString: serverRuntime().databaseUrl,
     healthcheckTimeoutMs,
     sleep,
   });
@@ -296,7 +236,7 @@ async function waitForComposeHealth() {
 async function ensureComposeDbHealthy() {
   await ensureComposePostgresHealthy({
     composeFilePath,
-    connectionString: loadServerEnv().databaseUrl,
+    connectionString: serverRuntime().databaseUrl,
   });
 }
 
@@ -368,7 +308,7 @@ async function runDbUp() {
   await ensureDockerReady();
   const diagnosis = await readCanonicalLocalPostgresStatus({
     composeFilePath,
-    connectionString: loadServerEnv().databaseUrl,
+    connectionString: serverRuntime().databaseUrl,
   });
   const portCheck = toCanonicalLocalPostgresCheck(diagnosis);
   if (!portCheck.ok) {
@@ -412,9 +352,13 @@ async function runGate() {
 
 async function runLive() {
   ensureEnvLocalExists();
+  const doctorOk = await runDoctor(false, true);
+  if (!doctorOk) {
+    throw new Error("Live proof environment is not ready. Run `pnpm local:doctor --live`.");
+  }
   await runDbUp();
 
-  const baseUrl = loadCliEnv().baseUrl;
+  const baseUrl = cliRuntime().baseUrl;
   const app = buildAppCommand();
   const child = spawn(app.command, app.args, {
     cwd: repoRoot,
@@ -440,7 +384,7 @@ async function main() {
   const [command, ...args] = process.argv.slice(2);
 
   if (command === "doctor") {
-    process.exitCode = (await runDoctor(false)) ? 0 : 1;
+    process.exitCode = (await runDoctor(false, args.includes("--live"))) ? 0 : 1;
     return;
   }
 
@@ -448,7 +392,7 @@ async function main() {
     if (args.includes("--install")) {
       await installPrerequisites();
     }
-    process.exitCode = (await runDoctor(true)) ? 0 : 1;
+    process.exitCode = (await runDoctor(true, args.includes("--live"))) ? 0 : 1;
     return;
   }
 

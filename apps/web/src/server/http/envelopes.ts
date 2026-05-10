@@ -1,6 +1,8 @@
 import "server-only";
 
+import { buildErrorEnvelope, buildSuccessEnvelope, type ErrorEnvelope } from "@the-seven/contracts";
 import { NextResponse } from "next/server";
+import { redactText } from "../domain/redaction";
 
 export function jsonSuccess(input: {
   traceId: string;
@@ -9,47 +11,31 @@ export function jsonSuccess(input: {
   now: Date;
   status?: number;
 }) {
-  return NextResponse.json(
-    {
-      schema_version: 1,
-      trace_id: input.traceId,
-      ts: input.now.toISOString(),
-      result: {
-        resource: input.resource,
-        payload: input.payload,
-      },
+  const envelope = buildSuccessEnvelope(input);
+  return NextResponse.json(envelope, {
+    status: input.status ?? 200,
+    headers: {
+      "X-Trace-Id": input.traceId,
     },
-    {
-      status: input.status ?? 200,
-      headers: {
-        "X-Trace-Id": input.traceId,
-      },
-    },
-  );
+  });
 }
 
 export function jsonError(input: {
   traceId: string;
-  kind: string;
+  kind: ErrorEnvelope["kind"];
   message: string;
-  details: object;
+  details: ErrorEnvelope["details"];
   now: Date;
   status: number;
 }) {
-  return NextResponse.json(
-    {
-      schema_version: 1,
-      trace_id: input.traceId,
-      ts: input.now.toISOString(),
-      kind: input.kind,
-      message: input.message,
-      details: input.details,
+  const envelope = buildErrorEnvelope({
+    ...input,
+    message: redactText(input.message),
+  });
+  return NextResponse.json(envelope, {
+    status: input.status,
+    headers: {
+      "X-Trace-Id": input.traceId,
     },
-    {
-      status: input.status,
-      headers: {
-        "X-Trace-Id": input.traceId,
-      },
-    },
-  );
+  });
 }

@@ -1,3 +1,4 @@
+import { routeContract } from "@the-seven/contracts";
 import type { NextRequest } from "next/server";
 import { requireAuth } from "@/server/http/requireAuth";
 import { handleRoute } from "@/server/http/route";
@@ -5,7 +6,7 @@ import { listCouncils } from "@/server/services/councils";
 
 export async function GET(request: NextRequest) {
   return handleRoute(request, {
-    resource: "councils.list",
+    route: routeContract("councils.list"),
     handler: async (ctx) => {
       const auth = requireAuth(ctx.auth);
       const councils = await listCouncils(auth.userId);

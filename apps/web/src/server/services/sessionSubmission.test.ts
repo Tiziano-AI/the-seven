@@ -161,7 +161,13 @@ describe("sessionSubmission service", () => {
     expect(dbMocks.setSessionPending).toHaveBeenCalledWith(12);
     expect(dbMocks.enqueueSessionJob).toHaveBeenCalledWith({
       sessionId: 12,
-      credentialCiphertext: "ciphertext",
+      buildCredentialCiphertext: expect.any(Function),
+    });
+    const enqueueInput = dbMocks.enqueueSessionJob.mock.calls[0]?.[0];
+    expect(enqueueInput.buildCredentialCiphertext({ sessionId: 12, jobId: 99 })).toBe("ciphertext");
+    expect(credentialMocks.encryptJobCredential).toHaveBeenCalledWith("byok-key", {
+      sessionId: 12,
+      jobId: 99,
     });
   });
 
@@ -228,6 +234,7 @@ describe("sessionSubmission service", () => {
         ingressVersion: "cli@1.0.0",
         questionHash: "question-hash",
         traceId: "trace-2",
+        buildCredentialCiphertext: expect.any(Function),
       }),
     );
   });

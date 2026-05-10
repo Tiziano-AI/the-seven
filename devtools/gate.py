@@ -132,6 +132,86 @@ def _check_drizzle_squashed_init(*, repo_root: Path) -> None:
         )
 
 
+def _check_canonical_surfaces(*, repo_root: Path) -> None:
+    conflicting_root_entries = {
+        ".env.example": ".env.local.example and .env.live.example own env examples",
+        "packages/db/drizzle.config.ts": "hand-owned schema.ts and 0000_init.sql own the launch DB",
+        "client": "apps/web owns the browser runtime",
+        "server": "apps/web owns the HTTP runtime",
+        "shared": "packages/contracts owns shared schemas",
+        "config": "packages/config owns runtime configuration",
+        "drizzle": "packages/db/drizzle owns launch SQL",
+    }
+    path_hits = [
+        f"{path}: {reason}"
+        for path, reason in conflicting_root_entries.items()
+        if (repo_root / path).exists()
+    ]
+    if path_hits:
+        joined = "\n".join(f"- {item}" for item in path_hits)
+        raise SystemExit("Canonical surface ownership conflict:\n" + joined)
+
+    package_files = [
+        path
+        for path in _git_ls_files(repo_root=repo_root)
+        if path.name == "package.json"
+        and not path.relative_to(repo_root).as_posix().startswith(("node_modules/", ".next/"))
+    ]
+    blocked_dependencies = {
+        "@tailwindcss/vite": "Next/Tailwind PostCSS owns the web build",
+        "@vitejs/plugin-react": "Next owns the web build",
+        "axios": "native fetch owns HTTP transport",
+        "esbuild": "Next owns server/browser bundling",
+        "express": "Next route handlers own HTTP ingress",
+        "prettier": "Biome owns formatting",
+        "superjson": "contracts own JSON envelopes",
+        "vite": "Next owns the web build",
+    }
+    dependency_hits: list[str] = []
+    for path in package_files:
+        try:
+            package = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Failed to parse package manifest: {path.as_posix()} ({exc})")
+        rel = path.relative_to(repo_root).as_posix()
+        for section in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+            deps = package.get(section)
+            if not isinstance(deps, dict):
+                continue
+            for name in sorted(blocked_dependencies.keys() & deps.keys()):
+                dependency_hits.append(f"{rel}: {section}.{name}: {blocked_dependencies[name]}")
+
+    if dependency_hits:
+        joined = "\n".join(f"- {item}" for item in dependency_hits)
+        raise SystemExit("Package manifest conflicts with canonical owners:\n" + joined)
+
+    active_contract_files = [
+        "packages/config/src/builtInCouncils.ts",
+        "apps/web/e2e/smoke.spec.ts",
+        ".env.local.example",
+        ".env.live.example",
+    ]
+    exact_active_token_checks = {
+        "packages/config/src/builtInCouncils.ts": ["x-ai/grok-4.20-beta"],
+        "apps/web/e2e/smoke.spec.ts": ["seven.demo.token", "SEVEN_PLAYWRIGHT_DEMO_TOKEN"],
+        ".env.local.example": ["SEVEN_PLAYWRIGHT_DEMO_TOKEN"],
+        ".env.live.example": ["SEVEN_PLAYWRIGHT_DEMO_TOKEN"],
+    }
+    hazard_hits: list[str] = []
+    for rel in active_contract_files:
+        path = repo_root / rel
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for hazard in exact_active_token_checks[rel]:
+            if hazard in text:
+                hazard_hits.append(f"{rel}: {hazard}")
+
+    if hazard_hits:
+        joined = "\n".join(f"- {item}" for item in hazard_hits)
+        raise SystemExit("Exact active contract token drift:\n" + joined)
+
+
 def main(argv: list[str]) -> int:
     _require_python_312()
 
@@ -160,6 +240,7 @@ def main(argv: list[str]) -> int:
 
     _check_file_guardrails(repo_root=config.repo_root)
     _check_drizzle_squashed_init(repo_root=config.repo_root)
+    _check_canonical_surfaces(repo_root=config.repo_root)
 
     if config.lint:
         _run(["pnpm", "run", "lint"], cwd=config.repo_root)

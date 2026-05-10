@@ -15,6 +15,7 @@ describe("parseJsonBody", () => {
       parseJsonBody(
         new Request("https://example.com", {
           method: "POST",
+          headers: { "content-type": "application/json" },
           body: '{"name":',
         }),
         payloadSchema,
@@ -33,6 +34,7 @@ describe("parseJsonBody", () => {
       parseJsonBody(
         new Request("https://example.com", {
           method: "POST",
+          headers: { "content-type": "application/json" },
         }),
         payloadSchema,
       ),
@@ -47,7 +49,10 @@ describe("parseJsonBody", () => {
       parseJsonBody(
         new Request("https://example.com", {
           method: "POST",
-          headers: { "content-length": String(1024 * 1024) },
+          headers: {
+            "content-length": String(1024 * 1024),
+            "content-type": "application/json",
+          },
           body: '{"name":"ok"}',
         }),
         payloadSchema,
@@ -64,6 +69,7 @@ describe("parseJsonBody", () => {
       parseJsonBody(
         new Request("https://example.com", {
           method: "POST",
+          headers: { "content-type": "application/json" },
           body: largeBody,
         }),
         payloadSchema,
@@ -71,6 +77,30 @@ describe("parseJsonBody", () => {
     ).rejects.toMatchObject({
       kind: "invalid_input",
       status: 413,
+    });
+  });
+
+  test("rejects non-JSON content type before parsing", async () => {
+    await expect(
+      parseJsonBody(
+        new Request("https://example.com", {
+          method: "POST",
+          headers: { "content-type": "text/plain" },
+          body: '{"name":"ok"}',
+        }),
+        payloadSchema,
+      ),
+    ).rejects.toMatchObject({
+      kind: "invalid_input",
+      status: 415,
+      details: {
+        issues: [
+          {
+            path: "headers.content-type",
+            message: "Content-Type must be application/json",
+          },
+        ],
+      },
     });
   });
 });

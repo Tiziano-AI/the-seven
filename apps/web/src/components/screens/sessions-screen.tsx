@@ -33,13 +33,13 @@ export function SessionsScreen() {
 
   useEffect(() => {
     const authHeader = auth.authHeader;
-    if (!authHeader) {
+    if (!auth.isAuthenticated) {
       setSessions([]);
       return;
     }
 
     let cancelled = false;
-    async function load(currentAuthHeader: string) {
+    async function load(currentAuthHeader: string | null) {
       try {
         const result = await fetchSessions(currentAuthHeader);
         if (!cancelled) {
@@ -64,7 +64,7 @@ export function SessionsScreen() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [auth.authHeader, selectedSessionId]);
+  }, [auth.authHeader, auth.isAuthenticated, selectedSessionId]);
 
   const filteredSessions = useMemo(() => {
     return sessions.filter((session) => {
@@ -77,7 +77,7 @@ export function SessionsScreen() {
   }, [search, sessions, statusFilter]);
 
   async function handleExportSelected() {
-    if (!auth.authHeader || selectedIds.length === 0) {
+    if (!auth.isAuthenticated || selectedIds.length === 0) {
       return;
     }
 
@@ -182,6 +182,7 @@ export function SessionsScreen() {
       </Card>
 
       <SessionInspector
+        authenticated={auth.isAuthenticated}
         authHeader={auth.authHeader}
         sessionId={selectedSessionId}
         onSpawnedSession={(sessionId) => {

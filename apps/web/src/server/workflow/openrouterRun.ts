@@ -11,12 +11,14 @@ import {
 import {
   callOpenRouter,
   fetchOpenRouterGeneration,
-  normalizeCouncilMemberTuningInput,
+  materializeCouncilMemberTuningInput,
   type OpenRouterMessage,
   type OpenRouterRequest,
   OpenRouterRequestFailedError,
   type OpenRouterResponse,
 } from "../adapters/openrouter";
+import { redactErrorMessage } from "../domain/redaction";
+import { getModelCapability } from "../services/models";
 
 export class OpenRouterPhaseRateLimitError extends Error {
   readonly status: number | null;
@@ -25,6 +27,18 @@ export class OpenRouterPhaseRateLimitError extends Error {
     super(input.message);
     this.name = "OpenRouterPhaseRateLimitError";
     this.status = input.status;
+  }
+}
+
+export class OpenRouterUnsupportedParameterError extends Error {
+  readonly deniedParameters: ReadonlyArray<string>;
+
+  constructor(input: { modelId: string; deniedParameters: ReadonlyArray<string> }) {
+    super(
+      `Unsupported OpenRouter parameter(s) for ${input.modelId}: ${input.deniedParameters.join(", ")}`,
+    );
+    this.name = "OpenRouterUnsupportedParameterError";
+    this.deniedParameters = input.deniedParameters;
   }
 }
 
@@ -56,12 +70,12 @@ function getMessageCharCounts(messages: ReadonlyArray<OpenRouterMessage>): Messa
 function buildOpenRouterRequest(input: {
   modelId: string;
   messages: ReadonlyArray<OpenRouterMessage>;
-  tuning: CouncilMemberTuning | null;
+  tuningOptions: Omit<OpenRouterRequest, "model" | "messages">;
 }): OpenRouterRequest {
   return {
     model: input.modelId,
     messages: input.messages,
-    ...normalizeCouncilMemberTuningInput(input.tuning),
+    ...input.tuningOptions,
   };
 }
 
@@ -165,10 +179,15 @@ async function recordProviderCall(input: {
   memberPosition: MemberPosition;
   modelId: string;
   messages: ReadonlyArray<OpenRouterMessage>;
+  catalogRefreshedAt: Date | null;
+  supportedParameters: ReadonlyArray<string>;
+  sentParameters: ReadonlyArray<string>;
+  deniedParameters: ReadonlyArray<string>;
   requestStartedAt: Date;
   responseCompletedAt: Date;
   response: OpenRouterResponse | null;
   generation: Awaited<ReturnType<typeof fetchGenerationBestEffort>>;
+  billingLookupStatus: string;
   error: Error | null;
 }) {
   const counts = getMessageCharCounts(input.messages);
@@ -182,6 +201,10 @@ async function recordProviderCall(input: {
     requestSystemChars: counts.systemChars,
     requestUserChars: counts.userChars,
     requestTotalChars: counts.totalChars,
+    catalogRefreshedAt: input.catalogRefreshedAt,
+    supportedParametersJson: Array.from(input.supportedParameters),
+    sentParametersJson: Array.from(input.sentParameters),
+    deniedParametersJson: Array.from(input.deniedParameters),
     requestStartedAt: input.requestStartedAt,
     responseCompletedAt: input.responseCompletedAt,
     latencyMs: input.responseCompletedAt.getTime() - input.requestStartedAt.getTime(),
@@ -194,8 +217,10 @@ async function recordProviderCall(input: {
     usageTotalTokens: input.response?.usage?.total_tokens ?? null,
     finishReason: firstChoice?.finish_reason ?? null,
     nativeFinishReason: firstChoice?.native_finish_reason ?? null,
-    errorMessage: input.error?.message ?? null,
-    choiceErrorMessage: firstChoice?.error?.message ?? null,
+    errorMessage: input.error ? redactErrorMessage(input.error, "OpenRouter request failed") : null,
+    choiceErrorMessage: firstChoice?.error?.message
+      ? redactErrorMessage(firstChoice.error, "OpenRouter choice failed")
+      : null,
     choiceErrorCode: firstChoice?.error?.code ?? null,
     errorStatus:
       input.error instanceof OpenRouterRequestFailedError
@@ -203,6 +228,8 @@ async function recordProviderCall(input: {
         : input.error instanceof OpenRouterPhaseRateLimitError
           ? input.error.status
           : null,
+    errorCode: input.error instanceof OpenRouterRequestFailedError ? input.error.code : null,
+    billingLookupStatus: input.billingLookupStatus,
   });
 }
 
@@ -215,18 +242,49 @@ export async function runOpenRouterPhaseCall(input: {
   messages: ReadonlyArray<OpenRouterMessage>;
   tuning: CouncilMemberTuning | null;
 }) {
+  const capability = await getModelCapability(input.modelId);
+  const supportedParameters = capability?.supportedParameters ?? [];
+  const materialized = materializeCouncilMemberTuningInput(input.tuning, supportedParameters);
   const request = buildOpenRouterRequest({
     modelId: input.modelId,
     messages: input.messages,
-    tuning: input.tuning,
+    tuningOptions: materialized.options,
   });
   const requestStartedAt = new Date();
   let response: OpenRouterResponse | null = null;
   let generation: Awaited<ReturnType<typeof fetchGenerationBestEffort>> = null;
+  let billingLookupStatus = "not_requested";
+
+  if (!capability || materialized.deniedParameters.length > 0) {
+    const responseCompletedAt = new Date();
+    const error = new OpenRouterUnsupportedParameterError({
+      modelId: input.modelId,
+      deniedParameters: capability ? materialized.deniedParameters : ["model"],
+    });
+    await recordProviderCall({
+      sessionId: input.sessionId,
+      phase: input.phase,
+      memberPosition: input.memberPosition,
+      modelId: input.modelId,
+      messages: input.messages,
+      catalogRefreshedAt: capability?.refreshedAt ?? null,
+      supportedParameters,
+      sentParameters: [],
+      deniedParameters: capability ? materialized.deniedParameters : ["model"],
+      requestStartedAt,
+      responseCompletedAt,
+      response: null,
+      generation: null,
+      billingLookupStatus,
+      error,
+    });
+    return { ok: false as const, error };
+  }
 
   try {
     response = await callOpenRouter(input.apiKey, request);
     generation = await fetchGenerationBestEffort(input.apiKey, response.id);
+    billingLookupStatus = generation ? "succeeded" : "failed";
     const content = extractAssistantContent({
       phase: input.phase,
       memberPosition: input.memberPosition,
@@ -241,10 +299,15 @@ export async function runOpenRouterPhaseCall(input: {
       memberPosition: input.memberPosition,
       modelId: input.modelId,
       messages: input.messages,
+      catalogRefreshedAt: capability.refreshedAt,
+      supportedParameters,
+      sentParameters: materialized.sentParameters,
+      deniedParameters: materialized.deniedParameters,
       requestStartedAt,
       responseCompletedAt,
       response,
       generation,
+      billingLookupStatus,
       error: null,
     });
 
@@ -259,10 +322,15 @@ export async function runOpenRouterPhaseCall(input: {
       memberPosition: input.memberPosition,
       modelId: input.modelId,
       messages: input.messages,
+      catalogRefreshedAt: capability.refreshedAt,
+      supportedParameters,
+      sentParameters: materialized.sentParameters,
+      deniedParameters: materialized.deniedParameters,
       requestStartedAt,
       responseCompletedAt,
       response,
       generation,
+      billingLookupStatus,
       error: normalizedError,
     });
 

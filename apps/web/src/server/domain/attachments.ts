@@ -1,6 +1,14 @@
 import "server-only";
 
-import type { AttachmentText, AttachmentUpload } from "@the-seven/contracts";
+import {
+  ATTACHMENT_FILE_EXTENSIONS,
+  ATTACHMENT_PARSE_TIMEOUT_MS,
+  type AttachmentText,
+  type AttachmentUpload,
+  MAX_ATTACHMENT_DECODED_BYTES,
+  MAX_ATTACHMENT_EXTRACTED_CHARS,
+  MAX_ATTACHMENT_FILENAME_CHARS,
+} from "@the-seven/contracts";
 import { fileTypeFromBuffer } from "file-type";
 import officeParser from "officeparser";
 
@@ -25,6 +33,7 @@ const DOCUMENT_MIMES = new Set<string>([
   "application/vnd.oasis.opendocument.presentation",
   "application/vnd.oasis.opendocument.spreadsheet",
 ]);
+const ALLOWED_EXTENSIONS = new Set<string>(ATTACHMENT_FILE_EXTENSIONS);
 
 function hasOnlyBase64Chars(value: string): boolean {
   return /^[A-Za-z0-9+/=]*$/.test(value);
@@ -73,13 +82,57 @@ function normalizeNewlines(value: string): string {
   return value.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
 }
 
+function extensionForName(name: string): string | null {
+  const index = name.lastIndexOf(".");
+  if (index <= 0 || index === name.length - 1) {
+    return null;
+  }
+  return name.slice(index).toLowerCase();
+}
+
+function validateExtractedText(input: { name: string; text: string }): DecodeAttachmentResult {
+  if (input.text.length > MAX_ATTACHMENT_EXTRACTED_CHARS) {
+    return {
+      ok: false,
+      error: {
+        kind: "extraction_failed",
+        message: `Attachment ${input.name} extracted text exceeds ${MAX_ATTACHMENT_EXTRACTED_CHARS} characters.`,
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    attachment: {
+      name: input.name,
+      text: input.text,
+    },
+  };
+}
+
+async function withParserTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  try {
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timeout = setTimeout(() => {
+        reject(new Error(`parser_timeout_${ATTACHMENT_PARSE_TIMEOUT_MS}ms`));
+      }, ATTACHMENT_PARSE_TIMEOUT_MS);
+    });
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
 async function convertDocumentToText(input: {
   name: string;
   mime: string;
   buffer: Buffer;
 }): Promise<DecodeAttachmentResult> {
   try {
-    const extracted = await officeParser.parseOffice(input.buffer);
+    const extracted = await withParserTimeout(officeParser.parseOffice(input.buffer));
     const text = normalizeNewlines(extracted.toText());
     if (!text.trim()) {
       return {
@@ -91,13 +144,7 @@ async function convertDocumentToText(input: {
       };
     }
 
-    return {
-      ok: true,
-      attachment: {
-        name: input.name,
-        text,
-      },
-    };
+    return validateExtractedText({ name: input.name, text });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Document extraction failed";
     return {
@@ -128,11 +175,42 @@ export async function decodeAttachmentToText(
     };
   }
 
+  if (name.length > MAX_ATTACHMENT_FILENAME_CHARS) {
+    return {
+      ok: false,
+      error: {
+        kind: "invalid_name",
+        message: `Attachment name must be at most ${MAX_ATTACHMENT_FILENAME_CHARS} characters`,
+      },
+    };
+  }
+
+  const extension = extensionForName(name);
+  if (!extension || !ALLOWED_EXTENSIONS.has(extension)) {
+    return {
+      ok: false,
+      error: {
+        kind: "unsupported_type",
+        message: `Attachment ${name} must use one of: ${ATTACHMENT_FILE_EXTENSIONS.join(", ")}`,
+      },
+    };
+  }
+
   const base64Decoded = decodeBase64Strict(input.base64);
   if (!base64Decoded.ok) {
     return {
       ok: false,
       error: { kind: "invalid_base64", message: `Attachment ${name} is not valid base64` },
+    };
+  }
+
+  if (base64Decoded.buffer.byteLength > MAX_ATTACHMENT_DECODED_BYTES) {
+    return {
+      ok: false,
+      error: {
+        kind: "extraction_failed",
+        message: `Attachment ${name} exceeds ${MAX_ATTACHMENT_DECODED_BYTES} decoded bytes.`,
+      },
     };
   }
 
@@ -170,11 +248,5 @@ export async function decodeAttachmentToText(
     };
   }
 
-  return {
-    ok: true,
-    attachment: {
-      name,
-      text: normalizeNewlines(textDecoded.text),
-    },
-  };
+  return validateExtractedText({ name, text: normalizeNewlines(textDecoded.text) });
 }

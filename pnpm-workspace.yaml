@@ -4,3 +4,5 @@ packages:
 allowBuilds:
   esbuild: true
   msw: true
+  sharp: true
+  tesseract.js: true

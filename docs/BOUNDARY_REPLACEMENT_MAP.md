@@ -52,4 +52,4 @@ This document records the canonical owner for each surviving behavior in the rew
 | manual local Postgres bootstrapping | `compose.yaml` Postgres service on `127.0.0.1:5432` |
 | scattered local shell commands | `tools/local-dev.ts` subcommands surfaced as `pnpm local:*` |
 | self-contained Playwright dev-server startup only | Playwright config that can either self-start or honor an externally started local server |
-| dashboard-managed permanent Resend webhook for local testing | temporary live-test webhook and Cloudflare quick tunnel owned by `pnpm test:live` |
+| dashboard-managed permanent Resend webhook for local testing | Resend Receiving API polling and retrieval owned by `pnpm test:live` |

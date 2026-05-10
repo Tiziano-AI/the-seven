@@ -1,25 +1,24 @@
-import { loadServerEnv } from "@the-seven/config";
-import { demoRequestBodySchema } from "@the-seven/contracts";
+import { serverRuntime } from "@the-seven/config";
+import { forbiddenDetails, routeContract } from "@the-seven/contracts";
 import type { NextRequest } from "next/server";
+import { redactRateLimitScope } from "@/server/domain/redaction";
 import { EdgeError } from "@/server/http/errors";
-import { parseJsonBody } from "@/server/http/parse";
 import { handleRoute } from "@/server/http/route";
 import { DemoAuthError, requestDemoAuthLink } from "@/server/services/demoAuth";
 import { admitDemoEmailRequest } from "@/server/services/demoLimits";
 
 export async function POST(request: NextRequest) {
   return handleRoute(request, {
-    resource: "demo.request",
-    handler: async (ctx, rawRequest) => {
-      const input = await parseJsonBody(rawRequest, demoRequestBodySchema);
-      const email = input.email.trim().toLowerCase();
-      const env = loadServerEnv();
+    route: routeContract("demo.request"),
+    handler: async (ctx, _request, input) => {
+      const email = input.body.email.trim().toLowerCase();
+      const env = serverRuntime();
 
       if (!env.demo.enabled) {
         throw new EdgeError({
           kind: "forbidden",
           message: "Demo mode is disabled",
-          details: { reason: "demo_disabled" },
+          details: forbiddenDetails("demo_disabled"),
           status: 403,
         });
       }
@@ -34,7 +33,7 @@ export async function POST(request: NextRequest) {
           kind: "rate_limited",
           message: "Demo email rate limit exceeded",
           details: {
-            scope: limited.scope,
+            scope: redactRateLimitScope(limited.scope),
             limit: limited.limit,
             windowSeconds: limited.windowSeconds,
             resetAt: new Date(limited.resetAtMs).toISOString(),
@@ -55,7 +54,7 @@ export async function POST(request: NextRequest) {
             throw new EdgeError({
               kind: "forbidden",
               message: "Demo mode is disabled",
-              details: { reason: "demo_disabled" },
+              details: forbiddenDetails("demo_disabled"),
               status: 403,
             });
           }

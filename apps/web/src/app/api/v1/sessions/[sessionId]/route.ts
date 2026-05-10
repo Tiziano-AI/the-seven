@@ -1,5 +1,5 @@
+import { routeContract } from "@the-seven/contracts";
 import type { NextRequest } from "next/server";
-import { parsePositiveIntSegment } from "@/server/http/params";
 import { requireAuth } from "@/server/http/requireAuth";
 import { handleRoute } from "@/server/http/route";
 import { getSessionDetail } from "@/server/services/sessionViews";
@@ -9,11 +9,11 @@ export async function GET(
   context: { params: Promise<{ sessionId: string }> },
 ) {
   return handleRoute(request, {
-    resource: "sessions.get",
-    handler: async (ctx) => {
+    route: routeContract("sessions.get"),
+    params: context.params,
+    handler: async (ctx, _request, input) => {
       const auth = requireAuth(ctx.auth);
-      const params = await context.params;
-      return getSessionDetail(auth.userId, parsePositiveIntSegment(params.sessionId, "sessionId"));
+      return getSessionDetail(auth.userId, input.params.sessionId);
     },
   });
 }

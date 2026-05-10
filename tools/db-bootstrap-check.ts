@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { BUILT_IN_COUNCILS, loadServerEnv } from "@the-seven/config";
+import { BUILT_IN_COUNCILS, serverRuntime } from "@the-seven/config";
 import { closeDatabaseClient, createDatabaseClient, type DatabaseClient } from "@the-seven/db";
 import { runMigrationsForTarget } from "@the-seven/db/migrate";
 import {
@@ -164,7 +164,7 @@ async function verifyBootstrap(connectionString: string, schemaName: string) {
 
 async function main() {
   requireMembersOnBuiltIns();
-  const env = loadServerEnv();
+  const env = serverRuntime();
   const schemaName = buildSchemaName();
 
   try {

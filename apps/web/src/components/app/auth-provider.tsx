@@ -9,11 +9,11 @@ import {
   useRef,
   useState,
 } from "react";
+import { fetchDemoSession, logoutDemoSession } from "@/lib/api";
 import { clearEncryptedKey } from "@/lib/crypto";
 import { writeActiveSessionId } from "@/lib/storage";
 
 type DemoSession = Readonly<{
-  token: string;
   email: string;
   expiresAt: number;
 }>;
@@ -29,55 +29,16 @@ type AuthContextValue = Readonly<{
   setByokKey: (value: string | null) => void;
   resetEncryptedKey: () => void;
   clearByokKey: () => void;
-  setDemoSession: (session: DemoSession) => void;
   clearDemoSession: () => void;
 }>;
 
-const DEMO_TOKEN_KEY = "seven.demo.token";
-const DEMO_EMAIL_KEY = "seven.demo.email";
-const DEMO_EXPIRES_AT_KEY = "seven.demo.expires_at";
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
-
-function readDemoSession(): DemoSession | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const token = window.localStorage.getItem(DEMO_TOKEN_KEY);
-  const email = window.localStorage.getItem(DEMO_EMAIL_KEY);
-  const expiresAtRaw = window.localStorage.getItem(DEMO_EXPIRES_AT_KEY);
-  if (!token || !email || !expiresAtRaw || !/^\d+$/.test(expiresAtRaw)) {
-    return null;
-  }
-
-  const expiresAt = Number.parseInt(expiresAtRaw, 10);
-  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-    return null;
-  }
-
-  return { token, email, expiresAt };
-}
-
-function writeDemoSession(session: DemoSession | null) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  if (!session) {
-    window.localStorage.removeItem(DEMO_TOKEN_KEY);
-    window.localStorage.removeItem(DEMO_EMAIL_KEY);
-    window.localStorage.removeItem(DEMO_EXPIRES_AT_KEY);
-    return;
-  }
-  window.localStorage.setItem(DEMO_TOKEN_KEY, session.token);
-  window.localStorage.setItem(DEMO_EMAIL_KEY, session.email);
-  window.localStorage.setItem(DEMO_EXPIRES_AT_KEY, String(session.expiresAt));
-}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
   const [byokKey, setByokKeyState] = useState<string | null>(null);
-  const [demoSession, setDemoSessionState] = useState<DemoSession | null>(() => readDemoSession());
+  const [demoSession, setDemoSessionState] = useState<DemoSession | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTimeoutRef = useCallback(() => {
@@ -113,15 +74,10 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
     [clearTimeoutRef, resetTimeout],
   );
 
-  const setDemoSession = useCallback((value: DemoSession) => {
-    setDemoSessionState(value);
-    writeDemoSession(value);
-  }, []);
-
   const clearDemoSession = useCallback(() => {
     setDemoSessionState(null);
-    writeDemoSession(null);
     writeActiveSessionId(null);
+    void logoutDemoSession().catch(() => undefined);
   }, []);
 
   const resetEncryptedKey = useCallback(() => {
@@ -148,6 +104,20 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
   }, [byokKey, clearTimeoutRef, resetTimeout]);
 
   useEffect(() => {
+    let cancelled = false;
+    void fetchDemoSession()
+      .then((session) => {
+        if (!cancelled && session.expiresAt > Date.now()) {
+          setDemoSessionState(session);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (demoSession && demoSession.expiresAt <= Date.now()) {
       clearDemoSession();
     }
@@ -158,11 +128,8 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
     if (mode === "byok" && byokKey) {
       return `Bearer ${byokKey}`;
     }
-    if (mode === "demo" && demoSession) {
-      return `Demo ${demoSession.token}`;
-    }
     return null;
-  }, [byokKey, demoSession, mode]);
+  }, [byokKey, mode]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -174,7 +141,6 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
       setByokKey,
       resetEncryptedKey,
       clearByokKey,
-      setDemoSession,
       clearDemoSession,
     }),
     [
@@ -186,7 +152,6 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
       mode,
       resetEncryptedKey,
       setByokKey,
-      setDemoSession,
     ],
   );
 

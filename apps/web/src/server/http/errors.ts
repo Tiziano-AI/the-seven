@@ -1,34 +1,24 @@
 import "server-only";
 
-import type { ErrorKind } from "@the-seven/contracts";
+import { HttpContractError, upstreamErrorDetails } from "@the-seven/contracts";
 import { OpenRouterRequestFailedError } from "../adapters/openrouter";
 import { ResendRequestFailedError } from "../adapters/resend";
+import { redactText } from "../domain/redaction";
 
-export class EdgeError extends Error {
-  readonly kind: ErrorKind;
-  readonly details: object;
-  readonly status: number;
-
-  constructor(input: { kind: ErrorKind; message: string; details: object; status: number }) {
-    super(input.message);
-    this.kind = input.kind;
-    this.details = input.details;
-    this.status = input.status;
-  }
-}
+export { HttpContractError as EdgeError };
 
 function buildUpstreamError(input: {
   service: "openrouter" | "resend";
   status: number | null;
   message: string;
 }) {
-  return new EdgeError({
+  return new HttpContractError({
     kind: "upstream_error",
-    message: input.message,
-    details: {
+    message: redactText(input.message),
+    details: upstreamErrorDetails({
       service: input.service,
       status: input.status,
-    },
+    }),
     status: input.status ?? 502,
   });
 }

@@ -7,6 +7,7 @@ import type {
   OutputFormats,
   PhasePrompts,
 } from "@the-seven/contracts";
+import { notFoundDetails } from "@the-seven/contracts";
 import {
   createCouncil,
   deleteCouncil,
@@ -54,7 +55,7 @@ async function requireOwnedCouncil(input: { userId: number; councilId: number })
     throw new EdgeError({
       kind: "not_found",
       message: "Council not found",
-      details: { resource: "council" },
+      details: notFoundDetails("council"),
       status: 404,
     });
   }
@@ -128,7 +129,7 @@ export async function replaceCouncil(input: {
     throw new EdgeError({
       kind: "not_found",
       message: "Council not found",
-      details: { resource: "council" },
+      details: notFoundDetails("council"),
       status: 404,
     });
   }
@@ -140,7 +141,7 @@ export async function removeCouncil(input: { userId: number; councilId: number }
     throw new EdgeError({
       kind: "not_found",
       message: "Council not found",
-      details: { resource: "council" },
+      details: notFoundDetails("council"),
       status: 404,
     });
   }

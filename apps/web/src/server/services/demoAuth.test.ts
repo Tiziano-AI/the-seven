@@ -25,7 +25,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@the-seven/config", () => ({
   DEMO_AUTH_LINK_TTL_HOURS: 24,
   DEMO_SESSION_TTL_HOURS: 24,
-  loadServerEnv: vi.fn(() => ({
+  serverRuntime: vi.fn(() => ({
     publicOrigin: "http://localhost:3000",
     demo: {
       enabled: true,

@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  consumeDemoLink,
   createSession,
   fetchCouncils,
   readCouncilRef,
@@ -31,11 +30,7 @@ import {
   writeLastCouncilRef,
 } from "@/lib/storage";
 
-type HomeScreenProps = {
-  initialDemoToken: string | null;
-};
-
-export function HomeScreen({ initialDemoToken }: HomeScreenProps) {
+export function HomeScreen() {
   const auth = useAuth();
   const [hasStoredByok, setHasStoredByok] = useState(false);
   const [apiKey, setApiKey] = useState("");
@@ -61,7 +56,7 @@ export function HomeScreen({ initialDemoToken }: HomeScreenProps) {
   }, [query]);
 
   useEffect(() => {
-    if (!auth.authHeader) {
+    if (!auth.isAuthenticated) {
       setAvailableCouncils([]);
       return;
     }
@@ -91,28 +86,13 @@ export function HomeScreen({ initialDemoToken }: HomeScreenProps) {
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Failed to load councils");
       });
-  }, [auth.authHeader]);
+  }, [auth.authHeader, auth.isAuthenticated]);
 
   useEffect(() => {
     if (selectedCouncil) {
       writeLastCouncilRef(selectedCouncil);
     }
   }, [selectedCouncil]);
-
-  useEffect(() => {
-    if (!initialDemoToken || auth.isAuthenticated) {
-      return;
-    }
-
-    void consumeDemoLink(initialDemoToken)
-      .then((session) => {
-        auth.setDemoSession(session);
-        toast.success(`Demo unlocked for ${session.email}`);
-      })
-      .catch((error) => {
-        toast.error(error instanceof Error ? error.message : "Demo unlock failed");
-      });
-  }, [auth, auth.isAuthenticated, initialDemoToken]);
 
   const selectedCouncilRef = useMemo(() => {
     return readCouncilRef(selectedCouncil);
@@ -156,7 +136,7 @@ export function HomeScreen({ initialDemoToken }: HomeScreenProps) {
   }
 
   async function handleSubmitQuestion() {
-    if (!auth.authHeader || !selectedCouncilRef) {
+    if (!auth.isAuthenticated || !selectedCouncilRef) {
       toast.error("Choose a council first");
       return;
     }
@@ -367,6 +347,7 @@ export function HomeScreen({ initialDemoToken }: HomeScreenProps) {
       </Card>
 
       <SessionInspector
+        authenticated={auth.isAuthenticated}
         authHeader={auth.authHeader}
         sessionId={activeSessionId}
         onSpawnedSession={(sessionId) => {

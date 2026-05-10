@@ -83,3 +83,67 @@ export const errorEnvelopeSchema = z.discriminatedUnion("kind", [
 ]);
 
 export type ErrorEnvelope = z.infer<typeof errorEnvelopeSchema>;
+
+export type InvalidInputIssue = Readonly<{ path: string; message: string }>;
+
+/** Public HTTP contract error used by adapters and services before envelope emission. */
+export class HttpContractError extends Error {
+  readonly kind: ErrorKind;
+  readonly details: ErrorEnvelope["details"];
+  readonly status: number;
+
+  constructor(input: {
+    kind: ErrorKind;
+    message: string;
+    details: ErrorEnvelope["details"];
+    status: number;
+  }) {
+    super(input.message);
+    this.kind = input.kind;
+    this.details = input.details;
+    this.status = input.status;
+  }
+}
+
+/** Builds canonical `invalid_input` details from public validation issues. */
+export function invalidInputDetails(issues: ReadonlyArray<InvalidInputIssue>) {
+  return invalidInputDetailsSchema.parse({ issues });
+}
+
+/** Builds canonical `unauthorized` details without leaking credential material. */
+export function unauthorizedDetails(reason: "missing_auth" | "invalid_token" | "expired_token") {
+  return unauthorizedDetailsSchema.parse({ reason });
+}
+
+/** Builds canonical `forbidden` details for policy denials. */
+export function forbiddenDetails(reason: string) {
+  return forbiddenDetailsSchema.parse({ reason });
+}
+
+/** Builds canonical `not_found` details for resource denials. */
+export function notFoundDetails(resource: string) {
+  return notFoundDetailsSchema.parse({ resource });
+}
+
+/** Builds canonical `rate_limited` details for public limiter denials. */
+export function rateLimitedDetails(input: {
+  scope: string;
+  limit: number;
+  windowSeconds: number;
+  resetAt: string;
+}) {
+  return rateLimitedDetailsSchema.parse(input);
+}
+
+/** Builds canonical `upstream_error` details for provider transport failures. */
+export function upstreamErrorDetails(input: {
+  service: "openrouter" | "resend";
+  status: number | null;
+}) {
+  return upstreamErrorDetailsSchema.parse(input);
+}
+
+/** Builds canonical `internal_error` details from an opaque server error id. */
+export function internalErrorDetails(errorId: string) {
+  return internalErrorDetailsSchema.parse({ errorId });
+}

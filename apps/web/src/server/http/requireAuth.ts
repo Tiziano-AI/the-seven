@@ -1,5 +1,6 @@
 import "server-only";
 
+import { forbiddenDetails, unauthorizedDetails } from "@the-seven/contracts";
 import type { AuthContext } from "./auth";
 import { EdgeError } from "./errors";
 
@@ -13,7 +14,7 @@ export function requireAuth(auth: AuthContext): AuthenticatedContext {
   throw new EdgeError({
     kind: "unauthorized",
     message: "Missing or invalid authentication",
-    details: { reason: auth.kind === "invalid" ? auth.reason : "missing_auth" },
+    details: unauthorizedDetails(auth.kind === "invalid" ? auth.reason : "missing_auth"),
     status: 401,
   });
 }
@@ -26,14 +27,14 @@ export function requireByokAuth(auth: AuthContext): ByokAuthenticatedContext {
     throw new EdgeError({
       kind: "forbidden",
       message: "This endpoint requires BYOK authentication",
-      details: { reason: "demo_not_allowed" },
+      details: forbiddenDetails("demo_not_allowed"),
       status: 403,
     });
   }
   throw new EdgeError({
     kind: "unauthorized",
     message: "Missing or invalid authentication",
-    details: { reason: auth.kind === "invalid" ? auth.reason : "missing_auth" },
+    details: unauthorizedDetails(auth.kind === "invalid" ? auth.reason : "missing_auth"),
     status: 401,
   });
 }

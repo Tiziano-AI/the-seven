@@ -8,6 +8,7 @@ import {
   JOB_SUPERVISOR_POLL_INTERVAL_MS,
 } from "@the-seven/config";
 import { claimRunnableJobs, markJobFailed, renewJobLease } from "@the-seven/db";
+import { redactErrorMessage } from "../domain/redaction";
 import { orchestrateClaimedJob } from "./orchestrateSession";
 
 type ClaimedJob = Awaited<ReturnType<typeof claimRunnableJobs>>[number];
@@ -27,7 +28,7 @@ function buildLeaseExpiresAt(now: Date) {
 }
 
 function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return redactErrorMessage(error, String(error));
 }
 
 async function runClaimedJob(job: ClaimedJob) {
