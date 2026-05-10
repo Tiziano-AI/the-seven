@@ -73,6 +73,11 @@ const OPENROUTER_CATALOG_2026_05_10: Record<string, CatalogFixture> = {
     completionUsdPerMillion: 1.25,
     supportedParameters: SUPPORTS_OPENAI_DEFAULT,
   },
+  "openai/gpt-5.5": {
+    promptUsdPerMillion: 5,
+    completionUsdPerMillion: 30,
+    supportedParameters: SUPPORTS_OPENAI_DEFAULT,
+  },
   "openai/gpt-5.5-pro": {
     promptUsdPerMillion: 30,
     completionUsdPerMillion: 180,
@@ -88,15 +93,20 @@ const OPENROUTER_CATALOG_2026_05_10: Record<string, CatalogFixture> = {
     completionUsdPerMillion: 1.95,
     supportedParameters: SUPPORTS_FULL_DEFAULT,
   },
-  "x-ai/grok-4.3": {
+  "qwen/qwen3.6-max-preview": {
+    promptUsdPerMillion: 1.04,
+    completionUsdPerMillion: 6.24,
+    supportedParameters: SUPPORTS_FULL_DEFAULT,
+  },
+  "x-ai/grok-4.20": {
     promptUsdPerMillion: 1.25,
     completionUsdPerMillion: 2.5,
     supportedParameters: SUPPORTS_FULL_DEFAULT,
   },
-  "xiaomi/mimo-v2.5": {
-    promptUsdPerMillion: 0.4,
-    completionUsdPerMillion: 2,
-    supportedParameters: ["temperature", "top_p", "reasoning"],
+  "x-ai/grok-4.3": {
+    promptUsdPerMillion: 1.25,
+    completionUsdPerMillion: 2.5,
+    supportedParameters: SUPPORTS_FULL_DEFAULT,
   },
   "xiaomi/mimo-v2.5-pro": {
     promptUsdPerMillion: 1,
@@ -121,19 +131,19 @@ const EXPECTED_ROSTERS = {
     "openai/gpt-5.4-nano",
   ],
   founding: [
-    "google/gemini-3.1-pro-preview",
+    "openai/gpt-5.5",
     "anthropic/claude-opus-4.7",
-    "x-ai/grok-4.3",
-    "deepseek/deepseek-v4-pro",
-    "xiaomi/mimo-v2.5-pro",
+    "google/gemini-3.1-pro-preview",
     "moonshotai/kimi-k2.6",
+    "xiaomi/mimo-v2.5-pro",
+    "x-ai/grok-4.3",
     "openai/gpt-5.5-pro",
   ],
   lantern: [
+    "qwen/qwen3.6-max-preview",
     "deepseek/deepseek-v4-pro",
+    "x-ai/grok-4.20",
     "qwen/qwen3.6-plus",
-    "xiaomi/mimo-v2.5",
-    "minimax/minimax-m2.7",
     "z-ai/glm-5.1",
     "mistralai/mistral-medium-3-5",
     "anthropic/claude-sonnet-4.6",
@@ -168,6 +178,14 @@ describe("built-in council rosters", () => {
         expect(OPENROUTER_CATALOG_2026_05_10[member.model.modelId]).toBeDefined();
       }
     }
+  });
+
+  test("built-in model ids are unique across tier clusters", () => {
+    const ids = Object.values(BUILT_IN_COUNCILS).flatMap((council) =>
+      council.members.map((member) => member.model.modelId),
+    );
+
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   test("Commons is the paid low-cost demo roster", () => {

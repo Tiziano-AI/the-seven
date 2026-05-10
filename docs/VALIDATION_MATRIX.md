@@ -59,10 +59,12 @@ This is the required verification pyramid for the launch-candidate milestone.
 ## Provider
 
 - built-in councils validate against a mocked 2026-05-10 OpenRouter catalog
-- Founding uses current best-of-best OpenRouter model IDs for BYOK
+- Founding uses current best-of-best OpenRouter model IDs for BYOK and treats
+  provider diversity as a tie-breaker only
 - Lantern uses a declared mid-tier bridge roster rather than leftovers
 - Commons uses paid low-cost demo model IDs with nonzero pricing and no
   `:free`, `~latest`, preview aliases, or catalog expiration date
+- all 21 built-in model IDs are distinct across tier clusters
 - unsupported built-in tuning defaults are `null`
 - unsupported non-null user tuning is denied before provider execution
 - supported tuning is sent

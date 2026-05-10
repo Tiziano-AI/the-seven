@@ -29,7 +29,7 @@ It also offers a zero-friction demo path (email → magic link) that uses a serv
   - Councils are saved 7-slot lineups (`A–G`) that define the 6 “members” + the final “verdict” model.
   - Prompts are editable only at the phase layer (Phase 1/2/3). There are no per-member prompt overrides.
   - Members may optionally expose a small set of high-signal tuning controls when the selected model supports them.
-  - Three built-in councils ship as immutable templates: Founding is the BYOK best-of-best roster, Lantern is the deliberate mid-tier bridge, and Commons is the paid low-cost demo roster; users Duplicate to edit their own.
+  - Three built-in councils ship as immutable templates: Founding is the BYOK best-of-best roster, Lantern is the deliberate mid-tier bridge, and Commons is the paid low-cost demo roster. The 21 built-in model IDs are distinct across those tier clusters; users Duplicate to edit their own.
 - Demo constraints:
   - Demo runs use the Commons Council only; councils and models are not editable.
   - Prompts and attachments behave the same as BYOK runs.
