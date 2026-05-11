@@ -120,6 +120,16 @@ No runtime code remains in `client/`, `server/`, or `shared/`.
 - Playwright supports a `webServer` config that can either start a server or
   reuse an existing one, which lets `pnpm local:live` own app startup.
   - Source: `vendor:playwright:1.59.1:https://playwright.dev/docs/test-webserver`
+- NextResponse redirect responses take an explicit URL, and NextRequest
+  `nextUrl` is the parsed current request URL. Redirect contracts that must
+  land on the public browser origin use the config-owned public origin rather
+  than a proxy- or adapter-materialized request URL.
+  - Source: `vendor:next:16.2.1:https://nextjs.org/docs/app/api-reference/functions/next-response`
+  - Source: `vendor:next:16.2.1:https://nextjs.org/docs/app/api-reference/functions/next-request`
+- Fetch Metadata defines `Sec-Fetch-Site` as the request initiator/target
+  relationship. `same-origin` is same-origin, `same-site` is not accepted as
+  same-origin authority for demo-cookie mutation, and `cross-site` is denied.
+  - Source: `vendor:w3c:fetch-metadata:https://www.w3.org/TR/fetch-metadata/#sec-fetch-site-header`
 - Resend documents that inbound email webhooks carry metadata and require the
   Received Emails API for body retrieval. It also documents list and retrieve
   endpoints for received emails and states that inbound emails are stored even
@@ -136,7 +146,9 @@ No runtime code remains in `client/`, `server/`, or `shared/`.
 
 All machine-facing routes live under `/api/v1`.
 
-`packages/contracts/src/http/registry.ts` owns every route row. Each row declares:
+`packages/contracts/src/http/registry.ts` owns the public registry types,
+lookup helper, and path builder. `packages/contracts/src/http/registryRoutes.ts`
+owns the route row data. Each row declares:
 
 - method,
 - path pattern,
@@ -157,6 +169,13 @@ Route input parsing is single-pass. The web adapter parses path params, query,
 and body once through the registry schemas, then passes the transformed outputs
 to handlers. Handlers never re-parse transformed path params such as council
 `locator`.
+
+Adapter-emitted denials are explicit registry rows. JSON syntax failures use
+`invalid_json` with status 400, oversized bodies use `body_too_large` with
+status 413, non-JSON bodies use `invalid_content_type` with status 415, invalid
+ingress headers use `invalid_ingress` with status 400, cookie-auth mutating
+requests use `same_origin_required` with status 403, and demo consume host
+admission uses `public_origin_required` with status 403.
 
 ### API Routes
 
@@ -248,7 +267,7 @@ Request admission is split into two process edges:
 
 1. Metadata admission creates a server-owned trace ID, parses
    `X-Seven-Ingress`, bounds client metadata, and resolves IP only from direct
-   request state or explicitly trusted proxy rules.
+   request state. Spoofable proxy client-IP headers are ignored.
 2. Auth admission validates BYOK keys upstream before user creation and
    validates demo cookies against the demo-session table.
 
@@ -260,25 +279,44 @@ ingress version deny as `invalid_input`; they never fall back to `web`.
 Server trace IDs are canonical audit truth. Client trace/request IDs are
 optional bounded metadata only.
 
+Cookie-auth mutating routes accept same-origin browser requests when `Origin` or
+`Referer` matches `SEVEN_PUBLIC_ORIGIN`, or when browser-owned Fetch Metadata
+reports `Sec-Fetch-Site: same-origin`. They reject missing, malformed,
+cross-site, and same-site-but-not-same-origin evidence with
+`same_origin_required`. Non-production local proof also admits the current
+request origin so `SEVEN_BASE_URL` can target loopback while
+`SEVEN_PUBLIC_ORIGIN` remains the public browser authority; production admits
+only the configured public origin or browser-owned `same-origin` fetch metadata.
+
 ## Demo Auth
 
 `POST /api/v1/demo/request` accepts an email address, applies rate limits before
 user or magic-link creation, creates a one-time magic-link token, and sends an
-email through Resend.
+email through Resend. `SEVEN_PUBLIC_ORIGIN` is the canonical origin for the
+email link and must be the public browser origin for the deployed service.
 
 The email link targets:
 
 ```text
-/api/v1/demo/consume?token=<one-time-token>
+<SEVEN_PUBLIC_ORIGIN>/api/v1/demo/consume?token=<one-time-token>
 ```
 
-`GET /api/v1/demo/consume` validates the token, marks it used, creates a demo
-session, sets the demo cookie, and redirects to `/`. Missing, reused, expired,
-or invalid tokens return the typed denial envelope. Browser localStorage never
-stores a demo token.
+`GET /api/v1/demo/consume` first admits only requests whose `Host` header maps
+to `SEVEN_PUBLIC_ORIGIN`, except explicit non-production loopback development.
+Wrong-host requests return the typed `public_origin_required` denial before
+rate-limit mutation or token consumption. Admitted API requests validate the
+token, mark it used, create a demo session, set the demo cookie, and return a
+`303` redirect to `<SEVEN_PUBLIC_ORIGIN>/`. Missing, reused, expired, or invalid
+tokens for API ingress return the typed denial envelope. Browser ingress for
+missing, reused, expired, invalid, or disabled demo links returns a `303`
+redirect to `<SEVEN_PUBLIC_ORIGIN>/?demo_link=<state>`, where the home screen
+renders the recovery state and lets the user request a fresh link. Browser
+localStorage never stores a demo token.
 
 `GET /api/v1/demo/session` returns the active cookie session metadata for UI
-bootstrap. `POST /api/v1/demo/logout` clears the cookie.
+bootstrap. `POST /api/v1/demo/logout` revokes the demo session row before the
+adapter clears the cookie; a UI logout is not considered complete until the
+server acknowledges that authority change.
 
 ## Provider Capability
 
@@ -423,6 +461,13 @@ there are no migration compatibility layers.
   requirements.
 - `playwrightProjection`: browser test projection from live/demo proof.
 
+`SEVEN_PUBLIC_ORIGIN` is parsed as a bare HTTP(S) origin. Paths, query strings,
+fragments, credentials, and non-HTTP schemes are rejected instead of silently
+normalized. In production it must be HTTPS and non-loopback. Live proof includes
+`SEVEN_PUBLIC_ORIGIN` in its required key set because `SEVEN_BASE_URL` is only
+the HTTP target for the proof harness, not the authority for user-visible links,
+same-origin checks, OpenRouter referer headers, or post-consume redirects.
+
 `pnpm local:doctor` proves local development readiness and does not require live
 provider keys. `pnpm local:doctor --live` proves live-proof key presence and
 secret hygiene. `pnpm local:live` runs the live doctor profile before live work.
@@ -471,7 +516,12 @@ proof-owned demo rate-limit buckets for `SEVEN_DEMO_TEST_EMAIL`, loopback IP
 scopes, and the demo proof's global demo scopes before it requests a fresh
 magic link. Product rate limits remain enforced in the route and covered by the
 deterministic auth/security tests; the live harness cleanup does not change
-runtime admission behavior.
+runtime admission behavior. The live demo proof retrieves the just-requested
+Resend email body and asserts that the absolute consume-link origin equals the
+server runtime `SEVEN_PUBLIC_ORIGIN` before it follows the link. It also asserts
+that the consume response redirects to `<SEVEN_PUBLIC_ORIGIN>/`, so a proxy,
+adapter, or browser cannot silently land the user on a localhost or internal
+origin after a correct email click.
 
 When live keys are absent, `HANDOFF.md` records `[blocked]` with the exact
 missing keys. When a live provider key is present but quota-limited,
