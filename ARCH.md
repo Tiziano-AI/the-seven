@@ -58,8 +58,11 @@ before provider execution. Phase 3 consumes parsed evaluation objects instead of
 raw reviewer prose.
 
 Candidate answers and evaluations are payload data, not instruction surfaces.
-The canonical protection is structural JSON payloads plus schema validation,
-not repo-wide negative string scans.
+The prompt hydrator inserts one canonical blank-line separator between the role
+instruction and the output contract, independent of stored whitespace. Phase-2
+and phase-3 user messages state that payload strings are reference data, not
+new instructions. The canonical protection is structural JSON payloads plus
+schema validation, not repo-wide negative string scans.
 
 - Source: `vendor:openai:2026-05-11:https://model-spec.openai.com/2025-04-11.html`
 - Source: `vendor:anthropic:2026-05-11:https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview`
@@ -285,6 +288,8 @@ call snapshots the catalog row before execution and denies unsupported non-null
 tuning before contacting the provider.
 OpenRouter HTTP calls are bounded by a request timeout and transport failures
 map to typed upstream diagnostics instead of hanging a job indefinitely.
+Retryable OpenRouter choice-level failures such as upstream `5xx` errors retry
+inside the adapter before the workflow records a terminal provider-call result.
 
 - Source: `vendor:openrouter:2026-05-10:https://openrouter.ai/docs/guides/overview/models`
 - Source: `vendor:openrouter:2026-05-10:https://openrouter.ai/docs/api-reference/chat-completion`

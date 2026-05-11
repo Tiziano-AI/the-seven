@@ -14,6 +14,7 @@ vi.mock("@the-seven/config", () => ({
 }));
 
 import {
+  callOpenRouter,
   materializeCouncilMemberTuningInput,
   type OpenRouterRequestFailedError,
   validateOpenRouterApiKey,
@@ -48,5 +49,51 @@ describe("OpenRouter tuning materialization", () => {
       name: "OpenRouterRequestFailedError",
       status: null,
     } satisfies Partial<OpenRouterRequestFailedError>);
+  });
+
+  test("retries retryable OpenRouter choice errors", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "gen-failed",
+            model: "provider/model",
+            choices: [
+              {
+                message: { role: "assistant", content: null },
+                error: {
+                  code: 502,
+                  message: "upstream unavailable",
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "gen-ok",
+            model: "provider/model",
+            choices: [
+              {
+                message: { role: "assistant", content: "done" },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await callOpenRouter("sk-or-test", {
+      model: "provider/model",
+      messages: [{ role: "user", content: "hello" }],
+    });
+
+    expect(response.id).toBe("gen-ok");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

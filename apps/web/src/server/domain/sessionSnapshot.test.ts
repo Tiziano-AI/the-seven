@@ -28,8 +28,8 @@ describe("session snapshot prompt materialization", () => {
       userMessage: "Question?",
       attachments: [],
       outputFormats: {
-        phase1: "\n\nOutput: Markdown.",
-        phase2: "\n\nOutput: JSON.",
+        phase1: "Output: Markdown.",
+        phase2: " Output: JSON.",
         phase3: "\n\nOutput: Markdown final.",
       },
       council: {

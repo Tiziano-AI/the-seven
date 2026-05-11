@@ -254,6 +254,19 @@ function isRetryableStatus(status: number | null): boolean {
   return status === 408 || status === 409 || status === 429 || (status >= 500 && status <= 599);
 }
 
+function retryableChoiceError(response: OpenRouterResponse): OpenRouterRequestFailedError | null {
+  const choiceError = response.choices[0]?.error;
+  if (!choiceError || !isRetryableStatus(choiceError.code)) {
+    return null;
+  }
+
+  return new OpenRouterRequestFailedError({
+    status: choiceError.code,
+    code: choiceError.code,
+    message: `OpenRouter choice error ${choiceError.code}: ${choiceError.message}`,
+  });
+}
+
 function materializeParam(input: {
   parameter: string;
   supported: ReadonlySet<string>;
@@ -343,7 +356,12 @@ export async function callOpenRouter(
         method: "POST",
         body: normalized,
       });
-      return openRouterChatCompletionSchema.parse(data);
+      const response = openRouterChatCompletionSchema.parse(data);
+      const choiceRetryError = retryableChoiceError(response);
+      if (choiceRetryError) {
+        throw choiceRetryError;
+      }
+      return response;
     } catch (error) {
       lastError = error;
       const retryable =

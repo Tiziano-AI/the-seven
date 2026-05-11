@@ -96,5 +96,5 @@ export function buildSystemPromptForPhase(
         ? snapshot.outputFormats.phase2
         : snapshot.outputFormats.phase3;
 
-  return `${basePrompt}${outputFormat}`;
+  return `${basePrompt.trimEnd()}\n\n${outputFormat.trimStart()}`;
 }

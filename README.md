@@ -47,7 +47,10 @@ The Seven is a privacy-first multi-model council for hard questions.
 - Prompt payloads:
   - the app owns council orchestration; model prompts do not narrate membership
     or hidden workflow
+  - system prompts join the editable role instruction and immutable output
+    contract with one canonical blank-line separator
   - phase-2 candidate answers and phase-3 evaluations travel as JSON payloads
+    whose strings are treated as data, not new instructions
   - phase-2 review JSON is requested through OpenRouter structured output,
     validated, normalized, and only then persisted as phase-3 reference material
 - Auth:

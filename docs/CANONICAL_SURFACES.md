@@ -61,6 +61,9 @@ app is not.
 - Phase-2 review execution requires structured-output support and sends the
   contracts-owned JSON schema as `response_format`; unsupported review models
   are denied before provider execution.
+- Prompt hydration joins role instructions and output contracts with one
+  canonical separator, and phase-2/phase-3 JSON payload strings are reference
+  data rather than new instruction surfaces.
 
 ## Operator Validation Owners
 
@@ -77,6 +80,8 @@ The gate may reject:
 - root entries that conflict with the owners above,
 - package dependencies that would reintroduce a parallel runtime/toolchain,
 - exact stale executable tokens in files that own live behavior.
+- prompt materialization drift where stored whitespace changes the hydrated
+  system instruction.
 
 The gate must not reject arbitrary prose just because it names a historical
 surface. Replacement maps and handoffs may mention prior surfaces when that
