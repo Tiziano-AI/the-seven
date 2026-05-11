@@ -30,7 +30,12 @@ implemented and validated.
   and phase-3 reference material are JSON payload data, not XML-style
   instruction wrappers. Phase-2 review calls send the contracts-owned structured
   JSON schema through OpenRouter `response_format` and persist only validated,
-  normalized review JSON.
+  normalized review JSON. Prompt hydration now inserts one canonical blank-line
+  separator between role instructions and output contracts, so schema trimming
+  cannot collapse them together.
+- OpenRouter retry covers retryable choice-level upstream errors such as `502`,
+  not only transport or HTTP status failures. Production deploy proof exposed
+  this with a DeepSeek phase-2 choice error after local proof was green.
 - A local live proof with Commons xhigh reasoning failed the 10-minute demo
   deadline while direct OpenRouter probes with low reasoning returned quickly
   for `deepseek/deepseek-v4-flash`, `openai/gpt-5.4-nano`,
@@ -54,27 +59,28 @@ implemented and validated.
 - `pnpm local:db:up` passed.
 - `pnpm run db:bootstrap:check` passed.
 - `uv run --python 3.12 devtools/gate.py --full` passed with lint, typecheck,
-  20 Vitest files / 72 tests, production build, bootstrap check, and Playwright
+  25 Vitest files / 86 tests, production build, bootstrap check, and Playwright
   smoke.
 - `pnpm local:doctor --live` passed.
 - Direct OpenRouter BYOK probes on 2026-05-10 completed for all 21 selected
   built-in model IDs with tier-owned reasoning efforts. The 21 selected IDs are
   distinct across Founding, Lantern, and Commons.
 - Latest `pnpm local:live` passed end to end after the structured phase-2
-  output fix, distinct roster refresh, and tier-owned reasoning policy:
+  output fix, prompt-hydration separator fix, OpenRouter choice-level retry,
+  distinct roster refresh, and tier-owned reasoning policy:
   - BYOK auth validation, model validation, autocomplete, and council CRUD
     passed.
-  - BYOK session `9` completed with 6 phase-1 responses, 6 phase-2 reviews, 1
+  - BYOK session `15` completed with 6 phase-1 responses, 6 phase-2 reviews, 1
     synthesis, completed provider diagnostics for all phases, and no
     provider-call errors.
   - Demo magic-link request, Resend received-email lookup, consume redirect,
     HttpOnly demo cookie session, and demo session submit passed.
-  - Demo session `10` completed with 6 phase-1 responses, 6 phase-2 reviews, 1
+  - Demo session `16` completed with 6 phase-1 responses, 6 phase-2 reviews, 1
     synthesis, completed provider diagnostics for all phases, and no
     provider-call errors.
   - Browser smoke passed for home, demo-authenticated councils page, and the
     completed demo session page.
-  - Provider diagnostics for sessions `9` and `10` show phase-2 calls sent
+  - Provider diagnostics for sessions `15` and `16` show phase-2 calls sent
     `response_format`, had empty denied-parameter arrays, and recorded no
     provider or choice errors.
 

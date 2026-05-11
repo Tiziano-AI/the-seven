@@ -8,9 +8,27 @@ export const DEFAULT_PHASE_PROMPTS = {
 } as const;
 
 export const DEFAULT_OUTPUT_FORMATS = {
-  phase1: "\n\nOutput: Markdown.",
-  phase2:
-    '\n\nOutput: return one JSON object and nothing else. Do not wrap it in Markdown.\n\nShape:\n{\n  "ranking": ["candidate_id"],\n  "reviews": [\n    {\n      "candidate_id": "candidate_id",\n      "strengths": ["..."],\n      "weaknesses": ["..."],\n      "critical_errors": [],\n      "missing_evidence": [],\n      "verdict_input": "..."\n    }\n  ],\n  "best_final_answer_inputs": ["..."],\n  "major_disagreements": []\n}',
+  phase1: "Output: Markdown.",
+  phase2: `Output: return one JSON object and nothing else. Do not wrap it in Markdown.
+\`ranking\` must contain exactly every candidate ID from the input payload once.
+\`reviews\` must contain exactly one review object for every candidate ID.
+
+Shape:
+{
+  "ranking": ["candidate_id"],
+  "reviews": [
+    {
+      "candidate_id": "candidate_id",
+      "strengths": ["..."],
+      "weaknesses": ["..."],
+      "critical_errors": [],
+      "missing_evidence": [],
+      "verdict_input": "..."
+    }
+  ],
+  "best_final_answer_inputs": ["..."],
+  "major_disagreements": []
+}`,
   phase3:
-    "\n\nOutput: Markdown. Start with the answer. Add assumptions, trade-offs, or caveats only when they materially improve the answer.",
+    "Output: Markdown. Start with the answer. Add assumptions, trade-offs, or caveats only when they materially improve the answer.",
 } as const;

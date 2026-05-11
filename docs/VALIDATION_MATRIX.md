@@ -70,6 +70,8 @@ This is the required verification pyramid for the launch-candidate milestone.
 - phase-2 review calls require OpenRouter structured-output support and send
   `response_format` with provider parameter enforcement
 - supported tuning is sent
+- retryable OpenRouter choice-level upstream errors retry before a terminal
+  provider-call result is recorded
 - OpenRouter/Resend errors are redacted
 - provider diagnostics persist requested model, catalog freshness, supported
   params, sent params, denied params, upstream status/code, response model,
@@ -83,6 +85,8 @@ This is the required verification pyramid for the launch-candidate milestone.
 - job claim, lease renewal, expiry, and reclaim
 - rate-limit buckets
 - session snapshot integrity
+- prompt materialization inserts one canonical separator between phase
+  instructions and output contracts
 - provider-call persistence
 - credential decrypt failure
 - invalid snapshot failure
@@ -97,6 +101,8 @@ This is the required verification pyramid for the launch-candidate milestone.
 - provider rate-limit surfacing
 - phase-2 evaluation JSON validates, normalizes, and rejects missing, extra, or
   duplicated candidate IDs before phase 3
+- phase-2 and phase-3 JSON payload builders preserve hostile strings as data
+  and do not create delimiter-based instruction surfaces
 - bounded retry behavior
 - restart recovery from leased jobs
 
