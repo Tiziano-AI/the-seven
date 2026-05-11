@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   isReviewerMemberPosition,
+  type PhaseTwoEvaluation,
   REVIEWER_MEMBER_POSITIONS,
   type SessionSnapshot,
   SYNTHESIZER_MEMBER_POSITION,
@@ -28,7 +29,13 @@ import {
   OpenRouterPhaseRateLimitError,
   runOpenRouterPhaseCall,
 } from "./openrouterRun";
-import { buildReviewPrompt, buildSynthesisPrompt } from "./prompts";
+import {
+  buildReviewPrompt,
+  buildSynthesisPrompt,
+  formatPhaseTwoEvaluationContent,
+  parsePhaseTwoEvaluation,
+  phaseTwoCandidateIds,
+} from "./prompts";
 
 type ResponseArtifact = Readonly<{
   memberPosition: (typeof REVIEWER_MEMBER_POSITIONS)[number];
@@ -37,6 +44,11 @@ type ResponseArtifact = Readonly<{
 }>;
 
 type ReviewArtifact = ResponseArtifact;
+
+type EvaluationArtifact = Readonly<{
+  memberPosition: (typeof REVIEWER_MEMBER_POSITIONS)[number];
+  evaluation: PhaseTwoEvaluation;
+}>;
 
 function toFailureKind(error: unknown, fallback: SessionFailureKind): SessionFailureKind {
   return error instanceof OpenRouterPhaseRateLimitError ? "openrouter_rate_limited" : fallback;
@@ -90,6 +102,28 @@ function toReviewArtifacts(
         content: artifact.content,
       };
     });
+}
+
+function toEvaluationArtifacts(input: {
+  responses: ReadonlyArray<ResponseArtifact>;
+  reviews: ReadonlyArray<ReviewArtifact>;
+}): EvaluationArtifact[] {
+  return input.reviews.map((review) => {
+    const parsed = parsePhaseTwoEvaluation({
+      content: review.content,
+      candidateIds: phaseTwoCandidateIds({
+        responses: input.responses,
+        reviewerMemberPosition: review.memberPosition,
+      }),
+    });
+    if (!parsed.ok) {
+      throw parsed.error;
+    }
+    return {
+      memberPosition: review.memberPosition,
+      evaluation: parsed.evaluation,
+    };
+  });
 }
 
 async function runParallel(tasks: ReadonlyArray<() => Promise<void>>) {
@@ -284,13 +318,24 @@ export async function orchestrateClaimedJob(input: {
         throw result.error;
       }
 
+      const parsedEvaluation = parsePhaseTwoEvaluation({
+        content: result.content,
+        candidateIds: phaseTwoCandidateIds({
+          responses: phaseOneArtifacts,
+          reviewerMemberPosition: memberPosition,
+        }),
+      });
+      if (!parsedEvaluation.ok) {
+        throw parsedEvaluation.error;
+      }
+
       await createSessionArtifact({
         sessionId: session.id,
         phase: 2,
         artifactKind: "review",
         memberPosition,
         modelId: member.model.modelId,
-        content: result.content,
+        content: formatPhaseTwoEvaluationContent(parsedEvaluation.evaluation),
       });
     });
 
@@ -322,6 +367,23 @@ export async function orchestrateClaimedJob(input: {
       return;
     }
 
+    let phaseTwoEvaluations: EvaluationArtifact[];
+    try {
+      phaseTwoEvaluations = toEvaluationArtifacts({
+        responses: phaseOneArtifacts,
+        reviews: phaseTwoArtifacts,
+      });
+    } catch (error) {
+      await failSession({
+        jobId: input.jobId,
+        leaseOwner: input.leaseOwner,
+        sessionId: session.id,
+        failureKind: "phase2_inference_failed",
+        error,
+      });
+      return;
+    }
+
     const existingSynthesis = await getSessionArtifact({
       sessionId: session.id,
       artifactKind: "synthesis",
@@ -346,7 +408,7 @@ export async function orchestrateClaimedJob(input: {
             content: buildSynthesisPrompt({
               userMessage: snapshot.userMessage,
               responses: phaseOneArtifacts,
-              reviews: phaseTwoArtifacts,
+              evaluations: phaseTwoEvaluations,
             }),
           },
         ],

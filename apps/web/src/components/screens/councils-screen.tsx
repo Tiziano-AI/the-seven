@@ -244,7 +244,7 @@ export function CouncilsScreen() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-phase1-output`}>Phase 1 Output Format</Label>
+              <Label htmlFor={`${fieldPrefix}-phase1-output`}>Answer Output Contract</Label>
               <Textarea
                 id={`${fieldPrefix}-phase1-output`}
                 className="min-h-[110px]"
@@ -253,7 +253,7 @@ export function CouncilsScreen() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-phase1-prompt`}>Phase 1 Prompt</Label>
+              <Label htmlFor={`${fieldPrefix}-phase1-prompt`}>Answer Instructions</Label>
               <Textarea
                 id={`${fieldPrefix}-phase1-prompt`}
                 value={phasePrompts.phase1}
@@ -264,7 +264,7 @@ export function CouncilsScreen() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-phase2-output`}>Phase 2 Output Format</Label>
+              <Label htmlFor={`${fieldPrefix}-phase2-output`}>Evaluation JSON Contract</Label>
               <Textarea
                 id={`${fieldPrefix}-phase2-output`}
                 className="min-h-[110px]"
@@ -273,7 +273,7 @@ export function CouncilsScreen() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-phase2-prompt`}>Phase 2 Prompt</Label>
+              <Label htmlFor={`${fieldPrefix}-phase2-prompt`}>Evaluation Instructions</Label>
               <Textarea
                 id={`${fieldPrefix}-phase2-prompt`}
                 value={phasePrompts.phase2}
@@ -284,7 +284,7 @@ export function CouncilsScreen() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-phase3-output`}>Phase 3 Output Format</Label>
+              <Label htmlFor={`${fieldPrefix}-phase3-output`}>Final Answer Output Contract</Label>
               <Textarea
                 id={`${fieldPrefix}-phase3-output`}
                 className="min-h-[110px]"
@@ -293,7 +293,7 @@ export function CouncilsScreen() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor={`${fieldPrefix}-phase3-prompt`}>Phase 3 Prompt</Label>
+              <Label htmlFor={`${fieldPrefix}-phase3-prompt`}>Final Answer Instructions</Label>
               <Textarea
                 id={`${fieldPrefix}-phase3-prompt`}
                 value={phasePrompts.phase3}

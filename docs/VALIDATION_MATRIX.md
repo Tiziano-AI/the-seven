@@ -67,6 +67,8 @@ This is the required verification pyramid for the launch-candidate milestone.
 - all 21 built-in model IDs are distinct across tier clusters
 - unsupported built-in tuning defaults are `null`
 - unsupported non-null user tuning is denied before provider execution
+- phase-2 review calls require OpenRouter structured-output support and send
+  `response_format` with provider parameter enforcement
 - supported tuning is sent
 - OpenRouter/Resend errors are redacted
 - provider diagnostics persist requested model, catalog freshness, supported
@@ -93,6 +95,8 @@ This is the required verification pyramid for the launch-candidate milestone.
 - completed-session idempotency
 - rerun isolation
 - provider rate-limit surfacing
+- phase-2 evaluation JSON validates, normalizes, and rejects missing, extra, or
+  duplicated candidate IDs before phase 3
 - bounded retry behavior
 - restart recovery from leased jobs
 
