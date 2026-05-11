@@ -10,6 +10,9 @@ The Seven is a privacy-first multi-model council for hard questions.
   and preserves the full record.
 - User-defined councils persist as one aggregate definition with shared phase
   prompts and exactly seven member slots.
+- Default prompts are intentionally plain one-shot roles: phase 1 answers,
+  phase 2 evaluates candidates, and phase 3 produces the final answer from the
+  request, candidates, and parsed evaluations.
 - Identity is canonicalized as `users(kind, principal)`: BYOK principals are
   hashed validated API keys and demo principals are normalized emails.
 
@@ -41,6 +44,12 @@ The Seven is a privacy-first multi-model council for hard questions.
   - Commons: paid low-cost demo roster with low reasoning effort and no free or
     preview aliases
   - all 21 built-in model IDs are distinct across the three tier clusters
+- Prompt payloads:
+  - the app owns council orchestration; model prompts do not narrate membership
+    or hidden workflow
+  - phase-2 candidate answers and phase-3 evaluations travel as JSON payloads
+  - phase-2 review JSON is requested through OpenRouter structured output,
+    validated, normalized, and only then persisted as phase-3 reference material
 - Auth:
   - BYOK: `Authorization: Bearer <openrouter_api_key>`
   - Demo: `HttpOnly` cookie set by `GET /api/v1/demo/consume`

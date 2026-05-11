@@ -58,6 +58,9 @@ app is not.
   OpenRouter call.
 - Unsupported non-null tuning is denied before provider execution and records
   provider-call diagnostics.
+- Phase-2 review execution requires structured-output support and sends the
+  contracts-owned JSON schema as `response_format`; unsupported review models
+  are denied before provider execution.
 
 ## Operator Validation Owners
 

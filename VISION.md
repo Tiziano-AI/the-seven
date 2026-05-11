@@ -9,6 +9,9 @@ It also offers a zero-friction demo path (email → magic link) that uses a serv
 - People who already have an OpenRouter API key and want higher-quality answers than a single model run.
 - People who want a zero-friction demo before bringing their own key (email → magic link).
 - Users who want control: models and prompts are editable, defaults are always recoverable.
+- Users who want the orchestration to stay app-owned: provider models receive
+  plain one-shot answer, evaluation, or final-answer roles instead of product
+  mythology.
 
 ## Non‑Negotiables
 

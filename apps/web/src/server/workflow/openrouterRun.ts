@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { CouncilMemberTuning, MemberPosition } from "@the-seven/contracts";
-import { parseUsdAmountToMicros } from "@the-seven/contracts";
+import { parseUsdAmountToMicros, phaseTwoEvaluationResponseFormat } from "@the-seven/contracts";
 import {
   createProviderCall,
   listProviderCalls,
@@ -16,6 +16,7 @@ import {
   type OpenRouterRequest,
   OpenRouterRequestFailedError,
   type OpenRouterResponse,
+  type OpenRouterResponseFormat,
 } from "../adapters/openrouter";
 import { redactErrorMessage } from "../domain/redaction";
 import { getModelCapability } from "../services/models";
@@ -46,6 +47,15 @@ type MessageCharCounts = Readonly<{
   systemChars: number;
   userChars: number;
   totalChars: number;
+}>;
+
+type PhaseResponseFormat = Readonly<{
+  options: Readonly<{
+    response_format?: OpenRouterResponseFormat;
+    provider?: Readonly<{ require_parameters: true }>;
+  }>;
+  sentParameters: string[];
+  deniedParameters: string[];
 }>;
 
 function getMessageCharCounts(messages: ReadonlyArray<OpenRouterMessage>): MessageCharCounts {
@@ -113,6 +123,33 @@ function extractAssistantContent(input: {
   }
 
   return content;
+}
+
+function materializePhaseResponseFormat(input: {
+  phase: 1 | 2 | 3;
+  supportedParameters: ReadonlyArray<string>;
+}): PhaseResponseFormat {
+  if (input.phase !== 2) {
+    return { options: {}, sentParameters: [], deniedParameters: [] };
+  }
+
+  const supported = new Set(input.supportedParameters);
+  if (!supported.has("response_format") || !supported.has("structured_outputs")) {
+    return {
+      options: {},
+      sentParameters: [],
+      deniedParameters: ["response_format"],
+    };
+  }
+
+  return {
+    options: {
+      response_format: phaseTwoEvaluationResponseFormat,
+      provider: { require_parameters: true },
+    },
+    sentParameters: ["response_format"],
+    deniedParameters: [],
+  };
 }
 
 async function fetchGenerationBestEffort(apiKey: string, generationId: string) {
@@ -245,21 +282,34 @@ export async function runOpenRouterPhaseCall(input: {
   const capability = await getModelCapability(input.modelId);
   const supportedParameters = capability?.supportedParameters ?? [];
   const materialized = materializeCouncilMemberTuningInput(input.tuning, supportedParameters);
+  const phaseResponseFormat = materializePhaseResponseFormat({
+    phase: input.phase,
+    supportedParameters,
+  });
   const request = buildOpenRouterRequest({
     modelId: input.modelId,
     messages: input.messages,
-    tuningOptions: materialized.options,
+    tuningOptions: {
+      ...materialized.options,
+      ...phaseResponseFormat.options,
+    },
   });
   const requestStartedAt = new Date();
   let response: OpenRouterResponse | null = null;
   let generation: Awaited<ReturnType<typeof fetchGenerationBestEffort>> = null;
   let billingLookupStatus = "not_requested";
 
-  if (!capability || materialized.deniedParameters.length > 0) {
+  const deniedParameters = [
+    ...materialized.deniedParameters,
+    ...phaseResponseFormat.deniedParameters,
+  ];
+  const sentParameters = [...materialized.sentParameters, ...phaseResponseFormat.sentParameters];
+
+  if (!capability || deniedParameters.length > 0) {
     const responseCompletedAt = new Date();
     const error = new OpenRouterUnsupportedParameterError({
       modelId: input.modelId,
-      deniedParameters: capability ? materialized.deniedParameters : ["model"],
+      deniedParameters: capability ? deniedParameters : ["model"],
     });
     await recordProviderCall({
       sessionId: input.sessionId,
@@ -270,7 +320,7 @@ export async function runOpenRouterPhaseCall(input: {
       catalogRefreshedAt: capability?.refreshedAt ?? null,
       supportedParameters,
       sentParameters: [],
-      deniedParameters: capability ? materialized.deniedParameters : ["model"],
+      deniedParameters: capability ? deniedParameters : ["model"],
       requestStartedAt,
       responseCompletedAt,
       response: null,
@@ -301,8 +351,8 @@ export async function runOpenRouterPhaseCall(input: {
       messages: input.messages,
       catalogRefreshedAt: capability.refreshedAt,
       supportedParameters,
-      sentParameters: materialized.sentParameters,
-      deniedParameters: materialized.deniedParameters,
+      sentParameters,
+      deniedParameters,
       requestStartedAt,
       responseCompletedAt,
       response,
@@ -324,8 +374,8 @@ export async function runOpenRouterPhaseCall(input: {
       messages: input.messages,
       catalogRefreshedAt: capability.refreshedAt,
       supportedParameters,
-      sentParameters: materialized.sentParameters,
-      deniedParameters: materialized.deniedParameters,
+      sentParameters,
+      deniedParameters,
       requestStartedAt,
       responseCompletedAt,
       response,

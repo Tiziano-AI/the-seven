@@ -22,6 +22,8 @@ export type OpenRouterRequest = Readonly<{
   verbosity?: string;
   include_reasoning?: boolean;
   reasoning?: Readonly<{ effort?: string }>;
+  response_format?: OpenRouterResponseFormat;
+  provider?: Readonly<{ require_parameters?: boolean }>;
 }>;
 
 export type OpenRouterTuningOptions = Readonly<{
@@ -31,6 +33,11 @@ export type OpenRouterTuningOptions = Readonly<{
   verbosity?: string;
   include_reasoning?: boolean;
   reasoning?: Readonly<{ effort?: string }>;
+}>;
+
+export type OpenRouterResponseFormat = Readonly<{
+  type: string;
+  json_schema?: unknown;
 }>;
 
 export type MaterializedOpenRouterTuning = Readonly<{

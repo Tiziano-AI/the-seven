@@ -31,6 +31,40 @@ deleted instead of shimmed.
 - Live updates remain polling-based in v1. No parallel realtime transport is
   introduced.
 
+## Prompt and Payload Contract
+
+The app owns council orchestration. Provider models receive only the one-shot
+role needed for the current call:
+
+- phase 1 receives a plain assistant instruction plus the user request and
+  attachment context;
+- phase 2 receives a plain evaluator instruction plus the user request and the
+  candidate answers it must judge;
+- phase 3 receives a plain assistant instruction plus the user request,
+  candidate answers, and parsed phase-2 evaluations.
+
+Default prompts do not expose or narrate orchestration and do not include
+vendor-policy boilerplate. They are compact role contracts: answer, evaluate,
+and produce the best final answer.
+
+`packages/config/src/prompts.ts` owns the default phase prompt text and output
+formats. `apps/web/src/server/workflow/prompts.ts` owns the JSON payloads sent
+to phase 2 and phase 3. Phase 2 returns one JSON object; the workflow validates
+that it ranks and reviews exactly the candidate IDs present in the payload
+before the review artifact is accepted. The OpenRouter adapter requests a
+phase-2 structured JSON response with provider parameter enforcement whenever a
+review call is made; phase-2 models without structured-output support are denied
+before provider execution. Phase 3 consumes parsed evaluation objects instead of
+raw reviewer prose.
+
+Candidate answers and evaluations are payload data, not instruction surfaces.
+The canonical protection is structural JSON payloads plus schema validation,
+not repo-wide negative string scans.
+
+- Source: `vendor:openai:2026-05-11:https://model-spec.openai.com/2025-04-11.html`
+- Source: `vendor:anthropic:2026-05-11:https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview`
+- Source: `vendor:openrouter:2026-05-11:https://openrouter.ai/docs/api-reference/chat-completion`
+
 ## Canonical Repository Shape
 
 - `apps/web`
@@ -285,7 +319,7 @@ Current built-in rosters:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Founding | `openai/gpt-5.5` | `anthropic/claude-opus-4.7` | `google/gemini-3.1-pro-preview` | `moonshotai/kimi-k2.6` | `xiaomi/mimo-v2.5-pro` | `x-ai/grok-4.3` | `openai/gpt-5.5-pro` |
 | Lantern | `qwen/qwen3.6-max-preview` | `deepseek/deepseek-v4-pro` | `x-ai/grok-4.20` | `qwen/qwen3.6-plus` | `z-ai/glm-5.1` | `mistralai/mistral-medium-3-5` | `anthropic/claude-sonnet-4.6` |
-| Commons | `google/gemini-3.1-flash-lite` | `deepseek/deepseek-v4-flash` | `qwen/qwen3.6-35b-a3b` | `minimax/minimax-m2.7` | `mistralai/mistral-small-2603` | `arcee-ai/trinity-large-thinking` | `openai/gpt-5.4-nano` |
+| Commons | `google/gemini-3.1-flash-lite` | `deepseek/deepseek-v4-flash` | `qwen/qwen3.6-35b-a3b` | `minimax/minimax-m2.7` | `mistralai/mistral-small-2603` | `x-ai/grok-4.1-fast` | `openai/gpt-5.4-nano` |
 
 The 2026-05-10 catalog rows for these IDs expose text input/output, nonzero
 prompt and completion pricing, no expiration date, context windows from 196k to
@@ -315,7 +349,7 @@ Retired built-in IDs are not aliases. `openai/gpt-5.4`,
 `anthropic/claude-haiku-4.5`, `google/gemini-3.1-flash-lite-preview`,
 `kwaipilot/kat-coder-pro-v2`, `bytedance-seed/seed-2.0-lite`,
 `amazon/nova-premier-v1`, `amazon/nova-lite-v1`,
-`meta-llama/llama-4-scout`, `x-ai/grok-4.1-fast`,
+`meta-llama/llama-4-scout`, `arcee-ai/trinity-large-thinking`,
 `google/gemini-3-flash-preview`, `qwen/qwen3.6-flash`,
 `xiaomi/mimo-v2.5`, `stepfun/step-3.5-flash`,
 `nvidia/nemotron-3-super-120b-a12b`, and `z-ai/glm-4.7-flash` are removed from

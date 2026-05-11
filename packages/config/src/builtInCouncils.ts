@@ -36,7 +36,7 @@ const COMMONS_COUNCIL_MODEL_IDS: Record<number, string> = {
   3: "qwen/qwen3.6-35b-a3b",
   4: "minimax/minimax-m2.7",
   5: "mistralai/mistral-small-2603",
-  6: "arcee-ai/trinity-large-thinking",
+  6: "x-ai/grok-4.1-fast",
   7: "openai/gpt-5.4-nano",
 };
 

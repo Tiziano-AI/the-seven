@@ -23,11 +23,6 @@ const OPENROUTER_CATALOG_2026_05_10: Record<string, CatalogFixture> = {
     completionUsdPerMillion: 15,
     supportedParameters: SUPPORTS_FULL_DEFAULT,
   },
-  "arcee-ai/trinity-large-thinking": {
-    promptUsdPerMillion: 0.22,
-    completionUsdPerMillion: 0.85,
-    supportedParameters: SUPPORTS_FULL_DEFAULT,
-  },
   "deepseek/deepseek-v4-flash": {
     promptUsdPerMillion: 0.14,
     completionUsdPerMillion: 0.28,
@@ -103,6 +98,11 @@ const OPENROUTER_CATALOG_2026_05_10: Record<string, CatalogFixture> = {
     completionUsdPerMillion: 2.5,
     supportedParameters: SUPPORTS_FULL_DEFAULT,
   },
+  "x-ai/grok-4.1-fast": {
+    promptUsdPerMillion: 0.2,
+    completionUsdPerMillion: 0.5,
+    supportedParameters: SUPPORTS_FULL_DEFAULT,
+  },
   "x-ai/grok-4.3": {
     promptUsdPerMillion: 1.25,
     completionUsdPerMillion: 2.5,
@@ -127,7 +127,7 @@ const EXPECTED_ROSTERS = {
     "qwen/qwen3.6-35b-a3b",
     "minimax/minimax-m2.7",
     "mistralai/mistral-small-2603",
-    "arcee-ai/trinity-large-thinking",
+    "x-ai/grok-4.1-fast",
     "openai/gpt-5.4-nano",
   ],
   founding: [

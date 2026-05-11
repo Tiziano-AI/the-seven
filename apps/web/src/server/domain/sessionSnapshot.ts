@@ -22,13 +22,13 @@ export function formatSnapshotUserMessage(
     const ticks = content.match(/`+/g);
     const maxTicks = ticks ? Math.max(...ticks.map((value) => value.length)) : 0;
     const marker = "`".repeat(Math.max(3, maxTicks + 1));
-    return `${marker}markdown\n${content}\n${marker}\n`;
+    return `${marker}text\n${content}\n${marker}\n`;
   };
 
   let message = query.trimEnd();
-  message += "\n\n## Attachments\n";
+  message += "\n\nAdditional context from attachments:\n";
   for (const attachment of attachments) {
-    message += `\n### ${attachment.name}\n\n`;
+    message += `\nAttachment: ${attachment.name}\n\n`;
     message += fence(attachment.text.trimEnd());
   }
   return message;

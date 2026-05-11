@@ -4,6 +4,7 @@ export * from "./domain/councilDefinition";
 export * from "./domain/councilMemberTuning";
 export * from "./domain/councilRef";
 export * from "./domain/ingress";
+export * from "./domain/phaseEvaluation";
 export * from "./domain/phasePrompts";
 export * from "./domain/providerModels";
 export * from "./domain/sessionSnapshot";

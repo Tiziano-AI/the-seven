@@ -35,6 +35,9 @@ const runMocks = vi.hoisted(() => {
 const promptMocks = vi.hoisted(() => ({
   buildReviewPrompt: vi.fn(),
   buildSynthesisPrompt: vi.fn(),
+  formatPhaseTwoEvaluationContent: vi.fn(),
+  parsePhaseTwoEvaluation: vi.fn(),
+  phaseTwoCandidateIds: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -96,6 +99,9 @@ describe("orchestrateClaimedJob", () => {
       runMocks.runOpenRouterPhaseCall,
       promptMocks.buildReviewPrompt,
       promptMocks.buildSynthesisPrompt,
+      promptMocks.formatPhaseTwoEvaluationContent,
+      promptMocks.parsePhaseTwoEvaluation,
+      promptMocks.phaseTwoCandidateIds,
     ]) {
       mock.mockReset();
     }
@@ -118,6 +124,24 @@ describe("orchestrateClaimedJob", () => {
     credentialMocks.decryptJobCredential.mockReturnValue("api-key");
     promptMocks.buildReviewPrompt.mockReturnValue("review-prompt");
     promptMocks.buildSynthesisPrompt.mockReturnValue("synthesis-prompt");
+    promptMocks.phaseTwoCandidateIds.mockReturnValue(["A", "B", "C", "D", "E"]);
+    promptMocks.parsePhaseTwoEvaluation.mockReturnValue({
+      ok: true,
+      evaluation: {
+        ranking: ["A", "B", "C", "D", "E"],
+        reviews: ["A", "B", "C", "D", "E"].map((candidateId) => ({
+          candidate_id: candidateId,
+          strengths: ["strong"],
+          weaknesses: ["weak"],
+          critical_errors: [],
+          missing_evidence: [],
+          verdict_input: "Useful.",
+        })),
+        best_final_answer_inputs: ["useful"],
+        major_disagreements: [],
+      },
+    });
+    promptMocks.formatPhaseTwoEvaluationContent.mockReturnValue("canonical-evaluation-json\n");
     runMocks.runOpenRouterPhaseCall.mockImplementation(
       async ({ phase, memberPosition }: { phase: number; memberPosition: number }) => ({
         ok: true as const,

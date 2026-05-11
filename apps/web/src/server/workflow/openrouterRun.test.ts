@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const adapterMocks = vi.hoisted(() => ({
   callOpenRouter: vi.fn(),
@@ -29,6 +29,20 @@ vi.mock("../adapters/openrouter", async (importOriginal) => {
 import { OpenRouterUnsupportedParameterError, runOpenRouterPhaseCall } from "./openrouterRun";
 
 describe("runOpenRouterPhaseCall", () => {
+  beforeEach(() => {
+    for (const mock of [
+      adapterMocks.callOpenRouter,
+      adapterMocks.fetchOpenRouterGeneration,
+      dbMocks.createProviderCall,
+      dbMocks.listProviderCalls,
+      dbMocks.refreshSessionUsageTotals,
+      dbMocks.updateProviderCallCost,
+      modelMocks.getModelCapability,
+    ]) {
+      mock.mockReset();
+    }
+  });
+
   test("records and denies unsupported non-null tuning before provider execution", async () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
@@ -96,6 +110,76 @@ describe("runOpenRouterPhaseCall", () => {
         supportedParametersJson: [],
         sentParametersJson: [],
         deniedParametersJson: ["model"],
+        billingLookupStatus: "not_requested",
+      }),
+    );
+  });
+
+  test("requests structured JSON for phase-two evaluations", async () => {
+    modelMocks.getModelCapability.mockResolvedValue({
+      modelId: "provider/model",
+      supportedParameters: ["response_format", "structured_outputs"],
+      refreshedAt: new Date("2026-05-09T10:00:00.000Z"),
+    });
+    adapterMocks.callOpenRouter.mockResolvedValue({
+      id: "generation-1",
+      model: "provider/model",
+      choices: [{ message: { role: "assistant", content: "{}" } }],
+    });
+    adapterMocks.fetchOpenRouterGeneration.mockResolvedValue(null);
+
+    const result = await runOpenRouterPhaseCall({
+      sessionId: 14,
+      phase: 2,
+      memberPosition: 2,
+      apiKey: "sk-or-secret",
+      modelId: "provider/model",
+      messages: [{ role: "user", content: "user" }],
+      tuning: null,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(adapterMocks.callOpenRouter).toHaveBeenCalledWith(
+      "sk-or-secret",
+      expect.objectContaining({
+        response_format: expect.objectContaining({
+          type: "json_schema",
+        }),
+        provider: { require_parameters: true },
+      }),
+    );
+    expect(dbMocks.createProviderCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sentParametersJson: ["response_format"],
+        deniedParametersJson: [],
+      }),
+    );
+  });
+
+  test("denies phase-two models without structured output support before provider execution", async () => {
+    modelMocks.getModelCapability.mockResolvedValue({
+      modelId: "provider/model",
+      supportedParameters: ["temperature"],
+      refreshedAt: new Date("2026-05-09T10:00:00.000Z"),
+    });
+
+    const result = await runOpenRouterPhaseCall({
+      sessionId: 15,
+      phase: 2,
+      memberPosition: 2,
+      apiKey: "sk-or-secret",
+      modelId: "provider/model",
+      messages: [{ role: "user", content: "user" }],
+      tuning: null,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeInstanceOf(OpenRouterUnsupportedParameterError);
+    expect(adapterMocks.callOpenRouter).not.toHaveBeenCalled();
+    expect(dbMocks.createProviderCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sentParametersJson: [],
+        deniedParametersJson: ["response_format"],
         billingLookupStatus: "not_requested",
       }),
     );
