@@ -69,3 +69,13 @@ temp/
 
 # Planning artifacts
 track.md
+
+
+# operating-state files (universally gitignored)
+AGENTS.md
+CLAUDE.md
+CONTINUE.md
+HANDOFF.md
+PLAN.md
+.codex/
+.claude/
