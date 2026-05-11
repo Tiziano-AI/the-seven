@@ -1,13 +1,18 @@
 # The Seven
 
-The Seven is a privacy-first multi-model council for hard questions.
+The Seven is a privacy-first multi-model council for hard questions. Seven
+language models answer the prompt, evaluate each other's drafts, and a final
+phase synthesizes one verdict from the request, candidates, and parsed
+evaluations. The whole run is preserved as a durable record so the reasoning
+trail stays inspectable.
 
-- Bring your own OpenRouter key, encrypt it locally, and keep it out of server
-  storage.
-- Or use the demo flow: email magic link, 24-hour server cookie, Commons Council
-  only. Commons is paid low-cost, not a free-model showcase.
-- Every run snapshots a 7-member council, executes reply -> critique -> verdict,
-  and preserves the full record.
+It is bring-your-own-key by default — your OpenRouter key is hashed and held
+out of server storage. A paid low-cost demo flow is available behind an email
+magic link.
+
+- Three built-in councils: Founding (best-of-best with xhigh reasoning effort),
+  Lantern (mid-tier bridge with medium effort), Commons (low-cost demo with low
+  effort). All 21 built-in model ids are distinct across the three tiers.
 - User-defined councils persist as one aggregate definition with shared phase
   prompts and exactly seven member slots.
 - Default prompts are intentionally plain one-shot roles: phase 1 answers,
@@ -71,20 +76,18 @@ The Seven is a privacy-first multi-model council for hard questions.
 
 ```bash
 pnpm install
-ln -s /Users/tiziano/.secrets/the-seven.env .env.local
+cp .env.local.example .env.local   # then fill in values
 pnpm local:doctor
 pnpm local:bootstrap -- --install
 pnpm local:db:up
 pnpm local:dev
 ```
 
-Canonical local Mac path:
+Canonical local path:
 
 - Docker Desktop provides the only supported local Postgres runtime.
 - `compose.yaml` owns the local database on `127.0.0.1:5432`.
-- `/Users/tiziano/.secrets/ALL.env` is the human-owned master secret pool.
-- `THE_SEVEN__...` keys materialize into `/Users/tiziano/.secrets/the-seven.env`.
-- `.env.local` is the repo-local symlink to the app slice.
+- `.env.local` provides the app environment (see `.env.local.example`).
 - `pnpm local:*` is the only canonical local operator surface.
 
 Minimal The Seven slice keys:
@@ -140,8 +143,7 @@ pnpm local:live
 
 `pnpm local:doctor` validates minimal local readiness and does not require live
 provider keys. `pnpm local:doctor --live` additionally validates live-proof keys
-and effective local secret-file permissions. `tiz-home --json secrets doctor`
-validates the master pool, app slice, and projection without printing values.
+and effective local secret-file permissions.
 
 On Node runtime boot, the app applies the single squashed init SQL before the
 durable worker starts. A blank compose-managed Postgres database is a valid
@@ -182,14 +184,13 @@ pnpm local:live
 proof-owned demo rate-limit buckets for the configured demo test inbox before
 requesting a fresh magic link; it does not disable product rate limits.
 
-If live keys are absent, live proof is `[blocked]` in `HANDOFF.md` with the exact
-missing keys.
+If live keys are absent, live proof is blocked with the exact missing keys.
 
 ## Docs
 
-- `VISION.md` - product outcomes and non-goals
-- `ARCH.md` - canonical architecture, contracts, citations, and owner maps
-- `docs/BOUNDARY_REPLACEMENT_MAP.md` - old-to-new surface map
-- `docs/CANONICAL_SURFACES.md` - launch surface owners and gate boundary
-- `docs/PACKAGE_POLICY.md` - package and workspace rules
-- `docs/VALIDATION_MATRIX.md` - verification requirements
+- [`VISION.md`](VISION.md) — product outcomes and non-goals
+- [`ARCH.md`](ARCH.md) — canonical architecture, contracts, citations, and owner maps
+- [`docs/BOUNDARY_REPLACEMENT_MAP.md`](docs/BOUNDARY_REPLACEMENT_MAP.md) — old-to-new surface map
+- [`docs/CANONICAL_SURFACES.md`](docs/CANONICAL_SURFACES.md) — launch surface owners and gate boundary
+- [`docs/PACKAGE_POLICY.md`](docs/PACKAGE_POLICY.md) — package and workspace rules
+- [`docs/VALIDATION_MATRIX.md`](docs/VALIDATION_MATRIX.md) — verification requirements
