@@ -29,7 +29,7 @@ type AuthContextValue = Readonly<{
   setByokKey: (value: string | null) => void;
   resetEncryptedKey: () => void;
   clearByokKey: () => void;
-  clearDemoSession: () => void;
+  clearDemoSession: () => Promise<void>;
 }>;
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
@@ -74,11 +74,19 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
     [clearTimeoutRef, resetTimeout],
   );
 
-  const clearDemoSession = useCallback(() => {
+  const clearLocalDemoSession = useCallback(() => {
     setDemoSessionState(null);
     writeActiveSessionId(null);
-    void logoutDemoSession().catch(() => undefined);
   }, []);
+
+  const clearDemoSession = useCallback(async () => {
+    await logoutDemoSession();
+    clearLocalDemoSession();
+  }, [clearLocalDemoSession]);
+
+  const resetExpiredDemoSession = useCallback(() => {
+    clearLocalDemoSession();
+  }, [clearLocalDemoSession]);
 
   const resetEncryptedKey = useCallback(() => {
     clearByokKey();
@@ -119,9 +127,9 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
 
   useEffect(() => {
     if (demoSession && demoSession.expiresAt <= Date.now()) {
-      clearDemoSession();
+      resetExpiredDemoSession();
     }
-  }, [demoSession, clearDemoSession]);
+  }, [demoSession, resetExpiredDemoSession]);
 
   const mode: AuthMode = byokKey ? "byok" : demoSession ? "demo" : "none";
   const authHeader = useMemo(() => {

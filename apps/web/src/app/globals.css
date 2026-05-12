@@ -2,4 +2,6 @@
 @import "./theme.css";
 @import "./base.css";
 @import "./components.css";
+@import "./inspector.css";
+@import "./surface.css";
 @import "./prose.css";

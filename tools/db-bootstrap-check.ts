@@ -32,6 +32,7 @@ const EXPECTED_ENUMS = [
 
 const EXPECTED_COLUMNS = {
   users: ["principal"],
+  demo_sessions: ["revoked_at"],
   councils: ["definition_json"],
   sessions: ["snapshot_json", "trace_id", "status", "question_hash"],
   jobs: ["state", "credential_ciphertext", "lease_owner", "next_run_at"],

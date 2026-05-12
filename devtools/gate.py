@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 def _require_python_312() -> None:
@@ -30,8 +32,53 @@ class GateConfig:
     e2e: bool
 
 
-def _run(cmd: list[str], *, cwd: Path) -> None:
-    subprocess.run(cmd, cwd=cwd, check=True)
+def _run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
+    subprocess.run(cmd, cwd=cwd, check=True, env=env)
+
+
+def _read_dotenv_assignments(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+    assignments: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        assignments[key] = value
+    return assignments
+
+
+def _allocate_loopback_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        address = sock.getsockname()
+        return int(address[1])
+
+
+def _is_loopback_origin(value: str) -> bool:
+    parsed = urlparse(value)
+    host = parsed.hostname or ""
+    return host in {"localhost", "127.0.0.1", "::1"}
+
+
+def _build_e2e_env(repo_root: Path) -> dict[str, str]:
+    port = _allocate_loopback_port()
+    env = os.environ.copy()
+    assignments = _read_dotenv_assignments(repo_root / ".env.local")
+    configured_public_origin = (
+        env.get("SEVEN_PUBLIC_ORIGIN") or assignments.get("SEVEN_PUBLIC_ORIGIN") or ""
+    ).strip()
+    public_origin = (
+        configured_public_origin.rstrip("/")
+        if configured_public_origin and not _is_loopback_origin(configured_public_origin)
+        else f"http://localhost:{port}"
+    )
+    env["PORT"] = str(port)
+    env["SEVEN_BASE_URL"] = f"http://127.0.0.1:{port}"
+    env["SEVEN_NEXT_DIST_DIR"] = f".next-local/{port}"
+    env["SEVEN_PUBLIC_ORIGIN"] = public_origin
+    return env
 
 
 def _git_ls_files(*, repo_root: Path) -> list[Path]:
@@ -253,7 +300,7 @@ def main(argv: list[str]) -> int:
     if config.bootstrap:
         _run(["pnpm", "run", "db:bootstrap:check"], cwd=config.repo_root)
     if config.e2e:
-        _run(["pnpm", "run", "test:e2e"], cwd=config.repo_root)
+        _run(["pnpm", "run", "test:e2e"], cwd=config.repo_root, env=_build_e2e_env(config.repo_root))
 
     return 0
 

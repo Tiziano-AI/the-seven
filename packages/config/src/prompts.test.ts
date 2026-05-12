@@ -18,4 +18,10 @@ describe("default prompt corpus", () => {
       expect(value).toBe(value.trimStart());
     }
   });
+
+  test("phase 3 prompt instructs the synthesizer to cite candidates and reviewers", () => {
+    expect(DEFAULT_OUTPUT_FORMATS.phase3).toContain("[A]-[F]");
+    expect(DEFAULT_OUTPUT_FORMATS.phase3).toContain("[R1]-[R6]");
+    expect(DEFAULT_OUTPUT_FORMATS.phase3).toContain("never invent IDs");
+  });
 });

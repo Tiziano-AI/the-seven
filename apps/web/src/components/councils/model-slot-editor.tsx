@@ -1,21 +1,29 @@
 "use client";
 
-import type { CouncilMemberAssignment } from "@the-seven/contracts";
+import {
+  type CouncilMemberAssignment,
+  isMemberPosition,
+  memberForPosition,
+} from "@the-seven/contracts";
 import { useEffect, useId, useState } from "react";
+import { Sigil } from "@/components/app/sigil";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { autocompleteModels } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 export type EditableCouncilMember = CouncilMemberAssignment;
 
 export function ModelSlotEditor(props: {
   authHeader: string;
   member: EditableCouncilMember;
+  editable?: boolean;
   onChange: (next: EditableCouncilMember) => void;
 }) {
   const listId = useId();
   const fieldId = useId();
+  const editable = props.editable ?? true;
   const [suggestions, setSuggestions] = useState<
     Awaited<ReturnType<typeof autocompleteModels>>["suggestions"]
   >([]);
@@ -25,22 +33,16 @@ export function ModelSlotEditor(props: {
       setSuggestions([]);
       return;
     }
-
     let cancelled = false;
     const timeout = setTimeout(() => {
       void autocompleteModels(props.authHeader, props.member.model.modelId, 6)
         .then((result) => {
-          if (!cancelled) {
-            setSuggestions(result.suggestions);
-          }
+          if (!cancelled) setSuggestions(result.suggestions);
         })
         .catch(() => {
-          if (!cancelled) {
-            setSuggestions([]);
-          }
+          if (!cancelled) setSuggestions([]);
         });
     }, 180);
-
     return () => {
       cancelled = true;
       clearTimeout(timeout);
@@ -56,26 +58,42 @@ export function ModelSlotEditor(props: {
     includeReasoning: null,
   };
 
+  const position = isMemberPosition(props.member.memberPosition)
+    ? props.member.memberPosition
+    : null;
+  const seven = position ? memberForPosition(position) : null;
+  const role = seven?.role ?? "reviewer";
+  const alias = seven?.alias ?? String.fromCharCode(64 + props.member.memberPosition);
+
   return (
-    <div className="panel">
-      <div className="mb-3 text-sm font-semibold">
-        Member {String.fromCharCode(64 + props.member.memberPosition)}
+    <div className={cn("panel role-card", role === "synthesizer" && "role-card-synth")}>
+      <div className="role-card-head">
+        {position ? <Sigil position={position} className="role-card-sigil" /> : null}
+        <div>
+          <div className="role-card-id">{alias}</div>
+          <div className="text-xs text-[var(--text-dim)]">
+            {role === "synthesizer"
+              ? "Synthesizer · final verdict"
+              : "Reviewer · drafts and critiques"}
+          </div>
+        </div>
+        <span className="role-card-role">M{props.member.memberPosition}</span>
       </div>
+
       <div className="space-y-2">
-        <Label htmlFor={`${fieldId}-model`}>Model Id</Label>
+        <Label htmlFor={`${fieldId}-model`}>Model id</Label>
         <Input
           id={`${fieldId}-model`}
           list={listId}
           value={props.member.model.modelId}
+          disabled={!editable}
           onChange={(event) =>
             props.onChange({
               ...props.member,
-              model: {
-                provider: "openrouter",
-                modelId: event.target.value,
-              },
+              model: { provider: "openrouter", modelId: event.target.value },
             })
           }
+          placeholder="provider/model-slug"
         />
         <datalist id={listId}>
           {suggestions.map((suggestion) => (
@@ -85,17 +103,19 @@ export function ModelSlotEditor(props: {
           ))}
         </datalist>
       </div>
-      <details className="mt-4">
-        <summary className="cursor-pointer text-sm font-medium text-[var(--muted-foreground)]">
+
+      <details>
+        <summary className="cursor-pointer text-xs uppercase tracking-[0.18em] text-[var(--text-dim)]">
           Tuning
         </summary>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor={`${fieldId}-temperature`}>Temperature</Label>
             <Input
               id={`${fieldId}-temperature`}
               type="number"
               step="0.1"
+              disabled={!editable}
               value={tuning.temperature ?? ""}
               onChange={(event) =>
                 props.onChange({
@@ -113,6 +133,7 @@ export function ModelSlotEditor(props: {
             <Input
               id={`${fieldId}-seed`}
               type="number"
+              disabled={!editable}
               value={tuning.seed ?? ""}
               onChange={(event) =>
                 props.onChange({
@@ -129,39 +150,36 @@ export function ModelSlotEditor(props: {
             <Label htmlFor={`${fieldId}-verbosity`}>Verbosity</Label>
             <Input
               id={`${fieldId}-verbosity`}
+              disabled={!editable}
               value={tuning.verbosity ?? ""}
               onChange={(event) =>
                 props.onChange({
                   ...props.member,
-                  tuning: {
-                    ...tuning,
-                    verbosity: event.target.value || null,
-                  },
+                  tuning: { ...tuning, verbosity: event.target.value || null },
                 })
               }
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor={`${fieldId}-reasoning-effort`}>Reasoning Effort</Label>
+            <Label htmlFor={`${fieldId}-reasoning-effort`}>Reasoning effort</Label>
             <Input
               id={`${fieldId}-reasoning-effort`}
+              disabled={!editable}
               value={tuning.reasoningEffort ?? ""}
               onChange={(event) =>
                 props.onChange({
                   ...props.member,
-                  tuning: {
-                    ...tuning,
-                    reasoningEffort: event.target.value || null,
-                  },
+                  tuning: { ...tuning, reasoningEffort: event.target.value || null },
                 })
               }
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor={`${fieldId}-include-reasoning`}>Include Reasoning</Label>
+            <Label htmlFor={`${fieldId}-include-reasoning`}>Include reasoning</Label>
             <Textarea
               id={`${fieldId}-include-reasoning`}
-              className="min-h-[70px]"
+              className="min-h-[60px]"
+              disabled={!editable}
               value={
                 tuning.includeReasoning === null ? "" : tuning.includeReasoning ? "true" : "false"
               }

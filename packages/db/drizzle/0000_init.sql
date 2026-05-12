@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS "demo_sessions" (
   "token_hash" text NOT NULL,
   "expires_at" timestamp with time zone NOT NULL,
   "last_used_at" timestamp with time zone,
+  "revoked_at" timestamp with time zone,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

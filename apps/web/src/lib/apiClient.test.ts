@@ -1,15 +1,20 @@
 import { buildSuccessEnvelope, routeContract } from "@the-seven/contracts";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { apiRequest } from "./apiClient";
 
 describe("apiRequest", () => {
+  beforeEach(() => {
+    process.env.SEVEN_BASE_URL = "http://127.0.0.1:43217";
+  });
+
   afterEach(() => {
+    delete process.env.SEVEN_BASE_URL;
     vi.unstubAllGlobals();
   });
 
   test("derives method, path, body validation, and resource validation from the route registry", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      expect(String(url)).toBe("http://127.0.0.1:3000/api/v1/sessions/42/rerun");
+      expect(String(url)).toBe("http://127.0.0.1:43217/api/v1/sessions/42/rerun");
       expect(init?.method).toBe("POST");
       expect(init?.body).toBe(
         JSON.stringify({ councilRef: { kind: "built_in", slug: "commons" } }),
@@ -57,5 +62,17 @@ describe("apiRequest", () => {
         body: { councilRef: { kind: "built_in", slug: "commons" } },
       }),
     ).rejects.toThrow("API resource mismatch");
+  });
+
+  test("requires an explicit server-side base URL", async () => {
+    delete process.env.SEVEN_BASE_URL;
+
+    await expect(
+      apiRequest({
+        route: routeContract("sessions.rerun"),
+        params: { sessionId: 42 },
+        body: { councilRef: { kind: "built_in", slug: "commons" } },
+      }),
+    ).rejects.toThrow("SEVEN_BASE_URL is required");
   });
 });

@@ -110,6 +110,8 @@ This is the required verification pyramid for the launch-candidate milestone.
 
 - BYOK setup, unlock, and lock
 - demo magic-link flow through cookie
+- End Demo waits for server logout, clears the cookie, locks the UI, and proves
+  the stale cookie no longer authorizes `GET /api/v1/demo/session`
 - ask with attachments
 - council duplicate, edit, save, and delete
 - sessions search, select, and export
@@ -118,6 +120,14 @@ This is the required verification pyramid for the launch-candidate milestone.
 - rerun completed run
 
 ## Local Operator
+
+- `pnpm local:dev`, `pnpm local:live`, and full-gate e2e allocate a free
+  loopback HTTP port instead of requiring `127.0.0.1:3000`
+- local proof projects one consistent `PORT` and `SEVEN_BASE_URL`
+- loopback `SEVEN_PUBLIC_ORIGIN` is materialized to the allocated local port;
+  explicit non-loopback public origins are preserved
+- local proof isolates Next's dev `distDir` so an existing `apps/web`
+  `.next/dev/lock` cannot break a launch-owned browser proof
 
 - `pnpm local:doctor` verifies:
   - Homebrew presence

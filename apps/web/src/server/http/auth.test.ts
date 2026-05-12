@@ -67,6 +67,7 @@ describe("resolveAuthContext", () => {
   test("valid demo cookie resolves to demo auth", async () => {
     demoMocks.getDemoSessionContext.mockResolvedValue({
       kind: "active",
+      sessionId: 11,
       userId: 4,
       principal: "demo@example.com",
       expiresAt: 1_800_000_000_000,
@@ -79,10 +80,22 @@ describe("resolveAuthContext", () => {
 
     expect(auth).toEqual({
       kind: "demo",
+      demoSessionId: 11,
       userId: 4,
       principal: "demo@example.com",
       openRouterKey: "demo-openrouter-key",
       expiresAt: 1_800_000_000_000,
     });
+  });
+
+  test("revoked demo cookies resolve to invalid token", async () => {
+    demoMocks.getDemoSessionContext.mockResolvedValue({ kind: "missing" });
+
+    const auth = await resolveAuthContext(
+      buildRequest({ cookie: `${DEMO_SESSION_COOKIE}=revoked-cookie-token` }),
+      new Date("2026-05-09T00:00:00.000Z"),
+    );
+
+    expect(auth).toEqual({ kind: "invalid", reason: "invalid_token" });
   });
 });

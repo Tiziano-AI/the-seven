@@ -76,6 +76,17 @@ schema validation, not repo-wide negative string scans.
   - server-only orchestration, auth, adapter, and HTTP modules under
     `src/server/**`
   - client components and design-system code under `src/components/**`
+  - design tokens in `src/app/theme.css`; layered class vocabularies in
+    `components.css` (buttons, cards, panels, badges, nav), `inspector.css`
+    (ask-band, council track, verdict card, citation chips, composer,
+    deliberation ribbon), `surface.css` (role cards, gate card), all imported
+    from `globals.css`
+  - inspector splits into `components/inspector/council-track.tsx`,
+    `components/inspector/verdict-card.tsx`, and
+    `components/sessions/session-inspector.tsx` (orchestrator)
+  - phase-3 chip protocol parsed by `lib/chips.ts` (remark plugin) and
+    rendered by `verdict-card.tsx`; member-position sigils live in
+    `components/app/sigil.tsx`
 - `apps/cli`
   - HTTP-only batch client against `/api/v1`
 - `packages/contracts`
@@ -127,9 +138,10 @@ No runtime code remains in `client/`, `server/`, or `shared/`.
   - Source: `vendor:next:16.2.1:https://nextjs.org/docs/app/api-reference/functions/next-response`
   - Source: `vendor:next:16.2.1:https://nextjs.org/docs/app/api-reference/functions/next-request`
 - Fetch Metadata defines `Sec-Fetch-Site` as the request initiator/target
-  relationship. `same-origin` is same-origin, `same-site` is not accepted as
-  same-origin authority for demo-cookie mutation, and `cross-site` is denied.
-  - Source: `vendor:w3c:fetch-metadata:https://www.w3.org/TR/fetch-metadata/#sec-fetch-site-header`
+  relationship with `same-origin`, `same-site`, `cross-site`, and `none`
+  values. The `Sec-` prefix makes these headers browser-owned rather than
+  JavaScript-forgeable.
+  - Source: `vendor:w3c:2025-04-01:https://www.w3.org/TR/fetch-metadata/#sec-fetch-site-header`
 - Resend documents that inbound email webhooks carry metadata and require the
   Received Emails API for body retrieval. It also documents list and retrieve
   endpoints for received emails and states that inbound emails are stored even
@@ -280,13 +292,13 @@ Server trace IDs are canonical audit truth. Client trace/request IDs are
 optional bounded metadata only.
 
 Cookie-auth mutating routes accept same-origin browser requests when `Origin` or
-`Referer` matches `SEVEN_PUBLIC_ORIGIN`, or when browser-owned Fetch Metadata
-reports `Sec-Fetch-Site: same-origin`. They reject missing, malformed,
-cross-site, and same-site-but-not-same-origin evidence with
-`same_origin_required`. Non-production local proof also admits the current
-request origin so `SEVEN_BASE_URL` can target loopback while
-`SEVEN_PUBLIC_ORIGIN` remains the public browser authority; production admits
-only the configured public origin or browser-owned `same-origin` fetch metadata.
+`Referer` matches `SEVEN_PUBLIC_ORIGIN` or when browser-owned Fetch Metadata
+reports `Sec-Fetch-Site: same-origin`. `same-site`, `cross-site`, malformed, and
+missing same-origin evidence are rejected with `same_origin_required`.
+Non-production local proof also admits the current request origin so
+`SEVEN_BASE_URL` can target loopback while `SEVEN_PUBLIC_ORIGIN` remains the
+public browser authority; production admits only the configured public origin or
+browser-owned `same-origin` fetch metadata.
 
 ## Demo Auth
 
@@ -302,9 +314,12 @@ The email link targets:
 ```
 
 `GET /api/v1/demo/consume` first admits only requests whose `Host` header maps
-to `SEVEN_PUBLIC_ORIGIN`, except explicit non-production loopback development.
-Wrong-host requests return the typed `public_origin_required` denial before
-rate-limit mutation or token consumption. Admitted API requests validate the
+to `SEVEN_PUBLIC_ORIGIN`. Local development uses the local HTTP materializer to
+project a matching loopback `SEVEN_PUBLIC_ORIGIN` when the configured public
+origin is absent or loopback; live proof targets loopback transport while
+sending the public `Host` header. Wrong-host requests return the typed
+`public_origin_required` denial before rate-limit mutation or token
+consumption. Admitted API requests validate the
 token, mark it used, create a demo session, set the demo cookie, and return a
 `303` redirect to `<SEVEN_PUBLIC_ORIGIN>/`. Missing, reused, expired, or invalid
 tokens for API ingress return the typed denial envelope. Browser ingress for
@@ -313,10 +328,11 @@ redirect to `<SEVEN_PUBLIC_ORIGIN>/?demo_link=<state>`, where the home screen
 renders the recovery state and lets the user request a fresh link. Browser
 localStorage never stores a demo token.
 
-`GET /api/v1/demo/session` returns the active cookie session metadata for UI
-bootstrap. `POST /api/v1/demo/logout` revokes the demo session row before the
-adapter clears the cookie; a UI logout is not considered complete until the
-server acknowledges that authority change.
+`GET /api/v1/demo/session` returns the active non-revoked cookie session
+metadata for UI bootstrap. `POST /api/v1/demo/logout` revokes the active demo
+session row before the adapter clears the cookie; a UI logout is not considered
+complete until the server acknowledges that authority change. A stale cookie for
+a revoked row resolves as `invalid_token`.
 
 ## Provider Capability
 
@@ -468,6 +484,35 @@ normalized. In production it must be HTTPS and non-loopback. Live proof includes
 the HTTP target for the proof harness, not the authority for user-visible links,
 same-origin checks, OpenRouter referer headers, or post-consume redirects.
 
+`pnpm local:dev`, `pnpm local:live`, and full-gate browser proof do not require
+port `3000`. The local operator materializer allocates one free loopback port,
+projects `PORT=<port>` and `SEVEN_BASE_URL=http://127.0.0.1:<port>` to the
+child process, and projects `SEVEN_PUBLIC_ORIGIN=http://localhost:<port>` only
+when the configured public origin is absent or loopback. Explicit non-loopback
+public origins such as `https://theseven.ai` are preserved for demo emails,
+OpenRouter referer headers, same-origin checks, and live proof. The same launch
+context also projects an internal Next dev `distDir` under `.next-local/<port>`
+so a browser proof can run while another `apps/web` dev server owns
+`.next/dev/lock`. Next's CLI defaults `next dev` to port `3000` from `PORT`, and
+its dev server only retries ports when neither `--port` nor `PORT` supplied a
+value
+(`node_modules:node_modules/.pnpm/next@16.2.1_@playwright+test@1.59.1_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/bin/next:130`,
+`node_modules:node_modules/.pnpm/next@16.2.1_@playwright+test@1.59.1_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/cli/next-dev.js:192`).
+Next appends `/dev` to the configured `distDir` for development, then creates a
+lock at `<distDir>/lock`; disabling that lock is explicitly not recommended
+because concurrent writes can mangle the directory
+(`node_modules:node_modules/.pnpm/next@16.2.1_@playwright+test@1.59.1_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/server/config.js:1090`,
+`node_modules:node_modules/.pnpm/next@16.2.1_@playwright+test@1.59.1_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js:142`,
+`node_modules:node_modules/.pnpm/next@16.2.1_@playwright+test@1.59.1_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/server/config-shared.d.ts:811`).
+Because Next rewrites `next-env.d.ts` from the effective `distDir`, the
+local/proof launcher restores the canonical file after the dev process exits
+(`node_modules:node_modules/.pnpm/next@16.2.1_@playwright+test@1.59.1_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/lib/typescript/writeAppTypeDeclarations.js:52`).
+Playwright waits on an explicit `url` or `port`, accepts per-server environment
+projection, and recommends an explicit `baseURL` for relative navigation, so The
+Seven projects `SEVEN_BASE_URL` instead of relying on a hidden default
+(`node_modules:node_modules/.pnpm/playwright@1.59.1/node_modules/playwright/types/test.d.ts:943`,
+`node_modules:node_modules/.pnpm/playwright@1.59.1/node_modules/playwright/types/test.d.ts:10239`).
+
 `pnpm local:doctor` proves local development readiness and does not require live
 provider keys. `pnpm local:doctor --live` proves live-proof key presence and
 secret hygiene. `pnpm local:live` runs the live doctor profile before live work.
@@ -479,7 +524,9 @@ the repo-local `.env.local` symlink. `tiz-home --json secrets doctor` proves
 that the master pool, app slice, and projection are structurally healthy without
 exposing secret values.
 
-`.env.local.example` is minimal runnable development with demo disabled.
+`.env.local.example` is minimal runnable development with demo disabled and no
+fixed local HTTP port. `.env.live.example` documents optional external/public
+origin overrides rather than local transport defaults.
 `.env.live.example` documents the live-proof overlay for BYOK, Resend, demo
 sender, and demo test inbox.
 

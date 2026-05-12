@@ -94,13 +94,11 @@ Minimal The Seven slice keys:
 
 ```bash
 NODE_ENV=development
-PORT=3000
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/the_seven
 SEVEN_JOB_CREDENTIAL_SECRET=replace-with-a-long-random-secret
-SEVEN_PUBLIC_ORIGIN=http://localhost:3000
+SEVEN_PUBLIC_ORIGIN=http://localhost
 SEVEN_APP_NAME=The Seven
 SEVEN_DEMO_ENABLED=0
-SEVEN_BASE_URL=http://127.0.0.1:3000
 ```
 
 `SEVEN_JOB_CREDENTIAL_SECRET` is required for durable background execution. It
@@ -125,9 +123,14 @@ that allows message listing and retrieval through the Resend Receiving API.
 Send-only restricted keys are not sufficient for `pnpm test:live` or
 `pnpm local:live`.
 
-`SEVEN_BASE_URL` is the local HTTP target for live tooling. `SEVEN_PUBLIC_ORIGIN`
-is the server-owned origin used in demo magic links, OpenRouter app headers, and
-same-origin checks for demo-cookie mutations.
+`pnpm local:dev`, `pnpm local:live`, and full browser gates allocate a free
+loopback port and project `PORT` plus `SEVEN_BASE_URL` for the child process.
+They also isolate Next's local dev `distDir` so a browser proof can run while a
+separate dev server already owns `.next/dev/lock`. `SEVEN_PUBLIC_ORIGIN` is the
+server-owned origin used in demo magic links, OpenRouter app headers, and
+same-origin checks for demo-cookie mutations. A loopback public origin is
+rewritten to the allocated local port; an explicit non-loopback origin such as
+`https://theseven.ai` is preserved for live proof.
 
 ## Operator Commands
 

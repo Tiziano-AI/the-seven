@@ -30,5 +30,5 @@ Shape:
   "major_disagreements": []
 }`,
   phase3:
-    "Output: Markdown. Start with the answer. Add assumptions, trade-offs, or caveats only when they materially improve the answer.",
+    "Output: Markdown. Start with the answer. Cite candidate answers inline as [A]-[F] and cite reviewers inline as [R1]-[R6], where Rn is the reviewer at member position n (the author of candidate n). Place each citation immediately after the claim it supports. Cite only IDs present in the input payload; never invent IDs. Add assumptions, trade-offs, or caveats only when they materially improve the answer.",
 } as const;

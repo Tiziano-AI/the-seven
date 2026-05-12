@@ -9,9 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { exportSessions, fetchSessions } from "@/lib/api";
+import {
+  continueSession,
+  exportSessions,
+  fetchCouncils,
+  fetchSession,
+  fetchSessions,
+  rerunSession,
+} from "@/lib/api";
 import { writeActiveSessionId } from "@/lib/storage";
+import { cn } from "@/lib/utils";
 
 function downloadText(filename: string, text: string, type: string) {
   const blob = new Blob([text], { type });
@@ -23,12 +30,20 @@ function downloadText(filename: string, text: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+const STATUS_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "completed", label: "Completed" },
+  { value: "processing", label: "Running" },
+  { value: "pending", label: "Pending" },
+  { value: "failed", label: "Failed" },
+] as const;
+
 export function SessionsScreen() {
   const auth = useAuth();
   const [sessions, setSessions] = useState<Awaited<ReturnType<typeof fetchSessions>>>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   useEffect(() => {
@@ -59,7 +74,6 @@ export function SessionsScreen() {
     const interval = setInterval(() => {
       void load(authHeader);
     }, 2500);
-
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -77,10 +91,7 @@ export function SessionsScreen() {
   }, [search, sessions, statusFilter]);
 
   async function handleExportSelected() {
-    if (!auth.isAuthenticated || selectedIds.length === 0) {
-      return;
-    }
-
+    if (!auth.isAuthenticated || selectedIds.length === 0) return;
     try {
       const result = await exportSessions(auth.authHeader, selectedIds);
       downloadText("sessions.md", result.markdown, "text/markdown");
@@ -91,10 +102,56 @@ export function SessionsScreen() {
     }
   }
 
+  async function handleContinueRow(sessionId: number) {
+    if (!auth.isAuthenticated) return;
+    try {
+      await continueSession(auth.authHeader, sessionId);
+      toast.success("Run continued");
+      const next = await fetchSession(auth.authHeader, sessionId);
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId ? { ...session, status: next.session.status } : session,
+        ),
+      );
+      setSelectedSessionId(sessionId);
+      writeActiveSessionId(sessionId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Continue failed");
+    }
+  }
+
+  async function handleRerunRow(sessionId: number, councilName: string) {
+    if (!auth.isAuthenticated) return;
+    try {
+      const councils = (await fetchCouncils(auth.authHeader)).councils;
+      const matched = councils.find((council) => council.name === councilName);
+      if (!matched) {
+        toast.error(
+          `Council "${councilName}" is no longer available. Open the run and pick another.`,
+        );
+        setSelectedSessionId(sessionId);
+        writeActiveSessionId(sessionId);
+        return;
+      }
+      const result = await rerunSession({
+        authHeader: auth.authHeader,
+        sessionId,
+        councilRef: matched.ref,
+      });
+      toast.success("New run created");
+      const refreshed = await fetchSessions(auth.authHeader);
+      setSessions(refreshed);
+      setSelectedSessionId(result.sessionId);
+      writeActiveSessionId(result.sessionId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Rerun failed");
+    }
+  }
+
   if (!auth.isAuthenticated) {
     return (
-      <Card className="p-6">
-        <p className="text-sm text-[var(--muted-foreground)]">
+      <Card className="p-8 text-center">
+        <p className="text-sm text-[var(--text-muted)]">
           Unlock BYOK or start a demo session to view the journal.
         </p>
       </Card>
@@ -102,79 +159,135 @@ export function SessionsScreen() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+    <div className="grid gap-6 xl:grid-cols-[440px_minmax(0,1fr)]">
       <Card className="p-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <Badge>Journal</Badge>
-            <h1 className="mt-4 text-3xl font-semibold tracking-[-0.05em]">Sessions</h1>
-          </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <h1 className="surface-title text-sm uppercase tracking-[0.22em]">Journal</h1>
           <Button
-            variant="secondary"
+            variant="ghost"
+            size="sm"
             onClick={handleExportSelected}
             disabled={selectedIds.length === 0}
           >
             Export Selected
           </Button>
         </div>
-        <div className="mt-5 grid gap-3">
+
+        <div className="mt-4 space-y-3">
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search query or council"
           />
-          <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value="all">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="processing">Processing</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-          </Select>
+          <div className="flex flex-wrap gap-1.5">
+            {STATUS_FILTERS.map((filter) => (
+              <button
+                key={filter.value}
+                type="button"
+                className={cn(
+                  "btn-nav",
+                  "px-3 text-xs",
+                  statusFilter === filter.value && "btn-nav-active",
+                )}
+                style={{ fontSize: "0.78rem", minHeight: "2rem", padding: "0.3rem 0.7rem" }}
+                onClick={() => setStatusFilter(filter.value)}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
         </div>
+
         <div className="mt-5 space-y-3">
-          {filteredSessions.map((session) => (
-            <button
-              key={session.id}
-              type="button"
-              className="panel panel-interactive w-full text-left"
-              onClick={() => {
-                setSelectedSessionId(session.id);
-                writeActiveSessionId(session.id);
-              }}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold">{session.query}</div>
-                  <div className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-                    {session.councilNameAtRun}
+          {filteredSessions.map((session) => {
+            const isSelected = selectedSessionId === session.id;
+            const canContinue = session.status === "failed";
+            const canRerun = session.status === "failed" || session.status === "completed";
+            return (
+              // biome-ignore lint/a11y/useSemanticElements: row contains nested action buttons; <button> would nest interactive descendants
+              <div
+                key={session.id}
+                className={cn(
+                  "panel space-y-3",
+                  "cursor-pointer transition-[border-color]",
+                  isSelected ? "border-[var(--gold)]" : "hover:border-[var(--gold-soft)]",
+                )}
+                onClick={() => {
+                  setSelectedSessionId(session.id);
+                  writeActiveSessionId(session.id);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedSessionId(session.id);
+                    writeActiveSessionId(session.id);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="line-clamp-2 text-sm font-semibold">{session.query}</div>
+                    <div className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--text-dim)]">
+                      {session.councilNameAtRun}
+                    </div>
                   </div>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(session.id)}
+                    onChange={(event) => {
+                      setSelectedIds((current) =>
+                        event.target.checked
+                          ? [...current, session.id]
+                          : current.filter((id) => id !== session.id),
+                      );
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                  />
                 </div>
-                <input
-                  type="checkbox"
-                  checked={selectedIds.includes(session.id)}
-                  onChange={(event) => {
-                    setSelectedIds((current) =>
-                      event.target.checked
-                        ? [...current, session.id]
-                        : current.filter((id) => id !== session.id),
-                    );
-                  }}
-                  onClick={(event) => event.stopPropagation()}
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <SessionStatusBadge status={session.status} failureKind={session.failureKind} />
+                  <Badge>{session.totalTokens} tokens</Badge>
+                  <Badge>
+                    {session.totalCostIsPartial && session.totalCostUsdMicros === 0
+                      ? "cost pending"
+                      : `$${session.totalCost}`}
+                  </Badge>
+                </div>
+                {(canContinue || canRerun) && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {canContinue ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleContinueRow(session.id);
+                        }}
+                      >
+                        Continue
+                      </Button>
+                    ) : null}
+                    {canRerun ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleRerunRow(session.id, session.councilNameAtRun);
+                        }}
+                      >
+                        Rerun
+                      </Button>
+                    ) : null}
+                  </div>
+                )}
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <SessionStatusBadge status={session.status} failureKind={session.failureKind} />
-                <Badge>{session.totalTokens} tokens</Badge>
-                <Badge>
-                  {session.totalCostIsPartial && session.totalCostUsdMicros === 0
-                    ? "cost pending"
-                    : `$${session.totalCost}`}
-                </Badge>
-              </div>
-            </button>
-          ))}
+            );
+          })}
           {filteredSessions.length === 0 ? (
-            <p className="text-sm text-[var(--muted-foreground)]">
+            <p className="text-sm text-[var(--text-muted)]">
               No sessions match the current filters.
             </p>
           ) : null}

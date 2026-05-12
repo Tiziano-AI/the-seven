@@ -15,6 +15,7 @@ export type AuthContext =
   | Readonly<{ kind: "byok"; userId: number; principal: string; openRouterKey: string }>
   | Readonly<{
       kind: "demo";
+      demoSessionId: number;
       userId: number;
       principal: string;
       openRouterKey: string;
@@ -89,6 +90,7 @@ export async function resolveAuthContext(request: NextRequest, now: Date): Promi
 
   return {
     kind: "demo",
+    demoSessionId: session.sessionId,
     userId: session.userId,
     principal: session.principal,
     openRouterKey: env.demo.openRouterApiKey,

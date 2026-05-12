@@ -37,6 +37,7 @@ function unauthenticatedContext(): AuthContext {
 function assertSameOrigin(request: NextRequest) {
   const origin = request.headers.get("origin");
   const referer = request.headers.get("referer");
+  const fetchSite = request.headers.get("sec-fetch-site")?.trim().toLowerCase();
   const configuredOrigin = serverRuntime().publicOrigin.replace(/\/+$/, "");
   const requestOrigin = request.nextUrl.origin;
   const allowed = new Set([configuredOrigin, requestOrigin]);
@@ -48,6 +49,9 @@ function assertSameOrigin(request: NextRequest) {
     if (refererOrigin && allowed.has(refererOrigin)) {
       return;
     }
+  }
+  if (fetchSite === "same-origin") {
+    return;
   }
 
   throw new EdgeError({
@@ -258,6 +262,9 @@ export async function handleRedirectRoute<Contract extends RouteContract>(
   input: {
     route: Contract;
     params?: RawRouteParams;
+    preAdmission?: (
+      request: NextRequest,
+    ) => Promise<NextResponse | undefined> | NextResponse | undefined;
     handler: (
       ctx: RequestContext,
       request: NextRequest,
@@ -269,6 +276,13 @@ export async function handleRedirectRoute<Contract extends RouteContract>(
   let ctx: RequestContext | null = null;
 
   try {
+    if (input.preAdmission) {
+      const earlyResponse = await input.preAdmission(request);
+      if (earlyResponse) {
+        earlyResponse.headers.set("X-Trace-Id", fallback.traceId);
+        return earlyResponse;
+      }
+    }
     ctx = await admitRequest(request, input.route);
     const parsed = await parseRouteInput(request, input.route, input.params);
     const response = await input.handler(ctx, request, parsed);

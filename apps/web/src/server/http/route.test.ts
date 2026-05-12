@@ -18,7 +18,6 @@ vi.mock("@the-seven/config", () => ({
   MAX_REQUEST_BODY_BYTES: 512_000,
   serverRuntime: () => ({
     publicOrigin: "http://localhost",
-    trustedProxyHeaders: false,
   }),
 }));
 
@@ -68,6 +67,7 @@ describe("handleRoute admission", () => {
   test("demo cookie mutations require same origin before handler execution", async () => {
     authMocks.resolveAuthContext.mockResolvedValue({
       kind: "demo",
+      demoSessionId: 11,
       userId: 1,
       principal: "demo@example.com",
       openRouterKey: "demo-key",
@@ -87,6 +87,93 @@ describe("handleRoute admission", () => {
       }),
       {
         route: routeContract("sessions.create"),
+        handler,
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  test("demo logout denies cross-origin requests before handler execution", async () => {
+    authMocks.resolveAuthContext.mockResolvedValue({
+      kind: "demo",
+      demoSessionId: 11,
+      userId: 1,
+      principal: "demo@example.com",
+      openRouterKey: "demo-key",
+      expiresAt: 1_800_000_000_000,
+    });
+    const handler = vi.fn(async () => ({ success: true }));
+
+    const response = await handleRoute(
+      request({
+        method: "POST",
+        headers: {
+          origin: "https://evil.example",
+          "x-seven-ingress": "web",
+        },
+      }),
+      {
+        route: routeContract("demo.logout"),
+        handler,
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  test("demo logout accepts browser-owned same-origin fetch metadata", async () => {
+    authMocks.resolveAuthContext.mockResolvedValue({
+      kind: "demo",
+      demoSessionId: 11,
+      userId: 1,
+      principal: "demo@example.com",
+      openRouterKey: "demo-key",
+      expiresAt: 1_800_000_000_000,
+    });
+    const handler = vi.fn(async () => ({ success: true }));
+
+    const response = await handleRoute(
+      request({
+        method: "POST",
+        headers: {
+          "sec-fetch-site": "same-origin",
+          "x-seven-ingress": "web",
+        },
+      }),
+      {
+        route: routeContract("demo.logout"),
+        handler,
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  test("demo logout rejects same-site fetch metadata without same-origin evidence", async () => {
+    authMocks.resolveAuthContext.mockResolvedValue({
+      kind: "demo",
+      demoSessionId: 11,
+      userId: 1,
+      principal: "demo@example.com",
+      openRouterKey: "demo-key",
+      expiresAt: 1_800_000_000_000,
+    });
+    const handler = vi.fn(async () => ({ success: true }));
+
+    const response = await handleRoute(
+      request({
+        method: "POST",
+        headers: {
+          "sec-fetch-site": "same-site",
+          "x-seven-ingress": "web",
+        },
+      }),
+      {
+        route: routeContract("demo.logout"),
         handler,
       },
     );

@@ -1,3 +1,4 @@
+import http from "node:http";
 import type { LiveProofRuntime, ServerRuntime } from "@the-seven/config";
 import {
   querySubmitBodySchema,
@@ -44,35 +45,95 @@ async function clearProofRateLimits(email: string) {
   }
 }
 
-function extractDemoConsumeUrl(input: {
-  baseUrl: string;
-  html?: string | null;
-  text?: string | null;
-}) {
-  const content = `${input.html ?? ""}\n${input.text ?? ""}`;
-  const linkMatch = content.match(
+export function extractDemoConsumeUrlFromEmail(input: { text: string }): string {
+  const linkMatch = input.text.match(
     /https?:\/\/[^\s"'<>]+\/api\/v1\/demo\/consume\?token=[A-Za-z0-9_-]+/,
   );
-  if (linkMatch) {
-    return linkMatch[0];
+  if (!linkMatch) {
+    throw new Error("Could not extract an absolute demo consume link from the received email.");
   }
-
-  const tokenMatch = content.match(/[?&]token=([A-Za-z0-9_-]+)/);
-  if (tokenMatch?.[1]) {
-    return new URL(`/api/v1/demo/consume?token=${tokenMatch[1]}`, input.baseUrl).toString();
-  }
-
-  throw new Error("Could not extract the demo consume link from the received email.");
+  return linkMatch[0];
 }
 
-function readDemoCookie(response: Response) {
-  const headersWithCookies = response.headers as Headers & {
-    getSetCookie?: () => string[];
+export function assertDemoConsumeUrlOrigin(input: { consumeUrl: string; publicOrigin: string }) {
+  const consume = new URL(input.consumeUrl);
+  const expected = new URL(input.publicOrigin);
+  if (consume.origin !== expected.origin) {
+    throw new Error(
+      `Demo email consume link origin mismatch: ${consume.origin} vs ${expected.origin}`,
+    );
+  }
+}
+
+export function assertDemoConsumeRedirect(input: { response: Response; publicOrigin: string }) {
+  if (input.response.status !== 303) {
+    throw new Error(`Demo consume redirect mismatch: status ${input.response.status}`);
+  }
+  const location = input.response.headers.get("location");
+  if (!location) {
+    throw new Error("Demo consume redirect mismatch: missing location header");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(location);
+  } catch {
+    throw new Error(`Demo consume redirect mismatch: non-absolute location ${location}`);
+  }
+  const expected = new URL(input.publicOrigin);
+  if (parsed.origin !== expected.origin || parsed.pathname !== "/") {
+    throw new Error(`Demo consume redirect mismatch: ${location}`);
+  }
+}
+
+export function buildDemoConsumeTransport(input: {
+  baseUrl: string;
+  consumeUrl: string;
+  publicOrigin: string;
+}) {
+  assertDemoConsumeUrlOrigin({
+    consumeUrl: input.consumeUrl,
+    publicOrigin: input.publicOrigin,
+  });
+  const consume = new URL(input.consumeUrl);
+  const targetUrl = new URL(consume.pathname + consume.search, input.baseUrl);
+  return {
+    targetUrl,
+    hostHeader: new URL(input.publicOrigin).host,
   };
-  const cookies = headersWithCookies.getSetCookie?.() ?? [];
-  const fallbackCookie = response.headers.get("set-cookie");
-  const allCookies = fallbackCookie ? [...cookies, fallbackCookie] : cookies;
-  const cookie = allCookies.find((value) => value.startsWith(`${demoSessionCookieName}=`));
+}
+
+type DemoConsumeResponse = Readonly<{
+  status: number;
+  location: string | null;
+  setCookies: readonly string[];
+  body: string;
+}>;
+
+function assertDemoConsumeResponseRedirect(input: {
+  response: DemoConsumeResponse;
+  publicOrigin: string;
+}) {
+  if (input.response.status !== 303) {
+    throw new Error(`Demo consume redirect mismatch: status ${input.response.status}`);
+  }
+  const location = input.response.location;
+  if (!location) {
+    throw new Error("Demo consume redirect mismatch: missing location header");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(location);
+  } catch {
+    throw new Error(`Demo consume redirect mismatch: non-absolute location ${location}`);
+  }
+  const expected = new URL(input.publicOrigin);
+  if (parsed.origin !== expected.origin || parsed.pathname !== "/") {
+    throw new Error(`Demo consume redirect mismatch: ${location}`);
+  }
+}
+
+function readDemoCookie(response: DemoConsumeResponse) {
+  const cookie = response.setCookies.find((value) => value.startsWith(`${demoSessionCookieName}=`));
   const pair = cookie?.split(";", 1)[0];
   const cookieValue = pair?.slice(demoSessionCookieName.length + 1);
   if (!cookie || !pair || !cookieValue) {
@@ -82,6 +143,69 @@ function readDemoCookie(response: Response) {
     cookieHeader: pair,
     cookieValue,
   };
+}
+
+export async function requestDemoConsume(input: {
+  targetUrl: URL;
+  hostHeader: string;
+}): Promise<DemoConsumeResponse> {
+  const headers = {
+    Host: input.hostHeader,
+    "X-Seven-Ingress": "api",
+  };
+
+  if (input.targetUrl.protocol === "https:") {
+    if (input.targetUrl.host !== input.hostHeader) {
+      throw new Error(
+        "HTTPS demo consume proof cannot override Host; use loopback HTTP transport.",
+      );
+    }
+    const response = await fetch(input.targetUrl, {
+      method: "GET",
+      headers,
+      redirect: "manual",
+    });
+    return {
+      status: response.status,
+      location: response.headers.get("location"),
+      setCookies:
+        (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ?? [],
+      body: await response.text(),
+    };
+  }
+
+  if (input.targetUrl.protocol !== "http:") {
+    throw new Error(`Unsupported demo consume transport protocol ${input.targetUrl.protocol}`);
+  }
+
+  return new Promise<DemoConsumeResponse>((resolve, reject) => {
+    const request = http.request(
+      input.targetUrl,
+      {
+        method: "GET",
+        headers,
+      },
+      (response) => {
+        response.setEncoding("utf8");
+        let body = "";
+        response.on("data", (chunk: string) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          const setCookie = response.headers["set-cookie"];
+          resolve({
+            status: response.statusCode ?? 0,
+            location:
+              typeof response.headers.location === "string" ? response.headers.location : null,
+            setCookies: Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [],
+            body,
+          });
+        });
+      },
+    );
+    request.on("error", reject);
+    request.end();
+  });
 }
 
 type PayloadSchema<T> = Readonly<{ parse(value: unknown): T }>;
@@ -142,20 +266,19 @@ async function consumeDemoLink(input: {
   email: string;
   receivedEmail: { html?: string | null; text?: string | null };
 }) {
-  const consumeUrl = extractDemoConsumeUrl({
+  const consumeUrl = extractDemoConsumeUrlFromEmail({
+    text: `${input.receivedEmail.html ?? ""}\n${input.receivedEmail.text ?? ""}`,
+  });
+  const transport = buildDemoConsumeTransport({
     baseUrl: input.baseUrl,
-    html: input.receivedEmail.html,
-    text: input.receivedEmail.text,
+    consumeUrl,
+    publicOrigin: input.publicOrigin,
   });
-  const response = await fetch(consumeUrl, {
-    method: "GET",
-    headers: { "X-Seven-Ingress": "api" },
-    redirect: "manual",
-  });
+  const response = await requestDemoConsume(transport);
   if (response.status !== 303) {
-    const body = await response.text();
-    throw new Error(`Demo consume failed (${response.status}): ${body}`);
+    throw new Error(`Demo consume failed (${response.status}): ${response.body}`);
   }
+  assertDemoConsumeResponseRedirect({ response, publicOrigin: input.publicOrigin });
 
   const cookie = readDemoCookie(response);
   const session = await demoApiRequest({

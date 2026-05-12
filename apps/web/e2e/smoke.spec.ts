@@ -5,7 +5,7 @@ const demoEmail = process.env.SEVEN_PLAYWRIGHT_DEMO_EMAIL ?? "";
 const demoExpiresAt = process.env.SEVEN_PLAYWRIGHT_DEMO_EXPIRES_AT ?? "";
 const sessionId = process.env.SEVEN_PLAYWRIGHT_SESSION_ID ?? "";
 const sessionQuery = process.env.SEVEN_PLAYWRIGHT_SESSION_QUERY ?? "";
-const baseUrl = process.env.SEVEN_BASE_URL ?? "http://127.0.0.1:3000";
+const baseUrl = process.env.SEVEN_BASE_URL;
 const demoCookieName = "seven_demo_session";
 const hasAuthenticatedSmokeState =
   demoCookie.length > 0 &&
@@ -16,13 +16,17 @@ const hasAuthenticatedSmokeState =
 
 test("home renders", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("The Seven")).toBeVisible();
+  await expect(page.locator("header").getByText("The Seven", { exact: true })).toBeVisible();
 });
 
 test.describe("authenticated smoke", () => {
+  test.describe.configure({ mode: "serial" });
   test.skip(!hasAuthenticatedSmokeState, "requires live smoke auth state");
 
   test.beforeEach(async ({ context }) => {
+    if (!baseUrl) {
+      throw new Error("SEVEN_BASE_URL is required for authenticated smoke.");
+    }
     const origin = new URL(baseUrl);
     await context.addCookies([
       {
@@ -49,6 +53,39 @@ test.describe("authenticated smoke", () => {
 
   test("session page renders after a created session", async ({ page }) => {
     await page.goto(`/sessions/${sessionId}`);
-    await expect(page.getByRole("heading", { name: sessionQuery, level: 2 })).toBeVisible();
+    await expect(page.locator(".ask-band").getByText(sessionQuery)).toBeVisible();
+  });
+
+  test("End Demo revokes server authority", async ({ context, page }) => {
+    if (!baseUrl) {
+      throw new Error("SEVEN_BASE_URL is required for authenticated smoke.");
+    }
+    await page.goto("/");
+    await expect(page.getByText("DEMO", { exact: true })).toBeVisible();
+
+    page.once("dialog", (dialog) => {
+      void dialog.accept();
+    });
+    const logoutResponse = page.waitForResponse(
+      (response) => response.url().endsWith("/api/v1/demo/logout") && response.status() === 200,
+    );
+    await page.getByRole("button", { name: "End Demo" }).click();
+    await logoutResponse;
+
+    await expect(page.getByText("LOCKED", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "End Demo" })).toBeHidden();
+    const cookies = await context.cookies(baseUrl);
+    expect(cookies.some((cookie) => cookie.name === demoCookieName)).toBe(false);
+
+    const sessionResponse = await page.request.get(
+      new URL("/api/v1/demo/session", baseUrl).toString(),
+      {
+        headers: {
+          Cookie: `${demoCookieName}=${demoCookie}`,
+          "X-Seven-Ingress": "web",
+        },
+      },
+    );
+    expect(sessionResponse.status()).toBe(401);
   });
 });

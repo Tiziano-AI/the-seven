@@ -14,6 +14,27 @@ import { handleRedirectRoute } from "@/server/http/route";
 import { consumeDemoAuthLink, DemoAuthError } from "@/server/services/demoAuth";
 import { admitDemoConsume } from "@/server/services/demoLimits";
 
+type BrowserDemoLinkState = "invalid" | "expired" | "disabled";
+
+function browserDemoLinkState(error: DemoAuthError): BrowserDemoLinkState {
+  if (error.kind === "demo_disabled") {
+    return "disabled";
+  }
+  if (error.kind === "link_expired") {
+    return "expired";
+  }
+  return "invalid";
+}
+
+function demoLinkRecoveryRedirect(input: {
+  publicOrigin: string;
+  state: BrowserDemoLinkState;
+}): NextResponse {
+  const url = new URL("/", input.publicOrigin);
+  url.searchParams.set("demo_link", input.state);
+  return NextResponse.redirect(url, 303);
+}
+
 function mapDemoConsumeError(error: DemoAuthError): EdgeError {
   if (error.kind === "demo_disabled") {
     return new EdgeError({
@@ -42,7 +63,29 @@ function mapDemoConsumeError(error: DemoAuthError): EdgeError {
 export async function GET(request: NextRequest) {
   return handleRedirectRoute(request, {
     route: routeContract("demo.consume"),
-    handler: async (ctx, rawRequest, input) => {
+    preAdmission: (req) => {
+      const env = serverRuntime();
+      const publicOriginHost = new URL(env.publicOrigin).host;
+      if (req.headers.get("host") !== publicOriginHost) {
+        throw new EdgeError({
+          kind: "forbidden",
+          message: "Demo consume must use the configured public origin",
+          details: forbiddenDetails("public_origin_required"),
+          status: 403,
+        });
+      }
+      const isApiIngress = req.headers.get("x-seven-ingress") === "api";
+      const token = req.nextUrl.searchParams.get("token");
+      if (!token && !isApiIngress) {
+        return demoLinkRecoveryRedirect({
+          publicOrigin: env.publicOrigin,
+          state: "invalid",
+        });
+      }
+    },
+    handler: async (ctx, _rawRequest, input) => {
+      const env = serverRuntime();
+
       const limited = await admitDemoConsume({
         ip: ctx.ip,
         now: ctx.now,
@@ -61,14 +104,13 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      const env = serverRuntime();
       try {
         const session = await consumeDemoAuthLink({
           token: input.query.token,
           consumedIp: ctx.ip,
           now: ctx.now,
         });
-        const response = NextResponse.redirect(new URL("/", rawRequest.nextUrl), 303);
+        const response = NextResponse.redirect(new URL("/", env.publicOrigin), 303);
         setDemoSessionCookie({
           response,
           token: session.token,
@@ -78,7 +120,13 @@ export async function GET(request: NextRequest) {
         return response;
       } catch (error) {
         if (error instanceof DemoAuthError) {
-          throw mapDemoConsumeError(error);
+          if (ctx.ingress.source === "api") {
+            throw mapDemoConsumeError(error);
+          }
+          return demoLinkRecoveryRedirect({
+            publicOrigin: env.publicOrigin,
+            state: browserDemoLinkState(error),
+          });
         }
         throw error;
       }

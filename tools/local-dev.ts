@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { chromium } from "@playwright/test";
-import { cliRuntime, serverRuntime } from "@the-seven/config";
+import { serverRuntime } from "@the-seven/config";
 import {
   checkEnvFileMode,
   checkEnvFilePresence,
@@ -11,6 +11,7 @@ import {
   checkLegacyEnvRuntimeKeys,
   readEnvAssignments,
 } from "./env-doctor";
+import { materializeLocalHttpProjection } from "./local-http";
 import {
   ensureComposePostgresHealthy,
   type OperatorCheckResult,
@@ -18,6 +19,7 @@ import {
   toCanonicalLocalPostgresCheck,
   waitForComposePostgresHealthy,
 } from "./local-postgres";
+import { buildNextDevServerCommand } from "./next-dev";
 import { runCommand, runCommandOrThrow, sleep, stopChild } from "./process-utils";
 
 const repoRoot = process.cwd();
@@ -50,23 +52,6 @@ function ensureEnvLocalExists() {
     ? " Legacy `.env` exists; move its keys into `.env.local`."
     : "";
   throw new Error(`Missing .env.local.${legacyHint}`);
-}
-function buildAppCommand() {
-  const env = serverRuntime();
-  return {
-    command: "pnpm",
-    args: [
-      "--filter",
-      "@the-seven/web",
-      "exec",
-      "next",
-      "dev",
-      "--hostname",
-      "127.0.0.1",
-      "--port",
-      String(env.port),
-    ],
-  };
 }
 async function commandExists(command: string) {
   const result = await runCommand("which", [command]);
@@ -334,9 +319,11 @@ async function runDbReset() {
 async function runDev() {
   ensureEnvLocalExists();
   await ensureComposeDbHealthy();
-  const app = buildAppCommand();
+  const projection = await materializeLocalHttpProjection(process.env);
+  const app = buildNextDevServerCommand();
+  console.log(`Local app: ${projection.baseUrl}`);
   await runCommandOrThrow(app.command, app.args, {
-    env: process.env,
+    env: projection.env,
     stdio: "inherit",
   });
 }
@@ -358,11 +345,13 @@ async function runLive() {
   }
   await runDbUp();
 
-  const baseUrl = cliRuntime().baseUrl;
-  const app = buildAppCommand();
+  const projection = await materializeLocalHttpProjection(process.env);
+  const baseUrl = projection.baseUrl;
+  const app = buildNextDevServerCommand();
+  console.log(`Live proof app: ${projection.baseUrl}`);
   const child = spawn(app.command, app.args, {
     cwd: repoRoot,
-    env: process.env,
+    env: projection.env,
     stdio: "inherit",
   });
 
@@ -370,7 +359,7 @@ async function runLive() {
     await waitForHttpReady(baseUrl);
     await runCommandOrThrow("pnpm", ["test:live"], {
       env: {
-        ...process.env,
+        ...projection.env,
         SEVEN_PLAYWRIGHT_EXTERNAL_SERVER: "1",
       },
       stdio: "inherit",

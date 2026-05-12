@@ -44,7 +44,10 @@ function resolveRequestUrl(path: string) {
     return path;
   }
 
-  const baseUrl = process.env.SEVEN_BASE_URL ?? "http://127.0.0.1:3000";
+  const baseUrl = process.env.SEVEN_BASE_URL;
+  if (!baseUrl) {
+    throw new Error("SEVEN_BASE_URL is required for server-side API requests.");
+  }
   return new URL(path, baseUrl).toString();
 }
 

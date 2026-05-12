@@ -9,6 +9,7 @@ CHARTER.md
 
 # Build outputs
 .next/
+**/.next-local/
 dist/
 build/
 coverage/

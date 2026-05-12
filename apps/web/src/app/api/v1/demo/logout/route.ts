@@ -1,10 +1,11 @@
 import { serverRuntime } from "@the-seven/config";
-import { forbiddenDetails, routeContract } from "@the-seven/contracts";
+import { forbiddenDetails, routeContract, unauthorizedDetails } from "@the-seven/contracts";
 import type { NextRequest } from "next/server";
 import { clearDemoSessionCookie } from "@/server/http/demoCookie";
 import { EdgeError } from "@/server/http/errors";
 import { requireAuth } from "@/server/http/requireAuth";
 import { handleRoute } from "@/server/http/route";
+import { endDemoSession } from "@/server/services/demoAuth";
 
 export async function POST(request: NextRequest) {
   const response = await handleRoute(request, {
@@ -17,6 +18,18 @@ export async function POST(request: NextRequest) {
           message: "Demo session required",
           details: forbiddenDetails("demo_required"),
           status: 403,
+        });
+      }
+      const revoked = await endDemoSession({
+        sessionId: auth.demoSessionId,
+        now: ctx.now,
+      });
+      if (!revoked) {
+        throw new EdgeError({
+          kind: "unauthorized",
+          message: "Invalid demo session",
+          details: unauthorizedDetails("invalid_token"),
+          status: 401,
         });
       }
       return { success: true };

@@ -34,6 +34,14 @@ function assignmentsToEnv(assignments: ReadonlyMap<string, string>): NodeJS.Proc
   };
 }
 
+function assignmentsToLiveProfileEnv(assignments: ReadonlyMap<string, string>): NodeJS.ProcessEnv {
+  const env = assignmentsToEnv(assignments);
+  if (!env.SEVEN_BASE_URL) {
+    env.SEVEN_BASE_URL = "http://127.0.0.1:1";
+  }
+  return env;
+}
+
 function formatZodFailure(error: unknown) {
   if (error && typeof error === "object" && "issues" in error && Array.isArray(error.issues)) {
     return error.issues
@@ -160,7 +168,7 @@ export function checkEnvProfile(input: {
 
   try {
     if (input.live) {
-      liveProof(assignmentsToEnv(assignments));
+      liveProof(assignmentsToLiveProfileEnv(assignments));
     } else {
       operatorDoctor(assignmentsToEnv(assignments));
     }

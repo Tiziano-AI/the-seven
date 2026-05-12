@@ -107,7 +107,7 @@ export function usage() {
     "",
     "Environment:",
     "  SEVEN_BYOK_KEY=... (required)",
-    "  SEVEN_BASE_URL=... (optional, default http://127.0.0.1:3000)",
+    "  SEVEN_BASE_URL=... or --base-url URL (required)",
   ].join("\n");
 }
 

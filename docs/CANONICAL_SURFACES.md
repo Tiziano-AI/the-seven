@@ -19,6 +19,9 @@ app is not.
   own the squashed launch schema.
 - Operator commands: `pnpm local:*` owns local doctor, bootstrap, database, gate,
   and live-proof flows.
+- Local HTTP projection: `tools/local-dev.ts` owns free-port materialization and
+  launch-owned Next dev isolation for local dev, local live proof, and full-gate
+  browser proof.
 
 ## Contract Owners
 
@@ -40,6 +43,8 @@ app is not.
   OpenRouter key validation.
 - Demo authority is the `seven_demo_session` web cookie issued by
   `GET /api/v1/demo/consume`.
+- Demo logout authority is the revocation state on the matching
+  `demo_sessions` row; cookie clearing follows successful server revocation.
 - Cookie-auth mutating routes enforce same-origin admission. BYOK routes remain
   header-based.
 - Rate limiting runs before DB user creation and demo-session lookup.
