@@ -9,7 +9,9 @@ export type ProviderModelRef = Readonly<{
   modelId: string;
 }>;
 
-export const providerModelRefSchema = z.object({
-  provider: z.enum(PROVIDERS),
-  modelId: z.string().trim().min(1).max(255),
-});
+export const providerModelRefSchema = z
+  .object({
+    provider: z.enum(PROVIDERS),
+    modelId: z.string().trim().min(1).max(255),
+  })
+  .strict();

@@ -6,9 +6,9 @@ This document records the canonical owner for each surviving behavior in the rew
 
 | Retired boundary | Canonical replacement |
 | --- | --- |
-| `client/**` SPA routes + hand-rolled history router | `apps/web/app/**` Next App Router routes |
+| `client/**` SPA routes + hand-rolled history router | `apps/web/src/app/**` Next App Router routes |
 | `server/_core/index.ts` Express bootstrap | `apps/web` Next runtime bootstrap |
-| `server/edges/http/**` Express handlers | `apps/web/app/api/v1/**/route.ts` route handlers |
+| `server/edges/http/**` Express handlers | `apps/web/src/app/api/v1/**/route.ts` route handlers |
 | `server/edges/trpc/**` | deleted; no replacement surface |
 | `server/services/**` mixed orchestration/config services | `apps/web/src/server/**` by role: `auth`, `workflow`, `adapter`, `store` |
 | `server/stores/**` ad hoc store modules | `packages/db` query and transaction modules |
@@ -50,6 +50,6 @@ This document records the canonical owner for each surviving behavior in the rew
 | ad hoc route/build aliases | workspace TS config + package exports |
 | repo-root `.env` runtime scripts | repo-root `.env.local` loaded through the canonical config/env loader |
 | manual local Postgres bootstrapping | `compose.yaml` Postgres service on `127.0.0.1:5432` |
-| scattered local shell commands | `tools/local-dev.ts` subcommands surfaced as `pnpm local:*` |
-| self-contained Playwright dev-server startup only | Playwright config that can either self-start or honor an externally started local server |
+| scattered local shell commands | `tools/local-dev.ts` subcommands surfaced as `pnpm local:*`; `pnpm dev` aliases `pnpm local:dev` |
+| self-contained Playwright dev-server startup only | Playwright self-start through the local HTTP projection, or explicit external-server mode from `pnpm local:live` |
 | dashboard-managed permanent Resend webhook for local testing | Resend Receiving API polling and retrieval owned by `pnpm test:live` |

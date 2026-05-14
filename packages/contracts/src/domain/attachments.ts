@@ -25,15 +25,19 @@ export const MAX_ATTACHMENT_DECODED_BYTES = 2 * 1024 * 1024;
 export const MAX_ATTACHMENT_EXTRACTED_CHARS = 120_000;
 export const ATTACHMENT_PARSE_TIMEOUT_MS = 15_000;
 
-export const attachmentUploadSchema = z.object({
-  name: z.string().trim().min(1).max(MAX_ATTACHMENT_FILENAME_CHARS),
-  base64: z.string().trim().min(1),
-});
+export const attachmentUploadSchema = z
+  .object({
+    name: z.string().trim().min(1).max(MAX_ATTACHMENT_FILENAME_CHARS),
+    base64: z.string().trim().min(1),
+  })
+  .strict();
 
-export const attachmentTextSchema = z.object({
-  name: z.string().trim().min(1),
-  text: z.string(),
-});
+export const attachmentTextSchema = z
+  .object({
+    name: z.string().trim().min(1),
+    text: z.string(),
+  })
+  .strict();
 
 export type AttachmentUpload = z.infer<typeof attachmentUploadSchema>;
 export type AttachmentText = z.infer<typeof attachmentTextSchema>;

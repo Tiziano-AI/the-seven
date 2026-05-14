@@ -1,5 +1,6 @@
 "use client";
 
+import type { DemoSessionPayload } from "@the-seven/contracts";
 import {
   createContext,
   useCallback,
@@ -12,11 +13,9 @@ import {
 import { fetchDemoSession, logoutDemoSession } from "@/lib/api";
 import { clearEncryptedKey } from "@/lib/crypto";
 import { writeActiveSessionId } from "@/lib/storage";
+import { shouldClearLocalDemoSessionAfterLogoutError } from "./demo-logout";
 
-type DemoSession = Readonly<{
-  email: string;
-  expiresAt: number;
-}>;
+type DemoSession = DemoSessionPayload;
 
 type AuthMode = "none" | "byok" | "demo";
 
@@ -29,7 +28,7 @@ type AuthContextValue = Readonly<{
   setByokKey: (value: string | null) => void;
   resetEncryptedKey: () => void;
   clearByokKey: () => void;
-  clearDemoSession: () => void;
+  clearDemoSession: () => Promise<void>;
 }>;
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
@@ -74,11 +73,27 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
     [clearTimeoutRef, resetTimeout],
   );
 
-  const clearDemoSession = useCallback(() => {
+  const clearLocalDemoSession = useCallback(() => {
     setDemoSessionState(null);
     writeActiveSessionId(null);
-    void logoutDemoSession().catch(() => undefined);
   }, []);
+
+  const clearDemoSession = useCallback(async () => {
+    try {
+      await logoutDemoSession();
+      clearLocalDemoSession();
+    } catch (error) {
+      if (shouldClearLocalDemoSessionAfterLogoutError(error)) {
+        clearLocalDemoSession();
+        return;
+      }
+      throw error;
+    }
+  }, [clearLocalDemoSession]);
+
+  const resetExpiredDemoSession = useCallback(() => {
+    clearLocalDemoSession();
+  }, [clearLocalDemoSession]);
 
   const resetEncryptedKey = useCallback(() => {
     clearByokKey();
@@ -119,9 +134,9 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
 
   useEffect(() => {
     if (demoSession && demoSession.expiresAt <= Date.now()) {
-      clearDemoSession();
+      resetExpiredDemoSession();
     }
-  }, [demoSession, clearDemoSession]);
+  }, [demoSession, resetExpiredDemoSession]);
 
   const mode: AuthMode = byokKey ? "byok" : demoSession ? "demo" : "none";
   const authHeader = useMemo(() => {

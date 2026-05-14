@@ -77,6 +77,7 @@ export async function createDemoSession(input: {
       tokenHash: input.tokenHash,
       expiresAt: input.expiresAt,
       lastUsedAt: input.lastUsedAt,
+      revokedAt: null,
       createdAt: input.createdAt,
     })
     .returning();
@@ -89,7 +90,7 @@ export async function getDemoSessionByTokenHash(tokenHash: string) {
   const rows = await db
     .select()
     .from(demoSessions)
-    .where(eq(demoSessions.tokenHash, tokenHash))
+    .where(and(eq(demoSessions.tokenHash, tokenHash), isNull(demoSessions.revokedAt)))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -99,5 +100,16 @@ export async function touchDemoSession(input: { id: number; lastUsedAt: Date }) 
   await db
     .update(demoSessions)
     .set({ lastUsedAt: input.lastUsedAt })
-    .where(and(eq(demoSessions.id, input.id)));
+    .where(and(eq(demoSessions.id, input.id), isNull(demoSessions.revokedAt)));
+}
+
+export async function revokeDemoSession(input: { id: number; revokedAt: Date }): Promise<boolean> {
+  const db = await getDb();
+  const updated = await db
+    .update(demoSessions)
+    .set({ revokedAt: input.revokedAt })
+    .where(and(eq(demoSessions.id, input.id), isNull(demoSessions.revokedAt)))
+    .returning({ id: demoSessions.id });
+
+  return updated.length > 0;
 }

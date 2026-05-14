@@ -4,9 +4,11 @@
 [build]
 builder = "RAILPACK"
 buildEnvironment = "V3"
+buildCommand = "pnpm build"
 
 [deploy]
 runtime = "V2"
+startCommand = "pnpm start"
 numReplicas = 1
 sleepApplication = false
 restartPolicyType = "ON_FAILURE"

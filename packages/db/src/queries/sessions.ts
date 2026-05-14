@@ -1,7 +1,8 @@
-import type { AttachmentText, SessionSnapshot } from "@the-seven/contracts";
+import type { AttachmentText, BillingLookupStatus, SessionSnapshot } from "@the-seven/contracts";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../client";
 import { jobs, providerCalls, sessionArtifacts, sessions } from "../schema";
+import { type ClaimedJobLease, ClaimedJobLeaseLostError } from "./claimedLease";
 
 export type SessionFailureKind =
   | "server_restart"
@@ -19,6 +20,15 @@ function requireRow<T>(rows: ReadonlyArray<T>, label: string): T {
     throw new Error(`Expected row for ${label}`);
   }
   return row;
+}
+
+function requireLeaseSessionMatch(input: { sessionId: number; claimedLease: ClaimedJobLease }) {
+  if (input.sessionId !== input.claimedLease.sessionId) {
+    throw new ClaimedJobLeaseLostError({
+      ...input.claimedLease,
+      reason: "session mismatch",
+    });
+  }
 }
 
 export async function createSessionWithJob(input: {
@@ -95,60 +105,34 @@ export async function listSessionsByUserId(userId: number) {
     .orderBy(desc(sessions.createdAt));
 }
 
-export async function setSessionPending(sessionId: number) {
+export async function startClaimedSessionProcessing(input: ClaimedJobLease) {
   const db = await getDb();
-  await db
-    .update(sessions)
-    .set({
-      status: "pending",
-      failureKind: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(sessions.id, sessionId));
-}
-
-export async function startSessionProcessing(sessionId: number) {
-  const db = await getDb();
+  const now = new Date();
   const updated = await db
     .update(sessions)
     .set({
       status: "processing",
       failureKind: null,
-      updatedAt: new Date(),
+      updatedAt: now,
     })
     .where(
       and(
-        eq(sessions.id, sessionId),
+        eq(sessions.id, input.sessionId),
         inArray(sessions.status, ["pending", "failed", "processing"]),
+        sql`exists (
+          select 1
+          from ${jobs}
+          where ${jobs.id} = ${input.jobId}
+            and ${jobs.sessionId} = ${sessions.id}
+            and ${jobs.state} = 'leased'
+            and ${jobs.leaseOwner} = ${input.leaseOwner}
+            and ${jobs.leaseExpiresAt} > ${now}
+        )`,
       ),
     )
     .returning({ id: sessions.id });
 
   return updated.length > 0;
-}
-
-export async function markSessionCompleted(sessionId: number) {
-  const db = await getDb();
-  await db
-    .update(sessions)
-    .set({
-      status: "completed",
-      failureKind: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(sessions.id, sessionId));
-}
-
-export async function markSessionFailed(sessionId: number, failureKind: SessionFailureKind) {
-  const db = await getDb();
-  await db
-    .update(sessions)
-    .set({
-      status: "failed",
-      failureKind,
-      updatedAt: new Date(),
-    })
-    .where(eq(sessions.id, sessionId));
 }
 
 export async function listSessionArtifacts(sessionId: number) {
@@ -169,21 +153,45 @@ export async function createSessionArtifact(input: {
   content: string;
   tokensUsed?: number | null;
   costUsdMicros?: number | null;
+  claimedLease?: ClaimedJobLease;
 }) {
   const db = await getDb();
-  await db
-    .insert(sessionArtifacts)
-    .values({
-      sessionId: input.sessionId,
-      phase: input.phase,
-      artifactKind: input.artifactKind,
-      memberPosition: input.memberPosition,
-      modelId: input.modelId,
-      content: input.content,
-      tokensUsed: input.tokensUsed ?? null,
-      costUsdMicros: input.costUsdMicros ?? null,
-    })
-    .onConflictDoNothing();
+  const values = {
+    sessionId: input.sessionId,
+    phase: input.phase,
+    artifactKind: input.artifactKind,
+    memberPosition: input.memberPosition,
+    modelId: input.modelId,
+    content: input.content,
+    tokensUsed: input.tokensUsed ?? null,
+    costUsdMicros: input.costUsdMicros ?? null,
+  };
+  if (!input.claimedLease) {
+    await db.insert(sessionArtifacts).values(values).onConflictDoNothing();
+    return;
+  }
+
+  const claimedLease = input.claimedLease;
+  requireLeaseSessionMatch({ sessionId: input.sessionId, claimedLease });
+  await db.transaction(async (tx) => {
+    const leaseRows = await tx.execute(sql`
+      select id
+      from ${jobs}
+      where id = ${claimedLease.jobId}
+        and session_id = ${input.sessionId}
+        and state = 'leased'
+        and lease_owner = ${claimedLease.leaseOwner}
+        and lease_expires_at > ${new Date()}
+      for update
+    `);
+    if (leaseRows.rows.length === 0) {
+      throw new ClaimedJobLeaseLostError({
+        ...claimedLease,
+        reason: "active lease not found",
+      });
+    }
+    await tx.insert(sessionArtifacts).values(values).onConflictDoNothing();
+  });
 }
 
 export async function getSessionArtifact(input: {
@@ -211,12 +219,16 @@ export async function createProviderCall(input: {
   phase: number;
   memberPosition: number;
   requestModelId: string;
+  requestMaxOutputTokens: number | null;
   requestSystemChars: number;
   requestUserChars: number;
   requestTotalChars: number;
   catalogRefreshedAt: Date | null;
   supportedParametersJson: string[];
   sentParametersJson: string[];
+  sentReasoningEffort: string | null;
+  sentProviderRequireParameters: boolean;
+  sentProviderIgnoredProvidersJson: string[];
   deniedParametersJson: string[];
   requestStartedAt: Date | null;
   responseCompletedAt: Date | null;
@@ -235,17 +247,43 @@ export async function createProviderCall(input: {
   choiceErrorCode: number | null;
   errorStatus: number | null;
   errorCode: string | null;
-  billingLookupStatus: string;
+  billingLookupStatus: BillingLookupStatus;
+  claimedLease?: ClaimedJobLease;
 }) {
   const db = await getDb();
-  await db.insert(providerCalls).values(input);
+  const { claimedLease, ...values } = input;
+  if (!claimedLease) {
+    await db.insert(providerCalls).values(values);
+    return;
+  }
+
+  requireLeaseSessionMatch({ sessionId: input.sessionId, claimedLease });
+  await db.transaction(async (tx) => {
+    const leaseRows = await tx.execute(sql`
+      select id
+      from ${jobs}
+      where id = ${claimedLease.jobId}
+        and session_id = ${input.sessionId}
+        and state = 'leased'
+        and lease_owner = ${claimedLease.leaseOwner}
+        and lease_expires_at > ${new Date()}
+      for update
+    `);
+    if (leaseRows.rows.length === 0) {
+      throw new ClaimedJobLeaseLostError({
+        ...claimedLease,
+        reason: "active lease not found",
+      });
+    }
+    await tx.insert(providerCalls).values(values);
+  });
 }
 
 export async function updateProviderCallCost(
   callId: number,
   totalCostUsdMicros: number,
   billedModelId: string | null,
-  billingLookupStatus = "succeeded",
+  billingLookupStatus: BillingLookupStatus = "succeeded",
 ) {
   const db = await getDb();
   await db
@@ -256,6 +294,51 @@ export async function updateProviderCallCost(
       ...(billedModelId !== null ? { billedModelId } : {}),
     })
     .where(eq(providerCalls.id, callId));
+}
+
+export async function updateProviderCallBillingStatus(
+  callId: number,
+  billingLookupStatus: BillingLookupStatus,
+) {
+  const db = await getDb();
+  await db.update(providerCalls).set({ billingLookupStatus }).where(eq(providerCalls.id, callId));
+}
+
+export async function markSessionPendingBillingFailed(sessionId: number) {
+  const db = await getDb();
+  const rows = await db.execute(sql`
+    update ${providerCalls}
+    set billing_lookup_status = 'failed'
+    where session_id = ${sessionId}
+      and billing_lookup_status = 'pending'
+      and response_id is not null
+      and exists (
+        select 1
+        from ${sessions}
+        where ${sessions.id} = ${providerCalls.sessionId}
+          and ${sessions.status} in ('completed', 'failed')
+      )
+    returning id
+  `);
+  await refreshSessionUsageTotals(sessionId);
+  return rows.rows.length;
+}
+
+export async function listSessionsWithPendingBilling() {
+  const db = await getDb();
+  const rows = await db
+    .select({ sessionId: providerCalls.sessionId })
+    .from(providerCalls)
+    .innerJoin(sessions, eq(providerCalls.sessionId, sessions.id))
+    .where(
+      and(
+        eq(providerCalls.billingLookupStatus, "pending"),
+        sql`${providerCalls.responseId} is not null`,
+        inArray(sessions.status, ["completed", "failed"]),
+      ),
+    )
+    .groupBy(providerCalls.sessionId);
+  return rows.map((row) => row.sessionId);
 }
 
 export async function listProviderCalls(sessionId: number) {

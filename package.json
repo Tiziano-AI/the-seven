@@ -8,7 +8,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "dev": "pnpm --filter @the-seven/web dev",
+    "dev": "pnpm local:dev",
     "build": "pnpm --filter @the-seven/web build",
     "start": "pnpm --filter @the-seven/web start",
     "local:doctor": "node --import tsx tools/local-dev.ts doctor",
@@ -19,6 +19,7 @@
     "local:dev": "node --import tsx tools/local-dev.ts dev",
     "local:gate": "node --import tsx tools/local-dev.ts gate",
     "local:live": "node --import tsx tools/local-dev.ts live",
+    "public:smoke": "node --import tsx tools/public-smoke.ts",
     "lint": "biome check .",
     "format": "biome format --write .",
     "check": "tsc --pretty false --noEmit -p tsconfig.check.json",

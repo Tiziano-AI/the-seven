@@ -6,6 +6,7 @@ export * from "./domain/councilRef";
 export * from "./domain/ingress";
 export * from "./domain/phaseEvaluation";
 export * from "./domain/phasePrompts";
+export * from "./domain/providerDiagnostics";
 export * from "./domain/providerModels";
 export * from "./domain/sessionSnapshot";
 export * from "./domain/sevenMembers";

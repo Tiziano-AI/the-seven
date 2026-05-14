@@ -9,6 +9,7 @@ import {
   getOrCreateUser,
   getUserById,
   markDemoMagicLinkUsed,
+  revokeDemoSession,
 } from "@the-seven/db";
 import { sendResendEmail } from "../adapters/resend";
 import { createDemoToken, hashDemoToken } from "../domain/demoTokens";
@@ -149,8 +150,16 @@ export async function getDemoSessionContext(input: { token: string; now: Date })
 
   return {
     kind: "active",
+    sessionId: session.id,
     userId: user.id,
     principal: user.principal,
     expiresAt: session.expiresAt.getTime(),
   } as const;
+}
+
+export async function endDemoSession(input: { sessionId: number; now: Date }): Promise<boolean> {
+  return revokeDemoSession({
+    id: input.sessionId,
+    revokedAt: input.now,
+  });
 }

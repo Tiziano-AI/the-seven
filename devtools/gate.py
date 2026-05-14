@@ -30,8 +30,39 @@ class GateConfig:
     e2e: bool
 
 
-def _run(cmd: list[str], *, cwd: Path) -> None:
-    subprocess.run(cmd, cwd=cwd, check=True)
+def _run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
+    subprocess.run(cmd, cwd=cwd, check=True, env=env)
+
+
+def _materialize_local_http_projection(repo_root: Path) -> dict[str, str]:
+    result = subprocess.run(
+        ["node", "--import", "tsx", "tools/local-http-projection.ts"],
+        cwd=repo_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        loaded = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Failed to parse local HTTP projection JSON: {exc}")
+    if not isinstance(loaded, dict):
+        raise SystemExit("Local HTTP projection did not return an object")
+
+    required = ("PORT", "SEVEN_BASE_URL", "SEVEN_NEXT_DIST_DIR", "SEVEN_PUBLIC_ORIGIN")
+    projection: dict[str, str] = {}
+    for key in required:
+        value = loaded.get(key)
+        if not isinstance(value, str) or not value:
+            raise SystemExit(f"Local HTTP projection missing {key}")
+        projection[key] = value
+    return projection
+
+
+def _build_e2e_env(repo_root: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(_materialize_local_http_projection(repo_root))
+    return env
 
 
 def _git_ls_files(*, repo_root: Path) -> list[Path]:
@@ -132,6 +163,23 @@ def _check_drizzle_squashed_init(*, repo_root: Path) -> None:
         )
 
 
+def _check_next_env_canonical(*, repo_root: Path) -> None:
+    path = repo_root / "apps" / "web" / "next-env.d.ts"
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    if ".next-local/" in text:
+        raise SystemExit(
+            "Tracked apps/web/next-env.d.ts points at launch-owned .next-local runtime cache.\n"
+            "Fix: restore the file to import './.next/types/routes.d.ts'."
+        )
+    if './.next/types/routes.d.ts' not in text and '"./.next/types/routes.d.ts"' not in text:
+        raise SystemExit(
+            "Tracked apps/web/next-env.d.ts is missing the canonical .next type reference.\n"
+            "Fix: restore the file to import './.next/types/routes.d.ts'."
+        )
+
+
 def _check_canonical_surfaces(*, repo_root: Path) -> None:
     conflicting_root_entries = {
         ".env.example": ".env.local.example and .env.live.example own env examples",
@@ -185,25 +233,45 @@ def _check_canonical_surfaces(*, repo_root: Path) -> None:
         joined = "\n".join(f"- {item}" for item in dependency_hits)
         raise SystemExit("Package manifest conflicts with canonical owners:\n" + joined)
 
-    active_contract_files = [
-        "packages/config/src/builtInCouncils.ts",
-        "apps/web/e2e/smoke.spec.ts",
-        ".env.local.example",
-        ".env.live.example",
-    ]
+    expected_scripts = {
+        "package.json": {"dev": "pnpm local:dev"},
+        "apps/web/package.json": {"dev": "node --import tsx ../../tools/next-dev-server.ts"},
+    }
+    script_hits: list[str] = []
+    for rel, scripts in expected_scripts.items():
+        path = repo_root / rel
+        if not path.exists():
+            continue
+        try:
+            package = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Failed to parse package manifest: {path.as_posix()} ({exc})")
+        manifest_scripts = package.get("scripts")
+        if not isinstance(manifest_scripts, dict):
+            script_hits.append(f"{rel}: missing scripts")
+            continue
+        for name, expected in scripts.items():
+            actual = manifest_scripts.get(name)
+            if actual != expected:
+                script_hits.append(f"{rel}: scripts.{name}: expected {expected!r}, found {actual!r}")
+
+    if script_hits:
+        joined = "\n".join(f"- {item}" for item in script_hits)
+        raise SystemExit("Local launch script ownership conflict:\n" + joined)
+
     exact_active_token_checks = {
-        "packages/config/src/builtInCouncils.ts": ["x-ai/grok-4.20-beta"],
         "apps/web/e2e/smoke.spec.ts": ["seven.demo.token", "SEVEN_PLAYWRIGHT_DEMO_TOKEN"],
+        "tools/live-test.ts": ["SEVEN_SKIP_DEMO_LIVE"],
         ".env.local.example": ["SEVEN_PLAYWRIGHT_DEMO_TOKEN"],
         ".env.live.example": ["SEVEN_PLAYWRIGHT_DEMO_TOKEN"],
     }
     hazard_hits: list[str] = []
-    for rel in active_contract_files:
+    for rel, hazards in exact_active_token_checks.items():
         path = repo_root / rel
         if not path.exists():
             continue
         text = path.read_text(encoding="utf-8")
-        for hazard in exact_active_token_checks[rel]:
+        for hazard in hazards:
             if hazard in text:
                 hazard_hits.append(f"{rel}: {hazard}")
 
@@ -240,6 +308,7 @@ def main(argv: list[str]) -> int:
 
     _check_file_guardrails(repo_root=config.repo_root)
     _check_drizzle_squashed_init(repo_root=config.repo_root)
+    _check_next_env_canonical(repo_root=config.repo_root)
     _check_canonical_surfaces(repo_root=config.repo_root)
 
     if config.lint:
@@ -253,7 +322,7 @@ def main(argv: list[str]) -> int:
     if config.bootstrap:
         _run(["pnpm", "run", "db:bootstrap:check"], cwd=config.repo_root)
     if config.e2e:
-        _run(["pnpm", "run", "test:e2e"], cwd=config.repo_root)
+        _run(["pnpm", "run", "test:e2e"], cwd=config.repo_root, env=_build_e2e_env(config.repo_root))
 
     return 0
 

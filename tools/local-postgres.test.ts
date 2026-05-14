@@ -39,6 +39,41 @@ describe("local postgres diagnostics", () => {
     });
   });
 
+  test("fails noncanonical database targets without exposing credentials", () => {
+    const detail = describeCanonicalLocalPostgresPort(
+      buildStatus({
+        target: {
+          host: "db.internal",
+          port: "6543",
+          database: "the_seven",
+        },
+      }),
+    );
+
+    expect(detail).toEqual({
+      ok: false,
+      detail:
+        "DATABASE_URL points to db.internal:6543/the_seven, not canonical local Postgres 127.0.0.1:5432/the_seven",
+      fix: "Point DATABASE_URL at the compose-managed local Postgres target from `.env.local.example`.",
+    });
+  });
+
+  test("formats noncanonical database targets as local command failures", () => {
+    const message = formatCanonicalLocalPostgresUnavailableMessage(
+      buildStatus({
+        target: {
+          host: "db.internal",
+          port: "6543",
+          database: "the_seven",
+        },
+      }),
+    );
+
+    expect(message).toContain("db.internal:6543/the_seven");
+    expect(message).not.toContain("postgresql://");
+    expect(message).toContain(".env.local.example");
+  });
+
   test("fails clearly when another docker container owns the canonical port", () => {
     const check = toCanonicalLocalPostgresCheck(
       buildStatus({
@@ -72,6 +107,32 @@ describe("local postgres diagnostics", () => {
 
     expect(message).toContain("agents-postgres-1");
     expect(message).toContain("the-seven-postgres");
+  });
+
+  test("explains database-missing errors on healthy local Postgres as reset work", () => {
+    const message = formatCanonicalLocalPostgresBootstrapMessage({
+      status: buildStatus({
+        composeHealth: "healthy",
+        portOwner: { kind: "docker", name: "the-seven-postgres" },
+      }),
+      error: { code: "3D000" },
+    });
+
+    expect(message).toContain("Database the_seven does not exist");
+    expect(message).toContain("pnpm local:db:reset");
+  });
+
+  test("explains database-missing errors without an active owner as local db startup work", () => {
+    const message = formatCanonicalLocalPostgresBootstrapMessage({
+      status: buildStatus({
+        composeHealth: "missing",
+        portOwner: null,
+      }),
+      error: { code: "3D000" },
+    });
+
+    expect(message).toContain("is not the active Postgres owner");
+    expect(message).toContain("pnpm local:db:up");
   });
 
   test("recognizes connection and database-missing failures", () => {

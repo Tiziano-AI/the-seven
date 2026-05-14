@@ -75,7 +75,12 @@ export function AppShell(props: Readonly<{ children: React.ReactNode }>) {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      if (window.confirm("End demo session?")) auth.clearDemoSession();
+                      if (!window.confirm("End demo session?")) {
+                        return;
+                      }
+                      void auth.clearDemoSession().catch(() => {
+                        window.alert("Demo logout failed. Please try again.");
+                      });
                     }}
                   >
                     End Demo

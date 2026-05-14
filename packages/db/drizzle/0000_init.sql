@@ -1,4 +1,10 @@
 DO $$ BEGIN
+ CREATE TYPE "public"."billing_lookup_status" AS ENUM('not_requested', 'pending', 'succeeded', 'failed');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
  CREATE TYPE "public"."artifact_kind" AS ENUM('response', 'review', 'synthesis');
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -50,6 +56,7 @@ CREATE TABLE IF NOT EXISTS "catalog_cache" (
   "description" text NOT NULL,
   "context_length" integer,
   "max_completion_tokens" integer,
+  "expiration_date" text,
   "supported_parameters_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
   "input_modalities_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
   "output_modalities_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
@@ -95,6 +102,7 @@ CREATE TABLE IF NOT EXISTS "demo_sessions" (
   "token_hash" text NOT NULL,
   "expires_at" timestamp with time zone NOT NULL,
   "last_used_at" timestamp with time zone,
+  "revoked_at" timestamp with time zone,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -158,12 +166,16 @@ CREATE TABLE IF NOT EXISTS "provider_calls" (
   "phase" integer NOT NULL,
   "member_position" integer NOT NULL,
   "request_model_id" text NOT NULL,
+  "request_max_output_tokens" integer,
   "request_system_chars" integer NOT NULL,
   "request_user_chars" integer NOT NULL,
   "request_total_chars" integer NOT NULL,
   "catalog_refreshed_at" timestamp with time zone,
   "supported_parameters_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
   "sent_parameters_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
+  "sent_reasoning_effort" text,
+  "sent_provider_require_parameters" boolean DEFAULT false NOT NULL,
+  "sent_provider_ignored_providers_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
   "denied_parameters_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
   "request_started_at" timestamp with time zone,
   "response_completed_at" timestamp with time zone,
@@ -182,7 +194,7 @@ CREATE TABLE IF NOT EXISTS "provider_calls" (
   "choice_error_code" integer,
   "error_status" integer,
   "error_code" text,
-  "billing_lookup_status" text DEFAULT 'not_requested' NOT NULL,
+  "billing_lookup_status" "billing_lookup_status" DEFAULT 'not_requested' NOT NULL,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   CONSTRAINT "provider_calls_member_position_check" CHECK ("provider_calls"."member_position" between 1 and 7),
   CONSTRAINT "provider_calls_phase_check" CHECK ("provider_calls"."phase" between 1 and 3)

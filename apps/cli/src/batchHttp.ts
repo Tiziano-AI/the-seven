@@ -1,11 +1,14 @@
 import fs from "node:fs";
 import {
+  buildRoutePath,
   type CouncilRef,
   errorEnvelopeSchema,
   INGRESS_SOURCE_CLI,
-  querySubmitBodySchema,
-  sessionDetailPayloadSchema,
-  submitPayloadSchema,
+  type RouteContract,
+  type RoutePathParams,
+  type RouteSuccessPayload,
+  routeContract,
+  routeDeclaresDenial,
   successPayloadSchema,
 } from "@the-seven/contracts";
 import { z } from "zod";
@@ -70,9 +73,17 @@ function invalidResponseError(status: number | null, message: string): BatchErro
   };
 }
 
-function extractBatchError(payload: unknown, status: number | null): BatchError {
+function extractBatchError(
+  route: RouteContract,
+  payload: unknown,
+  status: number | null,
+): BatchError {
   const parsed = errorEnvelopeSchema.safeParse(payload);
-  if (!parsed.success) {
+  if (
+    !parsed.success ||
+    status === null ||
+    !routeDeclaresDenial({ route, status, envelope: parsed.data })
+  ) {
     return invalidResponseError(status, "Request failed");
   }
   return {
@@ -81,6 +92,54 @@ function extractBatchError(payload: unknown, status: number | null): BatchError 
     status,
     traceId: parsed.data.trace_id,
   };
+}
+
+async function requestRoute<Contract extends RouteContract>(input: {
+  baseUrl: string;
+  apiKey: string;
+  ingressVersion: string | null;
+  route: Contract;
+  params?: RoutePathParams;
+  body?: unknown;
+}): Promise<
+  | Readonly<{ ok: true; payload: RouteSuccessPayload<Contract> }>
+  | Readonly<{ ok: false; error: BatchError }>
+> {
+  const headers = buildHeaders(input.apiKey, input.ingressVersion);
+  let body: string | undefined;
+  if (input.body !== undefined) {
+    body = JSON.stringify(input.route.bodySchema.parse(input.body));
+  }
+
+  const response = await fetch(
+    new URL(buildRoutePath(input.route, input.params), input.baseUrl).toString(),
+    {
+      method: input.route.method,
+      headers,
+      body,
+    },
+  );
+
+  const data = await readJson(response);
+  if (!response.ok) {
+    return { ok: false, error: extractBatchError(input.route, data, response.status) };
+  }
+  if (response.status !== input.route.status) {
+    return {
+      ok: false,
+      error: invalidResponseError(response.status, `Invalid ${input.route.resource} status`),
+    };
+  }
+
+  const parsed = successPayloadSchema(input.route.successPayloadSchema).safeParse(data);
+  if (!parsed.success || parsed.data.result.resource !== input.route.resource) {
+    return {
+      ok: false,
+      error: invalidResponseError(response.status, `Invalid ${input.route.resource} response`),
+    };
+  }
+
+  return { ok: true, payload: parsed.data.result.payload };
 }
 
 function sleep(ms: number) {
@@ -95,31 +154,23 @@ export async function submitSession(input: {
   ingressVersion: string | null;
   task: Readonly<{ query: string; councilRef: CouncilRef }>;
 }): Promise<SubmitResult> {
-  const response = await fetch(`${input.baseUrl}/api/v1/sessions`, {
-    method: "POST",
-    headers: buildHeaders(input.apiKey, input.ingressVersion),
-    body: JSON.stringify(
-      querySubmitBodySchema.parse({
-        query: input.task.query,
-        councilRef: input.task.councilRef,
-      }),
-    ),
+  const route = routeContract("sessions.create");
+  const result = await requestRoute({
+    baseUrl: input.baseUrl,
+    apiKey: input.apiKey,
+    ingressVersion: input.ingressVersion,
+    route,
+    body: {
+      query: input.task.query,
+      councilRef: input.task.councilRef,
+    },
   });
 
-  const payload = await readJson(response);
-  if (!response.ok) {
-    return { ok: false, error: extractBatchError(payload, response.status) };
+  if (!result.ok) {
+    return result;
   }
 
-  const parsed = successPayloadSchema(submitPayloadSchema).safeParse(payload);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: invalidResponseError(response.status, "Missing sessionId in successful response"),
-    };
-  }
-
-  return { ok: true, sessionId: parsed.data.result.payload.sessionId };
+  return { ok: true, sessionId: result.payload.sessionId };
 }
 
 export async function waitForSession(input: {
@@ -130,30 +181,22 @@ export async function waitForSession(input: {
   intervalMs: number;
   timeoutMs: number;
 }): Promise<WaitResult> {
+  const route = routeContract("sessions.get");
   const deadline = Date.now() + input.timeoutMs;
   while (true) {
-    const response = await fetch(`${input.baseUrl}/api/v1/sessions/${input.sessionId}`, {
-      method: "GET",
-      headers: buildHeaders(input.apiKey, input.ingressVersion),
+    const result = await requestRoute({
+      baseUrl: input.baseUrl,
+      apiKey: input.apiKey,
+      ingressVersion: input.ingressVersion,
+      route,
+      params: { sessionId: input.sessionId },
     });
 
-    const payload = await readJson(response);
-    if (!response.ok) {
-      return { ok: false, error: extractBatchError(payload, response.status) };
+    if (!result.ok) {
+      return result;
     }
 
-    const parsed = successPayloadSchema(sessionDetailPayloadSchema).safeParse(payload);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: invalidResponseError(
-          response.status,
-          "Missing session detail in successful response",
-        ),
-      };
-    }
-
-    const session = parsed.data.result.payload.session;
+    const session = result.payload.session;
     if (session.status === "completed" || session.status === "failed") {
       return {
         ok: true,

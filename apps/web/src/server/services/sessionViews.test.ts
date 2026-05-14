@@ -1,3 +1,4 @@
+import { routeContract, sessionDiagnosticsPayloadSchema } from "@the-seven/contracts";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const dbMocks = vi.hoisted(() => ({
@@ -32,6 +33,61 @@ describe("sessionViews service", () => {
     ]) {
       mock.mockReset();
     }
+  });
+
+  test("emits a contract-valid first-poll detail for processing sessions without child rows", async () => {
+    dbMocks.getSessionById.mockResolvedValue({
+      id: 12,
+      userId: 3,
+      query: "When is a council worth the latency?",
+      questionHash: "hash-processing",
+      ingressSource: "web",
+      ingressVersion: null,
+      councilNameAtRun: "The Commons Council",
+      status: "processing",
+      failureKind: null,
+      createdAt: new Date("2026-05-14T01:25:29.823Z"),
+      updatedAt: new Date("2026-05-14T01:25:30.363Z"),
+      totalTokens: 0,
+      totalCostUsdMicros: 0,
+      totalCostIsPartial: false,
+      snapshotJson: {
+        version: 1,
+        createdAt: "2026-05-14T01:25:29.782Z",
+        query: "When is a council worth the latency?",
+        userMessage: "When is a council worth the latency?",
+        attachments: [],
+        outputFormats: {
+          phase1: "phase1",
+          phase2: "phase2",
+          phase3: "phase3",
+        },
+        council: {
+          nameAtRun: "The Commons Council",
+          phasePrompts: {
+            phase1: "prompt1",
+            phase2: "prompt2",
+            phase3: "prompt3",
+          },
+          members: [1, 2, 3, 4, 5, 6, 7].map((memberPosition) => ({
+            memberPosition,
+            model: { provider: "openrouter", modelId: `model-${memberPosition}` },
+            tuning: null,
+          })),
+        },
+      },
+    });
+    dbMocks.listSessionArtifacts.mockResolvedValue([]);
+    dbMocks.listProviderCalls.mockResolvedValue([]);
+    dbMocks.listCatalogModelsByIds.mockResolvedValue([]);
+
+    const { getSessionDetail } = await loadSessionViews();
+    const detail = await getSessionDetail(3, 12);
+
+    routeContract("sessions.get").successPayloadSchema.parse(detail);
+    expect(detail.session.status).toBe("processing");
+    expect(detail.artifacts).toEqual([]);
+    expect(detail.providerCalls).toEqual([]);
   });
 
   test("maps session detail into the public contract shape", async () => {
@@ -97,6 +153,14 @@ describe("sessionViews service", () => {
         phase: 3,
         memberPosition: 7,
         requestModelId: "model-7",
+        requestMaxOutputTokens: 8192,
+        catalogRefreshedAt: new Date("2026-04-02T10:03:00.000Z"),
+        supportedParametersJson: ["temperature", "reasoning"],
+        sentParametersJson: ["temperature", "reasoning"],
+        sentReasoningEffort: "low",
+        sentProviderRequireParameters: true,
+        sentProviderIgnoredProvidersJson: ["amazon-bedrock", "azure"],
+        deniedParametersJson: [],
         requestSystemChars: 10,
         requestUserChars: 20,
         requestTotalChars: 30,
@@ -115,6 +179,8 @@ describe("sessionViews service", () => {
         choiceErrorMessage: null,
         choiceErrorCode: null,
         errorStatus: null,
+        errorCode: null,
+        billingLookupStatus: "succeeded",
         responseId: "resp-1",
         createdAt: new Date("2026-04-02T10:05:00.000Z"),
       },
@@ -122,11 +188,11 @@ describe("sessionViews service", () => {
     dbMocks.listCatalogModelsByIds.mockResolvedValue([
       {
         modelId: "model-7",
-        modelName: "GPT-5.4",
+        modelName: "Model Seven",
       },
     ]);
 
-    const { getSessionDetail } = await loadSessionViews();
+    const { getSessionDetail, getSessionDiagnostics } = await loadSessionViews();
     const detail = await getSessionDetail(3, 9);
 
     expect(detail.session).toMatchObject({
@@ -137,16 +203,27 @@ describe("sessionViews service", () => {
     });
     expect(detail.artifacts[0]).toMatchObject({
       artifactKind: "synthesis",
-      modelName: "GPT-5.4",
+      modelName: "Model Seven",
       member: {
         alias: "G",
         role: "synthesizer",
       },
     });
     expect(detail.providerCalls[0]).toMatchObject({
-      requestModelName: "GPT-5.4",
+      requestModelName: "Model Seven",
+      requestMaxOutputTokens: 8192,
+      catalogRefreshedAt: "2026-04-02T10:03:00.000Z",
+      supportedParameters: ["temperature", "reasoning"],
+      sentParameters: ["temperature", "reasoning"],
+      sentReasoningEffort: "low",
+      sentProviderRequireParameters: true,
+      sentProviderIgnoredProviders: ["amazon-bedrock", "azure"],
+      deniedParameters: [],
+      billingLookupStatus: "succeeded",
       responseId: "resp-1",
     });
+    sessionDiagnosticsPayloadSchema.parse(await getSessionDiagnostics(3, 9));
+    expect(dbMocks.listSessionArtifacts).toHaveBeenCalledTimes(1);
   });
 
   test("exports sessions as markdown and json from the same detail contract", async () => {
@@ -222,5 +299,69 @@ describe("sessionViews service", () => {
     expect(exported.markdown).toContain("Answer A");
     expect(exported.json).toContain('"id": 9');
     expect(exported.json).toContain('"artifactKind": "response"');
+  });
+
+  test("validates stored phase-2 review content before public detail emission", async () => {
+    dbMocks.getSessionById.mockResolvedValue({
+      id: 10,
+      userId: 3,
+      query: "What should we ship?",
+      questionHash: "hash-2",
+      ingressSource: "web",
+      ingressVersion: null,
+      councilNameAtRun: "The Founding Council",
+      status: "completed",
+      failureKind: null,
+      createdAt: new Date("2026-04-02T10:00:00.000Z"),
+      updatedAt: new Date("2026-04-02T10:05:00.000Z"),
+      totalTokens: 321,
+      totalCostUsdMicros: 123456,
+      totalCostIsPartial: false,
+      snapshotJson: {
+        version: 1,
+        createdAt: "2026-04-02T10:00:00.000Z",
+        query: "What should we ship?",
+        userMessage: "What should we ship?",
+        attachments: [],
+        outputFormats: {
+          phase1: "phase1",
+          phase2: "phase2",
+          phase3: "phase3",
+        },
+        council: {
+          nameAtRun: "The Founding Council",
+          phasePrompts: {
+            phase1: "prompt1",
+            phase2: "prompt2",
+            phase3: "prompt3",
+          },
+          members: [1, 2, 3, 4, 5, 6, 7].map((memberPosition) => ({
+            memberPosition,
+            model: { provider: "openrouter", modelId: `model-${memberPosition}` },
+            tuning: null,
+          })),
+        },
+      },
+    });
+    dbMocks.listSessionArtifacts.mockResolvedValue([
+      {
+        id: 2,
+        sessionId: 10,
+        phase: 2,
+        artifactKind: "review",
+        memberPosition: 1,
+        modelId: "model-1",
+        content: JSON.stringify({ ranking: ["A", "B", "C", "D", "E", "F"], reviews: {} }),
+        tokensUsed: null,
+        costUsdMicros: null,
+        createdAt: new Date("2026-04-02T10:03:00.000Z"),
+      },
+    ]);
+    dbMocks.listProviderCalls.mockResolvedValue([]);
+    dbMocks.listCatalogModelsByIds.mockResolvedValue([]);
+
+    const { getSessionDetail } = await loadSessionViews();
+
+    await expect(getSessionDetail(3, 10)).rejects.toThrow("Stored Phase 2 evaluation is invalid");
   });
 });

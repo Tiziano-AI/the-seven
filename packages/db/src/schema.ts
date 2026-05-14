@@ -1,4 +1,9 @@
-import type { CouncilMembers, PhasePrompts, SessionSnapshot } from "@the-seven/contracts";
+import {
+  BILLING_LOOKUP_STATUSES,
+  type CouncilMembers,
+  type PhasePrompts,
+  type SessionSnapshot,
+} from "@the-seven/contracts";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -41,6 +46,7 @@ export const sessionFailureKindEnum = pgEnum("session_failure_kind", SESSION_FAI
 export const jobStateEnum = pgEnum("job_state", JOB_STATES);
 export const artifactKindEnum = pgEnum("artifact_kind", ARTIFACT_KINDS);
 export const ingressSourceEnum = pgEnum("ingress_source", INGRESS_SOURCES);
+export const billingLookupStatusEnum = pgEnum("billing_lookup_status", BILLING_LOOKUP_STATUSES);
 
 function createdAtColumn(name = "created_at") {
   return timestamp(name, { withTimezone: true, mode: "date" }).notNull().defaultNow();
@@ -95,6 +101,7 @@ export const demoSessions = pgTable(
     tokenHash: text("token_hash").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
     createdAt: createdAtColumn(),
   },
   (table) => [
@@ -205,6 +212,7 @@ export const providerCalls = pgTable(
     phase: integer("phase").notNull(),
     memberPosition: integer("member_position").notNull(),
     requestModelId: text("request_model_id").notNull(),
+    requestMaxOutputTokens: integer("request_max_output_tokens"),
     requestSystemChars: integer("request_system_chars").notNull(),
     requestUserChars: integer("request_user_chars").notNull(),
     requestTotalChars: integer("request_total_chars").notNull(),
@@ -214,6 +222,14 @@ export const providerCalls = pgTable(
       .notNull()
       .default(sql`'[]'::jsonb`),
     sentParametersJson: jsonb("sent_parameters_json")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    sentReasoningEffort: text("sent_reasoning_effort"),
+    sentProviderRequireParameters: boolean("sent_provider_require_parameters")
+      .notNull()
+      .default(false),
+    sentProviderIgnoredProvidersJson: jsonb("sent_provider_ignored_providers_json")
       .$type<string[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
@@ -238,7 +254,9 @@ export const providerCalls = pgTable(
     choiceErrorCode: integer("choice_error_code"),
     errorStatus: integer("error_status"),
     errorCode: text("error_code"),
-    billingLookupStatus: text("billing_lookup_status").notNull().default("not_requested"),
+    billingLookupStatus: billingLookupStatusEnum("billing_lookup_status")
+      .notNull()
+      .default("not_requested"),
     createdAt: createdAtColumn(),
   },
   (table) => [
@@ -299,6 +317,7 @@ export const catalogCache = pgTable(
     description: text("description").notNull(),
     contextLength: integer("context_length"),
     maxCompletionTokens: integer("max_completion_tokens"),
+    expirationDate: text("expiration_date"),
     supportedParametersJson: jsonb("supported_parameters_json")
       .$type<string[]>()
       .notNull()

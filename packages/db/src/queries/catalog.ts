@@ -9,6 +9,7 @@ export async function replaceCatalogEntries(
     description: string;
     contextLength: number | null;
     maxCompletionTokens: number | null;
+    expirationDate: string | null;
     supportedParametersJson: string[];
     inputModalitiesJson: string[];
     outputModalitiesJson: string[];

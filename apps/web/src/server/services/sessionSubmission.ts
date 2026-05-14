@@ -8,12 +8,7 @@ import {
   notFoundDetails,
   rateLimitedDetails,
 } from "@the-seven/contracts";
-import {
-  createSessionWithJob,
-  enqueueSessionJob,
-  getSessionById,
-  setSessionPending,
-} from "@the-seven/db";
+import { createSessionWithJob, getSessionById, requeueFailedSessionJob } from "@the-seven/db";
 import { decodeAttachmentToText } from "../domain/attachments";
 import { encryptJobCredential } from "../domain/jobCredential";
 import { hashQuestion } from "../domain/questionHash";
@@ -95,7 +90,10 @@ async function decodeAttachments(
       throw new EdgeError({
         kind: "invalid_input",
         message: result.error.message,
-        details: invalidInputDetails([{ path: "attachments", message: result.error.message }]),
+        details: invalidInputDetails({
+          reason: "invalid_request",
+          issues: [{ path: "attachments", message: result.error.message }],
+        }),
         status: 400,
       });
     }
@@ -205,7 +203,10 @@ export async function continueSession(input: {
     throw new EdgeError({
       kind: "invalid_input",
       message: `Only failed sessions can be continued (status is "${session.status}")`,
-      details: invalidInputDetails([{ path: "status", message: "Session not in failed state" }]),
+      details: invalidInputDetails({
+        reason: "invalid_request",
+        issues: [{ path: "status", message: "Session not in failed state" }],
+      }),
       status: 400,
     });
   }
@@ -219,8 +220,7 @@ export async function continueSession(input: {
     now: input.now,
   });
 
-  await setSessionPending(session.id);
-  await enqueueSessionJob({
+  await requeueFailedSessionJob({
     sessionId: session.id,
     buildCredentialCiphertext: (context) => encryptJobCredential(input.auth.openRouterKey, context),
   });
@@ -252,7 +252,10 @@ export async function rerunSession(input: {
     throw new EdgeError({
       kind: "invalid_input",
       message: `Only terminal sessions can be rerun (status is "${session.status}")`,
-      details: invalidInputDetails([{ path: "status", message: "Session not in terminal state" }]),
+      details: invalidInputDetails({
+        reason: "invalid_request",
+        issues: [{ path: "status", message: "Session not in terminal state" }],
+      }),
       status: 400,
     });
   }

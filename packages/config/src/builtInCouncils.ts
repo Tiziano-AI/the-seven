@@ -2,6 +2,7 @@ import type {
   BuiltInCouncilSlug,
   CouncilMembers,
   CouncilMemberTuning,
+  MemberPosition,
   PhasePrompts,
   ProviderModelRef,
 } from "@the-seven/contracts";
@@ -10,7 +11,7 @@ import { DEFAULT_PHASE_PROMPTS } from "./prompts";
 
 export type ProviderModelSeed = Readonly<{ modelId: string; modelName: string }>;
 
-const FOUNDING_COUNCIL_MODEL_IDS: Record<number, string> = {
+const FOUNDING_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
   1: "openai/gpt-5.5",
   2: "anthropic/claude-opus-4.7",
   3: "google/gemini-3.1-pro-preview",
@@ -20,24 +21,24 @@ const FOUNDING_COUNCIL_MODEL_IDS: Record<number, string> = {
   7: "openai/gpt-5.5-pro",
 };
 
-const LANTERN_COUNCIL_MODEL_IDS: Record<number, string> = {
-  1: "qwen/qwen3.6-max-preview",
+const LANTERN_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
+  1: "anthropic/claude-sonnet-4.6",
   2: "deepseek/deepseek-v4-pro",
-  3: "x-ai/grok-4.20",
+  3: "z-ai/glm-5.1",
   4: "qwen/qwen3.6-plus",
-  5: "z-ai/glm-5.1",
+  5: "google/gemini-3-flash-preview",
   6: "mistralai/mistral-medium-3-5",
-  7: "anthropic/claude-sonnet-4.6",
+  7: "qwen/qwen3.6-max-preview",
 };
 
-const COMMONS_COUNCIL_MODEL_IDS: Record<number, string> = {
-  1: "google/gemini-3.1-flash-lite",
-  2: "deepseek/deepseek-v4-flash",
-  3: "qwen/qwen3.6-35b-a3b",
-  4: "minimax/minimax-m2.7",
-  5: "mistralai/mistral-small-2603",
-  6: "x-ai/grok-4.1-fast",
-  7: "openai/gpt-5.4-nano",
+const COMMONS_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
+  1: "qwen/qwen3.6-flash",
+  2: "google/gemini-3.1-flash-lite",
+  3: "openai/gpt-5-mini",
+  4: "deepseek/deepseek-v4-flash",
+  5: "openai/gpt-5-nano",
+  6: "mistralai/mistral-small-2603",
+  7: "minimax/minimax-m2.7",
 };
 
 export type BuiltInCouncilTemplate = Readonly<{
@@ -49,8 +50,8 @@ export type BuiltInCouncilTemplate = Readonly<{
 }>;
 
 const FULL_DEFAULT_TUNING = {
-  temperature: 1,
-  topP: 1,
+  temperature: null,
+  topP: null,
   seed: null,
   verbosity: null,
   reasoningEffort: "xhigh",
@@ -67,28 +68,15 @@ const LANTERN_DEFAULT_TUNING = {
   reasoningEffort: "medium",
 } as const satisfies CouncilMemberTuning;
 
-function defaultTuningForModel(modelId: string, baseTuning: CouncilMemberTuning) {
-  if (
-    modelId === "anthropic/claude-opus-4.7" ||
-    modelId === "openai/gpt-5.5" ||
-    modelId === "openai/gpt-5.4-nano" ||
-    modelId === "openai/gpt-5.5-pro"
-  ) {
-    return { ...baseTuning, temperature: null, topP: null };
-  }
-
-  return baseTuning;
-}
-
 function buildCouncilMembers(
-  models: Record<number, ProviderModelRef>,
+  models: Record<MemberPosition, ProviderModelRef>,
   baseTuning: CouncilMemberTuning,
 ): CouncilMembers {
   return parseCouncilMembers(
     MEMBER_POSITIONS.map((memberPosition) => ({
       memberPosition,
       model: models[memberPosition],
-      tuning: defaultTuningForModel(models[memberPosition].modelId, baseTuning),
+      tuning: baseTuning,
     })),
   );
 }
@@ -115,7 +103,7 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
   lantern: {
     slug: "lantern",
     name: "The Lantern Council",
-    description: "Deliberate mid-tier bridge voices. Claude Sonnet 4.6 delivers the verdict.",
+    description: "Deliberate mid-tier bridge voices. Qwen3.6 Max Preview delivers the verdict.",
     phasePrompts: DEFAULT_PHASE_PROMPTS,
     members: buildCouncilMembers(
       {
@@ -133,7 +121,7 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
   commons: {
     slug: "commons",
     name: "The Commons Council",
-    description: "Paid low-cost demo voices. GPT-5.4 Nano delivers the verdict.",
+    description: "Paid low-cost demo voices. MiniMax M2.7 delivers the verdict.",
     phasePrompts: DEFAULT_PHASE_PROMPTS,
     members: buildCouncilMembers(
       {

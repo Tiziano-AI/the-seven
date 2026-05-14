@@ -1,0 +1,473 @@
+import { z } from "zod";
+import { decodeCouncilRef } from "../domain/councilRef";
+import type { DenialRow, RouteContract } from "./registry";
+import {
+  councilDetailPayloadSchema,
+  councilsListPayloadSchema,
+  demoRequestBodySchema,
+  demoRequestPayloadSchema,
+  demoSessionPayloadSchema,
+  duplicateCouncilBodySchema,
+  duplicateCouncilPayloadSchema,
+  exportSessionsBodySchema,
+  exportSessionsPayloadSchema,
+  modelAutocompleteBodySchema,
+  modelAutocompletePayloadSchema,
+  modelValidateBodySchema,
+  modelValidatePayloadSchema,
+  outputFormatsPayloadSchema,
+  queryContinueBodySchema,
+  queryRerunBodySchema,
+  querySubmitBodySchema,
+  sessionDetailPayloadSchema,
+  sessionDiagnosticsPayloadSchema,
+  sessionListPayloadSchema,
+  submitPayloadSchema,
+  successFlagPayloadSchema,
+  updateCouncilBodySchema,
+  validateKeyPayloadSchema,
+} from "./schemas";
+
+const noParamsSchema = z.object({}).strict();
+const noQuerySchema = z.object({}).strict();
+const noBodySchema = z.object({}).strict();
+const redirectPayloadSchema = z.object({}).strict();
+const sessionParamsSchema = z.object({ sessionId: z.coerce.number().int().positive() }).strict();
+const locatorParamsSchema = z
+  .object({
+    locator: z
+      .string()
+      .min(1)
+      .transform((value, context) => {
+        const decoded = decodeCouncilRef(value);
+        if (decoded) {
+          return decoded;
+        }
+        context.addIssue({
+          code: "custom",
+          message: "Invalid council reference",
+        });
+        return z.NEVER;
+      }),
+  })
+  .strict();
+const demoConsumeQuerySchema = z.object({ token: z.string().trim().min(1) }).strict();
+
+const commonDenials = [
+  { kind: "invalid_input", status: 400, reason: "invalid_request" },
+  { kind: "invalid_input", status: 400, reason: "invalid_json" },
+  { kind: "invalid_input", status: 400, reason: "invalid_ingress" },
+  { kind: "invalid_input", status: 413, reason: "body_too_large" },
+  { kind: "invalid_input", status: 415, reason: "invalid_content_type" },
+  { kind: "rate_limited", status: 429, reason: "rate_limited" },
+  { kind: "internal_error", status: 500, reason: "internal_error" },
+] as const satisfies ReadonlyArray<DenialRow>;
+
+const authDenials = [
+  { kind: "unauthorized", status: 401, reason: "missing_auth" },
+  { kind: "unauthorized", status: 401, reason: "invalid_token" },
+  { kind: "unauthorized", status: 401, reason: "expired_token" },
+] as const satisfies ReadonlyArray<DenialRow>;
+
+const byokDenials = [
+  { kind: "forbidden", status: 403, reason: "demo_not_allowed" },
+] as const satisfies ReadonlyArray<DenialRow>;
+
+const sameOriginDenial = {
+  kind: "forbidden",
+  status: 403,
+  reason: "same_origin_required",
+} as const satisfies DenialRow;
+const publicOriginDenial = {
+  kind: "forbidden",
+  status: 403,
+  reason: "public_origin_required",
+} as const satisfies DenialRow;
+const demoRequiredDenial = {
+  kind: "forbidden",
+  status: 403,
+  reason: "demo_required",
+} as const satisfies DenialRow;
+const demoDisabledDenial = {
+  kind: "forbidden",
+  status: 403,
+  reason: "demo_disabled",
+} as const satisfies DenialRow;
+const demoCouncilOnlyDenial = {
+  kind: "forbidden",
+  status: 403,
+  reason: "demo_council_only",
+} as const satisfies DenialRow;
+const builtInReadOnlyDenial = {
+  kind: "forbidden",
+  status: 403,
+  reason: "built_in_read_only",
+} as const satisfies DenialRow;
+const councilNotFoundDenial = {
+  kind: "not_found",
+  status: 404,
+  reason: "council",
+} as const satisfies DenialRow;
+const sessionNotFoundDenial = {
+  kind: "not_found",
+  status: 404,
+  reason: "session",
+} as const satisfies DenialRow;
+const openRouterUpstreamDenial = {
+  kind: "upstream_error",
+  status: 502,
+  reason: "openrouter",
+} as const satisfies DenialRow;
+const resendUpstreamDenial = {
+  kind: "upstream_error",
+  status: 502,
+  reason: "resend",
+} as const satisfies DenialRow;
+
+function route<const Contract extends RouteContract>(input: Contract): Contract {
+  return input;
+}
+
+/** Canonical `/api/v1` route rows: method, path, schemas, auth, response mode, and denial contract. */
+export const ROUTE_CONTRACTS = [
+  route({
+    id: "auth.validate",
+    method: "POST",
+    path: "/api/v1/auth/validate",
+    resource: "auth.validate",
+    auth: "byok",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: noBodySchema,
+    successPayloadSchema: validateKeyPayloadSchema,
+    denials: [...commonDenials, ...authDenials, ...byokDenials, openRouterUpstreamDenial],
+  }),
+  route({
+    id: "demo.request",
+    method: "POST",
+    path: "/api/v1/demo/request",
+    resource: "demo.request",
+    auth: "public",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: demoRequestBodySchema,
+    successPayloadSchema: demoRequestPayloadSchema,
+    denials: [...commonDenials, demoDisabledDenial, resendUpstreamDenial],
+  }),
+  route({
+    id: "demo.consume",
+    method: "GET",
+    path: "/api/v1/demo/consume",
+    resource: "demo.consume",
+    auth: "public",
+    responseMode: "redirect",
+    status: 303,
+    paramsSchema: noParamsSchema,
+    querySchema: demoConsumeQuerySchema,
+    bodySchema: noBodySchema,
+    successPayloadSchema: redirectPayloadSchema,
+    denials: [
+      ...commonDenials,
+      { kind: "unauthorized", status: 401, reason: "invalid_token" },
+      { kind: "unauthorized", status: 401, reason: "expired_token" },
+      publicOriginDenial,
+      demoDisabledDenial,
+    ],
+  }),
+  route({
+    id: "demo.session",
+    method: "GET",
+    path: "/api/v1/demo/session",
+    resource: "demo.session",
+    auth: "demo-cookie",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: noBodySchema,
+    successPayloadSchema: demoSessionPayloadSchema,
+    denials: [...commonDenials, ...authDenials, demoRequiredDenial],
+  }),
+  route({
+    id: "demo.logout",
+    method: "POST",
+    path: "/api/v1/demo/logout",
+    resource: "demo.logout",
+    auth: "demo-cookie",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: noBodySchema,
+    successPayloadSchema: successFlagPayloadSchema,
+    denials: [...commonDenials, ...authDenials, demoRequiredDenial, sameOriginDenial],
+  }),
+  route({
+    id: "councils.list",
+    method: "GET",
+    path: "/api/v1/councils",
+    resource: "councils.list",
+    auth: "any",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: noBodySchema,
+    successPayloadSchema: councilsListPayloadSchema,
+    denials: [...commonDenials, ...authDenials, openRouterUpstreamDenial],
+  }),
+  route({
+    id: "councils.get",
+    method: "GET",
+    path: "/api/v1/councils/[locator]",
+    resource: "councils.get",
+    auth: "any",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: locatorParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: noBodySchema,
+    successPayloadSchema: councilDetailPayloadSchema,
+    denials: [
+      ...commonDenials,
+      ...authDenials,
+      demoCouncilOnlyDenial,
+      councilNotFoundDenial,
+      openRouterUpstreamDenial,
+    ],
+  }),
+  route({
+    id: "councils.duplicate",
+    method: "POST",
+    path: "/api/v1/councils/duplicate",
+    resource: "councils.duplicate",
+    auth: "byok",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: duplicateCouncilBodySchema,
+    successPayloadSchema: duplicateCouncilPayloadSchema,
+    denials: [
+      ...commonDenials,
+      ...authDenials,
+      ...byokDenials,
+      councilNotFoundDenial,
+      openRouterUpstreamDenial,
+    ],
+  }),
+  route({
+    id: "councils.update",
+    method: "PUT",
+    path: "/api/v1/councils/[locator]",
+    resource: "councils.update",
+    auth: "byok",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: locatorParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: updateCouncilBodySchema,
+    successPayloadSchema: successFlagPayloadSchema,
+    denials: [
+      ...commonDenials,
+      ...authDenials,
+      ...byokDenials,
+      builtInReadOnlyDenial,
+      councilNotFoundDenial,
+      openRouterUpstreamDenial,
+    ],
+  }),
+  route({
+    id: "councils.delete",
+    method: "DELETE",
+    path: "/api/v1/councils/[locator]",
+    resource: "councils.delete",
+    auth: "byok",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: locatorParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: noBodySchema,
+    successPayloadSchema: successFlagPayloadSchema,
+    denials: [
+      ...commonDenials,
+      ...authDenials,
+      ...byokDenials,
+      builtInReadOnlyDenial,
+      councilNotFoundDenial,
+      openRouterUpstreamDenial,
+    ],
+  }),
+  route({
+    id: "councils.outputFormats",
+    method: "GET",
+    path: "/api/v1/councils/output-formats",
+    resource: "councils.outputFormats",
+    auth: "any",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: noBodySchema,
+    successPayloadSchema: outputFormatsPayloadSchema,
+    denials: [...commonDenials, ...authDenials, openRouterUpstreamDenial],
+  }),
+  route({
+    id: "models.validate",
+    method: "POST",
+    path: "/api/v1/models/validate",
+    resource: "models.validate",
+    auth: "byok",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: modelValidateBodySchema,
+    successPayloadSchema: modelValidatePayloadSchema,
+    denials: [...commonDenials, ...authDenials, ...byokDenials, openRouterUpstreamDenial],
+  }),
+  route({
+    id: "models.autocomplete",
+    method: "POST",
+    path: "/api/v1/models/autocomplete",
+    resource: "models.autocomplete",
+    auth: "byok",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: modelAutocompleteBodySchema,
+    successPayloadSchema: modelAutocompletePayloadSchema,
+    denials: [...commonDenials, ...authDenials, ...byokDenials, openRouterUpstreamDenial],
+  }),
+  route({
+    id: "sessions.create",
+    method: "POST",
+    path: "/api/v1/sessions",
+    resource: "sessions.create",
+    auth: "any",
+    responseMode: "json",
+    status: 201,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: querySubmitBodySchema,
+    successPayloadSchema: submitPayloadSchema,
+    denials: [
+      ...commonDenials,
+      ...authDenials,
+      sameOriginDenial,
+      demoCouncilOnlyDenial,
+      councilNotFoundDenial,
+      openRouterUpstreamDenial,
+    ],
+  }),
+  route({
+    id: "sessions.list",
+    method: "GET",
+    path: "/api/v1/sessions",
+    resource: "sessions.list",
+    auth: "any",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: noBodySchema,
+    successPayloadSchema: sessionListPayloadSchema,
+    denials: [...commonDenials, ...authDenials, openRouterUpstreamDenial],
+  }),
+  route({
+    id: "sessions.get",
+    method: "GET",
+    path: "/api/v1/sessions/[sessionId]",
+    resource: "sessions.get",
+    auth: "any",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: sessionParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: noBodySchema,
+    successPayloadSchema: sessionDetailPayloadSchema,
+    denials: [...commonDenials, ...authDenials, sessionNotFoundDenial, openRouterUpstreamDenial],
+  }),
+  route({
+    id: "sessions.continue",
+    method: "POST",
+    path: "/api/v1/sessions/[sessionId]/continue",
+    resource: "sessions.continue",
+    auth: "any",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: sessionParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: queryContinueBodySchema,
+    successPayloadSchema: submitPayloadSchema,
+    denials: [
+      ...commonDenials,
+      ...authDenials,
+      sameOriginDenial,
+      sessionNotFoundDenial,
+      demoCouncilOnlyDenial,
+      openRouterUpstreamDenial,
+    ],
+  }),
+  route({
+    id: "sessions.rerun",
+    method: "POST",
+    path: "/api/v1/sessions/[sessionId]/rerun",
+    resource: "sessions.rerun",
+    auth: "any",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: sessionParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: queryRerunBodySchema,
+    successPayloadSchema: submitPayloadSchema,
+    denials: [
+      ...commonDenials,
+      ...authDenials,
+      sameOriginDenial,
+      sessionNotFoundDenial,
+      councilNotFoundDenial,
+      demoCouncilOnlyDenial,
+      openRouterUpstreamDenial,
+    ],
+  }),
+  route({
+    id: "sessions.diagnostics",
+    method: "GET",
+    path: "/api/v1/sessions/[sessionId]/diagnostics",
+    resource: "sessions.diagnostics",
+    auth: "any",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: sessionParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: noBodySchema,
+    successPayloadSchema: sessionDiagnosticsPayloadSchema,
+    denials: [...commonDenials, ...authDenials, sessionNotFoundDenial, openRouterUpstreamDenial],
+  }),
+  route({
+    id: "sessions.export",
+    method: "POST",
+    path: "/api/v1/sessions/export",
+    resource: "sessions.export",
+    auth: "any",
+    responseMode: "json",
+    status: 200,
+    paramsSchema: noParamsSchema,
+    querySchema: noQuerySchema,
+    bodySchema: exportSessionsBodySchema,
+    successPayloadSchema: exportSessionsPayloadSchema,
+    denials: [
+      ...commonDenials,
+      ...authDenials,
+      sameOriginDenial,
+      sessionNotFoundDenial,
+      openRouterUpstreamDenial,
+    ],
+  }),
+] as const satisfies ReadonlyArray<RouteContract>;

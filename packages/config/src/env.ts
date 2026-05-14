@@ -10,14 +10,63 @@ const databaseUrlSchema = z
     return value.startsWith("postgres://") || value.startsWith("postgresql://");
   }, "DATABASE_URL must use postgres:// or postgresql://");
 
+const PUBLIC_ORIGIN_LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const PUBLIC_ORIGIN_PROTOCOLS = new Set(["http:", "https:"]);
+
+/** Parses the canonical browser/public authority as one bare HTTP(S) origin. */
+export function parsePublicOrigin(value: string): string {
+  const trimmed = value.trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("SEVEN_PUBLIC_ORIGIN must be a valid URL");
+  }
+  if (!PUBLIC_ORIGIN_PROTOCOLS.has(parsed.protocol)) {
+    throw new Error("SEVEN_PUBLIC_ORIGIN must use http:// or https://");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("SEVEN_PUBLIC_ORIGIN must not include credentials");
+  }
+  if (parsed.pathname !== "/" || parsed.search !== "" || parsed.hash !== "") {
+    throw new Error("SEVEN_PUBLIC_ORIGIN must be a bare origin");
+  }
+  return parsed.origin;
+}
+
+function publicOriginSchema(options: { default?: string } = {}) {
+  const transformed = z
+    .string()
+    .url()
+    .transform((value, ctx) => {
+      try {
+        return parsePublicOrigin(value);
+      } catch (error) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: error instanceof Error ? error.message : "SEVEN_PUBLIC_ORIGIN is invalid",
+        });
+        return z.NEVER;
+      }
+    });
+  return options.default !== undefined ? transformed.default(options.default) : transformed;
+}
+
+function assertProductionPublicOrigin(origin: string) {
+  const parsed = new URL(origin);
+  const host = parsed.hostname.replace(/^\[/, "").replace(/\]$/, "");
+  if (parsed.protocol !== "https:" || PUBLIC_ORIGIN_LOOPBACK_HOSTS.has(host)) {
+    throw new Error("Production SEVEN_PUBLIC_ORIGIN must be HTTPS and non-loopback");
+  }
+}
+
 const baseServerSchema = z.object({
   NODE_ENV: nodeEnvSchema.default("development"),
-  PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
+  PORT: z.coerce.number().int().min(0).max(65_535).default(0),
   DATABASE_URL: databaseUrlSchema,
   SEVEN_JOB_CREDENTIAL_SECRET: z.string().trim().min(16),
-  SEVEN_PUBLIC_ORIGIN: z.string().url().default("http://localhost:3000"),
+  SEVEN_PUBLIC_ORIGIN: publicOriginSchema(),
   SEVEN_APP_NAME: z.string().trim().min(1).default("The Seven"),
-  SEVEN_TRUST_PROXY_HEADERS: z.enum(["0", "1"]).default("0"),
   SEVEN_DEMO_ENABLED: z.enum(["0", "1"]).default("0"),
   SEVEN_DEMO_OPENROUTER_KEY: z.string().optional(),
   SEVEN_DEMO_RESEND_API_KEY: z.string().optional(),
@@ -27,13 +76,13 @@ const baseServerSchema = z.object({
 const operatorDoctorSchema = z.object({
   DATABASE_URL: databaseUrlSchema,
   SEVEN_JOB_CREDENTIAL_SECRET: z.string().trim().min(16),
-  SEVEN_PUBLIC_ORIGIN: z.string().url(),
+  SEVEN_PUBLIC_ORIGIN: publicOriginSchema(),
   SEVEN_APP_NAME: z.string().trim().min(1),
   SEVEN_DEMO_ENABLED: z.enum(["0", "1"]).default("0"),
 });
 
 const liveProofSchema = z.object({
-  SEVEN_BASE_URL: z.string().url().default("http://127.0.0.1:3000"),
+  SEVEN_PUBLIC_ORIGIN: publicOriginSchema(),
   SEVEN_BYOK_KEY: z.string().trim().min(1),
   SEVEN_DEMO_ENABLED: z.literal("1"),
   SEVEN_DEMO_OPENROUTER_KEY: z.string().trim().min(1),
@@ -43,7 +92,7 @@ const liveProofSchema = z.object({
 });
 
 const cliRuntimeSchema = z.object({
-  SEVEN_BASE_URL: z.string().url().default("http://127.0.0.1:3000"),
+  SEVEN_BASE_URL: z.string().url(),
   SEVEN_BYOK_KEY: z.string().trim().optional(),
 });
 
@@ -64,6 +113,7 @@ export const OPERATOR_DOCTOR_REQUIRED_KEYS = [
 ] as const;
 
 export const LIVE_PROOF_REQUIRED_KEYS = [
+  "SEVEN_PUBLIC_ORIGIN",
   "SEVEN_BYOK_KEY",
   "SEVEN_DEMO_ENABLED",
   "SEVEN_DEMO_OPENROUTER_KEY",
@@ -72,12 +122,29 @@ export const LIVE_PROOF_REQUIRED_KEYS = [
   "SEVEN_DEMO_TEST_EMAIL",
 ] as const;
 
+// Doctor uses this registry as a reserved runtime/projection key fence for
+// local env files; not every listed key is parsed by `serverRuntime`.
 export const RUNTIME_ENV_KEYS = [
   "DATABASE_URL",
+  "NODE_ENV",
+  "PORT",
+  "SEVEN_APP_NAME",
+  "SEVEN_BASE_URL",
+  "SEVEN_BYOK_KEY",
+  "SEVEN_DEMO_EMAIL_FROM",
+  "SEVEN_DEMO_ENABLED",
   "SEVEN_JOB_CREDENTIAL_SECRET",
+  "SEVEN_DEMO_TEST_EMAIL",
   "SEVEN_DEMO_OPENROUTER_KEY",
   "SEVEN_DEMO_RESEND_API_KEY",
-  "SEVEN_BYOK_KEY",
+  "SEVEN_NEXT_DIST_DIR",
+  "SEVEN_PLAYWRIGHT_DEMO_COOKIE",
+  "SEVEN_PLAYWRIGHT_DEMO_EMAIL",
+  "SEVEN_PLAYWRIGHT_DEMO_EXPIRES_AT",
+  "SEVEN_PLAYWRIGHT_EXTERNAL_SERVER",
+  "SEVEN_PLAYWRIGHT_SESSION_ID",
+  "SEVEN_PLAYWRIGHT_SESSION_QUERY",
+  "SEVEN_PUBLIC_ORIGIN",
 ] as const;
 
 export type ServerRuntime = Readonly<{
@@ -93,7 +160,6 @@ export type ServerRuntime = Readonly<{
     resendApiKey: string | null;
     emailFrom: string | null;
   }>;
-  trustedProxyHeaders: boolean;
 }>;
 
 export type CliRuntime = Readonly<{
@@ -109,7 +175,7 @@ export type OperatorDoctorRuntime = Readonly<{
 }>;
 
 export type LiveProofRuntime = Readonly<{
-  baseUrl: string;
+  publicOrigin: string;
   byokKey: string;
   demoOpenRouterKey: string;
   demoResendApiKey: string;
@@ -167,6 +233,9 @@ function loadCanonicalEnvFile() {
 export function serverRuntime(input: NodeJS.ProcessEnv = process.env): ServerRuntime {
   loadCanonicalEnvFile();
   const parsed = baseServerSchema.parse(input);
+  if (parsed.NODE_ENV === "production") {
+    assertProductionPublicOrigin(parsed.SEVEN_PUBLIC_ORIGIN);
+  }
   const demoEnabled = parsed.SEVEN_DEMO_ENABLED === "1";
 
   if (demoEnabled) {
@@ -184,7 +253,6 @@ export function serverRuntime(input: NodeJS.ProcessEnv = process.env): ServerRun
     jobCredentialSecret: parsed.SEVEN_JOB_CREDENTIAL_SECRET,
     publicOrigin: parsed.SEVEN_PUBLIC_ORIGIN,
     appName: parsed.SEVEN_APP_NAME,
-    trustedProxyHeaders: parsed.SEVEN_TRUST_PROXY_HEADERS === "1",
     demo: {
       enabled: demoEnabled,
       openRouterApiKey: demoEnabled ? (parsed.SEVEN_DEMO_OPENROUTER_KEY ?? null) : null,
@@ -217,7 +285,7 @@ export function liveProof(input: NodeJS.ProcessEnv = process.env): LiveProofRunt
   loadCanonicalEnvFile();
   const parsed = liveProofSchema.parse(input);
   return {
-    baseUrl: parsed.SEVEN_BASE_URL,
+    publicOrigin: parsed.SEVEN_PUBLIC_ORIGIN,
     byokKey: parsed.SEVEN_BYOK_KEY,
     demoOpenRouterKey: parsed.SEVEN_DEMO_OPENROUTER_KEY,
     demoResendApiKey: parsed.SEVEN_DEMO_RESEND_API_KEY,

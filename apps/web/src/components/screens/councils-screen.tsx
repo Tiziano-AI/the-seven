@@ -307,13 +307,19 @@ export function CouncilsScreen() {
         </Card>
 
         <Card className="p-6">
-          <h2 className="text-2xl font-semibold tracking-[-0.04em]">Members</h2>
-          <div className="mt-5 grid gap-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="surface-title text-sm uppercase tracking-[0.22em]">The seven</h2>
+            <p className="text-xs italic text-[var(--text-dim)]">
+              Six reviewers draft and critique; a seventh synthesizes the verdict.
+            </p>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {members.map((member, index) => (
               <ModelSlotEditor
                 key={member.memberPosition}
                 authHeader={authHeader}
                 member={member}
+                editable={editable}
                 onChange={(next) =>
                   setMembers((current) =>
                     current.map((item, currentIndex) => (currentIndex === index ? next : item)),

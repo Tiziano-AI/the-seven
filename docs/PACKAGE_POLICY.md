@@ -5,11 +5,15 @@ The rewrite keeps one modern, coherent toolchain. New packages require a stronge
 ## Canonical Packages
 
 - App runtime: `next`, `react`, `react-dom`
-- UI: `tailwindcss`, `@tailwindcss/postcss`, local tokenized components aligned with `components.json`, `sonner`
+- UI: `tailwindcss`, `@tailwindcss/postcss`, `class-variance-authority`,
+  `clsx`, `tailwind-merge`, local tokenized components aligned with
+  `components.json`, `sonner`
 - State and validation: `zod`
 - Database: `drizzle-orm`, `pg`
 - Tooling: `@biomejs/biome`, `typescript`, `tsx`, `vitest`, `playwright`
 - Content rendering: `react-markdown`, `remark-gfm`
+- Attachment parsing: `file-type`, `officeparser`
+- Server-component guards: `server-only`
 
 ## Package Rules
 
@@ -26,6 +30,9 @@ The rewrite keeps one modern, coherent toolchain. New packages require a stronge
 - Formatting and linting stay on Biome.
 - Rendered UI primitives stay in `apps/web/src/components`.
 - HTTP transport stays on native `fetch`.
+- Attachment MIME sniffing stays on `file-type`; document text extraction stays
+  on `officeparser`.
+- Server-only module boundaries stay explicit through `server-only` imports.
 
 ## Workspace Rules
 

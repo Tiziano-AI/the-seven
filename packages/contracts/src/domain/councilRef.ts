@@ -10,14 +10,18 @@ export type CouncilRef =
   | Readonly<{ kind: "user"; councilId: number }>;
 
 export const councilRefSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("built_in"),
-    slug: z.enum(BUILT_IN_COUNCIL_SLUGS),
-  }),
-  z.object({
-    kind: z.literal("user"),
-    councilId: z.number().int().positive(),
-  }),
+  z
+    .object({
+      kind: z.literal("built_in"),
+      slug: z.enum(BUILT_IN_COUNCIL_SLUGS),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("user"),
+      councilId: z.number().int().positive(),
+    })
+    .strict(),
 ]);
 
 export function encodeCouncilRef(ref: CouncilRef): string {
@@ -39,7 +43,11 @@ export function decodeCouncilRef(value: string): CouncilRef | null {
   if (!trimmed.startsWith("user:")) {
     return null;
   }
-  const maybeId = Number.parseInt(trimmed.slice("user:".length), 10);
+  const idText = trimmed.slice("user:".length);
+  if (!/^[1-9]\d*$/.test(idText)) {
+    return null;
+  }
+  const maybeId = Number.parseInt(idText, 10);
   if (!Number.isSafeInteger(maybeId) || maybeId <= 0) {
     return null;
   }

@@ -1,5 +1,5 @@
 import { serverRuntime } from "@the-seven/config";
-import { forbiddenDetails, routeContract } from "@the-seven/contracts";
+import { forbiddenDetails, rateLimitedDetails, routeContract } from "@the-seven/contracts";
 import type { NextRequest } from "next/server";
 import { redactRateLimitScope } from "@/server/domain/redaction";
 import { EdgeError } from "@/server/http/errors";
@@ -32,12 +32,12 @@ export async function POST(request: NextRequest) {
         throw new EdgeError({
           kind: "rate_limited",
           message: "Demo email rate limit exceeded",
-          details: {
+          details: rateLimitedDetails({
             scope: redactRateLimitScope(limited.scope),
             limit: limited.limit,
             windowSeconds: limited.windowSeconds,
             resetAt: new Date(limited.resetAtMs).toISOString(),
-          },
+          }),
           status: 429,
         });
       }

@@ -1,6 +1,6 @@
 # Vision
 
-The Seven is a privacy-first, BYOK multi-model orchestration app: 7 fixed **members** (slots) run provider models. 6 “reviewers” produce independent answers, then review each other, then a 7th “synthesizer” produces a final answer.
+The Seven is a privacy-first, BYOK multi-model orchestration app: 7 fixed **members** (slots) run provider models. 6 “reviewers” produce independent answers, then each reviewer evaluates all 6 candidate answers, then a 7th “synthesizer” produces a final answer.
 
 It also offers a zero-friction demo path (email → magic link) that uses a server-owned OpenRouter key and the Commons Council so new users can try the flow without a BYOK setup. Commons uses paid low-cost models that are reliable enough to represent the product; it is not a free-model showcase.
 
@@ -18,7 +18,7 @@ It also offers a zero-friction demo path (email → magic link) that uses a serv
 - BYOK identity: the OpenRouter API key is the identity anchor (via a non-reversible hash).
 - Demo identity: the server-issued demo cookie is the browser authority; normalized email is stored server-side and sessions expire in 24 hours.
 - Key requirements: BYOK requires a user OpenRouter key; demo on theseven.ai uses a server-owned key (self-hosted demos provide their own).
-- Browser persistence: the encrypted API key blob (BYOK) and minimal UI state (`seven.active_session_id`, `seven.last_council_ref`, `seven.query_draft`) are persisted client-side. Demo authority stays in the server-issued `HttpOnly` cookie.
+- Browser persistence: the encrypted API key blob (BYOK) and minimal UI state (`seven.active_session_id`, `seven.last_council_ref`, `seven.draft.query`) are persisted client-side. Demo authority stays in the server-issued `HttpOnly` cookie.
 - Server persistence: the server stores sessions, artifacts, and councils; it never stores plaintext BYOK keys.
 - Provider traffic: the browser never calls OpenRouter directly; all provider calls happen server-side.
 - Durable jobs: orchestration is persisted in PostgreSQL and resumes after restarts through a leased job runner. Short-lived worker credentials are envelope-encrypted at rest and deleted when the job reaches a terminal state.
@@ -50,4 +50,4 @@ It also offers a zero-friction demo path (email → magic link) that uses a serv
 - No automatic semantic retries that fabricate missing artifacts; recovery may replay only durable state and explicit user actions.
 - No multi-provider abstraction beyond OpenRouter (OpenRouter remains the first-class provider boundary).
 
-Last updated: 2026-05-10.
+Last updated: 2026-05-13.

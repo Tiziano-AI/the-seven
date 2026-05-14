@@ -66,6 +66,10 @@ function placeholderKeys(assignments: ReadonlyMap<string, string>, keys: Readonl
   });
 }
 
+function uniqueKeys(keys: ReadonlyArray<string>): string[] {
+  return [...new Set(keys)];
+}
+
 export function checkEnvFilePresence(input: {
   envLocalPath: string;
   envLegacyPath: string;
@@ -135,7 +139,9 @@ export function checkEnvProfile(input: {
   live: boolean;
 }): OperatorCheckResult {
   const assignments = readEnvAssignments(input.envLocalPath);
-  const requiredKeys = input.live ? LIVE_PROOF_REQUIRED_KEYS : OPERATOR_DOCTOR_REQUIRED_KEYS;
+  const requiredKeys = input.live
+    ? uniqueKeys([...OPERATOR_DOCTOR_REQUIRED_KEYS, ...LIVE_PROOF_REQUIRED_KEYS])
+    : [...OPERATOR_DOCTOR_REQUIRED_KEYS];
   const missing = missingKeys(assignments, requiredKeys);
   if (missing.length > 0) {
     return {
@@ -160,6 +166,7 @@ export function checkEnvProfile(input: {
 
   try {
     if (input.live) {
+      operatorDoctor(assignmentsToEnv(assignments));
       liveProof(assignmentsToEnv(assignments));
     } else {
       operatorDoctor(assignmentsToEnv(assignments));

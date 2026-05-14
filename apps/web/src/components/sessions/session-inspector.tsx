@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { memberForPosition } from "@the-seven/contracts";
+import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
+import { CouncilTrack, type InspectorArtifact } from "@/components/inspector/council-track";
+import { VerdictCard } from "@/components/inspector/verdict-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,7 +19,8 @@ import {
   fetchSessionDiagnostics,
   rerunSession,
 } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { SessionDiagnosticsTable } from "./session-diagnostics-table";
+import { SessionTrail } from "./session-trail";
 import { SessionStatusBadge } from "./status-badge";
 
 function downloadText(filename: string, text: string, type: string) {
@@ -32,10 +34,16 @@ function downloadText(filename: string, text: string, type: string) {
 }
 
 function formatCost(micros: number | null) {
-  if (micros === null) {
-    return "n/a";
-  }
+  if (micros === null) return "n/a";
   return `$${(micros / 1_000_000).toFixed(6)}`;
+}
+
+function formatLatencySeconds(detail: {
+  providerCalls: ReadonlyArray<{ latencyMs: number | null }>;
+}) {
+  const total = detail.providerCalls.reduce((sum, call) => sum + (call.latencyMs ?? 0), 0);
+  if (!total) return null;
+  return `${(total / 1000).toFixed(1)} s deliberation`;
 }
 
 export function SessionInspector(props: {
@@ -50,9 +58,12 @@ export function SessionInspector(props: {
   > | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
+  const [trailOpen, setTrailOpen] = useState(false);
   const [rerunQuery, setRerunQuery] = useState("");
   const [rerunCouncil, setRerunCouncil] = useState("");
+  const [rerunOpen, setRerunOpen] = useState(false);
   const fieldPrefix = useId();
+  const trailRef = useRef<HTMLDivElement | null>(null);
   const [availableCouncils, setAvailableCouncils] = useState<
     Awaited<ReturnType<typeof fetchCouncils>>["councils"]
   >([]);
@@ -81,9 +92,7 @@ export function SessionInspector(props: {
           toast.error(error instanceof Error ? error.message : "Failed to load session");
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -95,13 +104,8 @@ export function SessionInspector(props: {
 
   useEffect(() => {
     const authHeader = props.authHeader;
-    if (!props.authenticated || !detail) {
-      return;
-    }
-    if (detail.session.status !== "pending" && detail.session.status !== "processing") {
-      return;
-    }
-
+    if (!props.authenticated || !detail) return;
+    if (detail.session.status !== "pending" && detail.session.status !== "processing") return;
     const interval = setInterval(() => {
       void fetchSession(authHeader, detail.session.id)
         .then(setDetail)
@@ -110,108 +114,8 @@ export function SessionInspector(props: {
     return () => clearInterval(interval);
   }, [detail, props.authHeader, props.authenticated]);
 
-  const phaseGroups = useMemo(() => {
-    if (!detail) {
-      return [];
-    }
-
-    return [
-      { phase: 1, title: "Replies" },
-      { phase: 2, title: "Critiques" },
-      { phase: 3, title: "Verdict" },
-    ].map((group) => ({
-      ...group,
-      artifacts: detail.artifacts.filter((artifact) => artifact.phase === group.phase),
-    }));
-  }, [detail]);
-
-  async function handleContinue() {
-    if (!props.authenticated || !detail) {
-      return;
-    }
-
-    try {
-      await continueSession(props.authHeader, detail.session.id);
-      toast.success("Run continued");
-      setDiagnostics(null);
-      setDetail(await fetchSession(props.authHeader, detail.session.id));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Continue failed");
-    }
-  }
-
-  async function handleRerun() {
-    if (!props.authenticated || !detail) {
-      return;
-    }
-
-    try {
-      const councils = availableCouncils.length
-        ? availableCouncils
-        : (await fetchCouncils(props.authHeader)).councils;
-      setAvailableCouncils(councils);
-
-      const chosen =
-        councils.find(
-          (council) =>
-            council.ref.kind === "user" && `user:${council.ref.councilId}` === rerunCouncil,
-        ) ??
-        councils.find(
-          (council) =>
-            council.ref.kind === "built_in" && `built_in:${council.ref.slug}` === rerunCouncil,
-        );
-      if (!chosen) {
-        toast.error("Choose a council for rerun");
-        return;
-      }
-
-      const result = await rerunSession({
-        authHeader: props.authHeader,
-        sessionId: detail.session.id,
-        councilRef: chosen.ref,
-        queryOverride:
-          rerunQuery.trim() === detail.session.snapshot.query.trim() ? undefined : rerunQuery,
-      });
-      toast.success("New run created");
-      props.onSpawnedSession?.(result.sessionId);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Rerun failed");
-    }
-  }
-
-  async function handleLoadDiagnostics() {
-    if (!props.authenticated || !detail) {
-      return;
-    }
-    setLoadingDiagnostics(true);
-    try {
-      setDiagnostics(await fetchSessionDiagnostics(props.authHeader, detail.session.id));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Diagnostics failed");
-    } finally {
-      setLoadingDiagnostics(false);
-    }
-  }
-
-  async function handleExport() {
-    if (!props.authenticated || !detail) {
-      return;
-    }
-
-    try {
-      const exported = await exportSessions(props.authHeader, [detail.session.id]);
-      downloadText(`session-${detail.session.id}.md`, exported.markdown, "text/markdown");
-      downloadText(`session-${detail.session.id}.json`, exported.json, "application/json");
-      toast.success("Session exported");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Export failed");
-    }
-  }
-
   useEffect(() => {
-    if (!props.authenticated) {
-      return;
-    }
+    if (!props.authenticated) return;
     void fetchCouncils(props.authHeader)
       .then((result) => {
         setAvailableCouncils(result.councils);
@@ -227,10 +131,87 @@ export function SessionInspector(props: {
       .catch(() => undefined);
   }, [props.authHeader, props.authenticated, rerunCouncil]);
 
+  async function handleContinue() {
+    if (!props.authenticated || !detail) return;
+    try {
+      await continueSession(props.authHeader, detail.session.id);
+      toast.success("Run continued");
+      setDiagnostics(null);
+      setDetail(await fetchSession(props.authHeader, detail.session.id));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Continue failed");
+    }
+  }
+
+  async function handleRerun() {
+    if (!props.authenticated || !detail) return;
+    try {
+      const councils = availableCouncils.length
+        ? availableCouncils
+        : (await fetchCouncils(props.authHeader)).councils;
+      setAvailableCouncils(councils);
+      const chosen =
+        councils.find(
+          (council) =>
+            council.ref.kind === "user" && `user:${council.ref.councilId}` === rerunCouncil,
+        ) ??
+        councils.find(
+          (council) =>
+            council.ref.kind === "built_in" && `built_in:${council.ref.slug}` === rerunCouncil,
+        );
+      if (!chosen) {
+        toast.error("Choose a council for rerun");
+        return;
+      }
+      const result = await rerunSession({
+        authHeader: props.authHeader,
+        sessionId: detail.session.id,
+        councilRef: chosen.ref,
+        queryOverride:
+          rerunQuery.trim() === detail.session.snapshot.query.trim() ? undefined : rerunQuery,
+      });
+      toast.success("New run created");
+      props.onSpawnedSession?.(result.sessionId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Rerun failed");
+    }
+  }
+
+  async function handleLoadDiagnostics() {
+    if (!props.authenticated || !detail) return;
+    setLoadingDiagnostics(true);
+    try {
+      setDiagnostics(await fetchSessionDiagnostics(props.authHeader, detail.session.id));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Diagnostics failed");
+    } finally {
+      setLoadingDiagnostics(false);
+    }
+  }
+
+  async function handleExport() {
+    if (!props.authenticated || !detail) return;
+    try {
+      const exported = await exportSessions(props.authHeader, [detail.session.id]);
+      downloadText(`session-${detail.session.id}.md`, exported.markdown, "text/markdown");
+      downloadText(`session-${detail.session.id}.json`, exported.json, "application/json");
+      toast.success("Session exported");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Export failed");
+    }
+  }
+
+  function openTrail() {
+    setTrailOpen(true);
+    requestAnimationFrame(() => {
+      trailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   if (!props.authenticated) {
     return (
-      <Card className="p-6">
-        <p className="text-sm text-[var(--muted-foreground)]">
+      <Card className="p-8 text-center">
+        <p className="text-sm text-[var(--text-muted)]">
           Unlock BYOK or start a demo session to inspect runs.
         </p>
       </Card>
@@ -239,180 +220,186 @@ export function SessionInspector(props: {
 
   if (!props.sessionId) {
     return (
-      <Card className="p-6">
-        <p className="text-sm text-[var(--muted-foreground)]">Pick a session to inspect.</p>
+      <Card className="p-8 text-center">
+        <p className="text-sm text-[var(--text-muted)]">
+          Send a question above and the council will assemble here.
+        </p>
       </Card>
     );
   }
 
   if (loading && !detail) {
-    return <Card className="p-6 text-sm text-[var(--muted-foreground)]">Loading session…</Card>;
+    return (
+      <Card className="p-8 text-center text-sm text-[var(--text-muted)]">Loading session…</Card>
+    );
   }
 
   if (!detail) {
-    return <Card className="p-6 text-sm text-[var(--muted-foreground)]">Session unavailable.</Card>;
+    return (
+      <Card className="p-8 text-center text-sm text-[var(--text-muted)]">Session unavailable.</Card>
+    );
   }
 
+  const phase3Artifact = detail.artifacts.find((a) => a.phase === 3);
+  const synthesizerLabel = detail.session.snapshot.council.members.find(
+    (m) => m.memberPosition === 7,
+  )?.model.modelId;
+  const latencyLabel = formatLatencySeconds({ providerCalls: detail.providerCalls });
+
+  const inspectorArtifacts: InspectorArtifact[] = detail.artifacts.map((a) => ({
+    id: a.id,
+    phase: a.phase,
+    memberPosition: a.memberPosition,
+    member: { label: a.member.label },
+    modelId: a.modelId,
+    modelName: a.modelName,
+    content: a.content,
+  }));
+
   return (
-    <div className="space-y-5">
-      <Card className="p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <SessionStatusBadge
-                status={detail.session.status}
-                failureKind={detail.session.failureKind}
+    <div className="space-y-6">
+      <section className="ask-band">
+        <p className="ask-meta">
+          <span>Asked of the</span>{" "}
+          <span className="ask-meta-council">{detail.session.councilNameAtRun}</span>
+          {latencyLabel ? (
+            <>
+              <span className="ask-meta-dot">·</span>
+              <span>{latencyLabel}</span>
+            </>
+          ) : null}
+          <span className="ask-meta-dot">·</span>
+          <span>{detail.session.ingressSource}</span>
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <SessionStatusBadge
+            status={detail.session.status}
+            failureKind={detail.session.failureKind}
+          />
+          <Badge>{detail.session.snapshot.attachments.length} attachment(s)</Badge>
+          <Badge>{detail.session.totalTokens} tokens</Badge>
+          <Badge>
+            {detail.session.totalCostIsPartial && detail.session.totalCostUsdMicros === 0
+              ? "cost pending"
+              : formatCost(detail.session.totalCostUsdMicros)}
+          </Badge>
+        </div>
+        <p className="ask-question mt-4">&ldquo;{detail.session.query}&rdquo;</p>
+      </section>
+
+      <CouncilTrack
+        members={detail.session.snapshot.council.members}
+        artifacts={inspectorArtifacts}
+        onCellSelect={(position) => {
+          const target = window.document.getElementById(
+            `cand-${memberForPosition(position).alias}`,
+          );
+          target?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }}
+      />
+
+      {phase3Artifact ? (
+        <>
+          <VerdictCard content={phase3Artifact.content} onOpenTrail={openTrail} />
+          <p className="composer">
+            <span>composed by</span> <span className="composer-strong">Synthesizer&nbsp;G</span>
+            {synthesizerLabel ? (
+              <>
+                <span className="composer-dot">·</span>
+                <span className="composer-strong">{synthesizerLabel}</span>
+              </>
+            ) : null}
+            {latencyLabel ? (
+              <>
+                <span className="composer-dot">·</span>
+                <span>{latencyLabel}</span>
+              </>
+            ) : null}
+          </p>
+        </>
+      ) : detail.session.status === "failed" ? (
+        <Card className="p-6">
+          <p className="text-sm text-[var(--text-muted)]">
+            The council did not converge. Review the trail below and either continue or rerun.
+          </p>
+        </Card>
+      ) : (
+        <Card className="p-6">
+          <p className="text-sm text-[var(--text-muted)]">
+            The synthesizer is still composing the verdict.
+          </p>
+        </Card>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {detail.session.status === "failed" ? (
+          <Button variant="secondary" size="sm" onClick={handleContinue}>
+            Continue
+          </Button>
+        ) : null}
+        {detail.session.status === "failed" || detail.session.status === "completed" ? (
+          <Button variant="secondary" size="sm" onClick={() => setRerunOpen((v) => !v)}>
+            {rerunOpen ? "Hide Rerun" : "Rerun"}
+          </Button>
+        ) : null}
+        <Button variant="ghost" size="sm" onClick={handleExport}>
+          Export
+        </Button>
+        <Button variant="ghost" size="sm" onClick={handleLoadDiagnostics}>
+          {loadingDiagnostics ? "Loading…" : diagnostics ? "Refresh Diagnostics" : "Diagnostics"}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={openTrail}>
+          {trailOpen ? "Trail open" : "Open Trail"}
+        </Button>
+      </div>
+
+      {rerunOpen ? (
+        <Card className="p-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor={`${fieldPrefix}-rerun-query`}>Rerun Question</Label>
+              <Textarea
+                id={`${fieldPrefix}-rerun-query`}
+                value={rerunQuery}
+                onChange={(event) => setRerunQuery(event.target.value)}
               />
-              <Badge>{detail.session.councilNameAtRun}</Badge>
-              <Badge>{detail.session.snapshot.attachments.length} attachment(s)</Badge>
             </div>
-            <h2 className="text-2xl font-semibold tracking-[-0.04em]">{detail.session.query}</h2>
-            <div className="grid gap-2 text-sm text-[var(--muted-foreground)] md:grid-cols-2">
-              <div>Created: {new Date(detail.session.createdAt).toLocaleString()}</div>
-              <div>Ingress: {detail.session.ingressSource}</div>
-              <div>Tokens: {detail.session.totalTokens}</div>
-              <div>
-                Cost:{" "}
-                {detail.session.totalCostIsPartial && detail.session.totalCostUsdMicros === 0
-                  ? "pending"
-                  : formatCost(detail.session.totalCostUsdMicros)}
-                {detail.session.totalCostIsPartial && detail.session.totalCostUsdMicros > 0
-                  ? " (partial)"
-                  : ""}
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor={`${fieldPrefix}-rerun-council`}>Rerun Council</Label>
+              <Select
+                id={`${fieldPrefix}-rerun-council`}
+                value={rerunCouncil}
+                onChange={(event) => setRerunCouncil(event.target.value)}
+              >
+                {availableCouncils.map((council) => {
+                  const value =
+                    council.ref.kind === "built_in"
+                      ? `built_in:${council.ref.slug}`
+                      : `user:${council.ref.councilId}`;
+                  return (
+                    <option key={value} value={value}>
+                      {council.name}
+                    </option>
+                  );
+                })}
+              </Select>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {detail.session.status === "failed" ? (
-              <Button variant="secondary" onClick={handleContinue}>
-                Continue
-              </Button>
-            ) : null}
-            {detail.session.status === "failed" || detail.session.status === "completed" ? (
-              <Button variant="secondary" onClick={handleRerun}>
-                Rerun
-              </Button>
-            ) : null}
-            <Button variant="secondary" onClick={handleExport}>
-              Export
-            </Button>
-            <Button variant="ghost" onClick={handleLoadDiagnostics}>
-              {loadingDiagnostics
-                ? "Loading…"
-                : diagnostics
-                  ? "Refresh Diagnostics"
-                  : "Diagnostics"}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      <Card className="p-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor={`${fieldPrefix}-rerun-query`}>Rerun Question</Label>
-            <Textarea
-              id={`${fieldPrefix}-rerun-query`}
-              value={rerunQuery}
-              onChange={(event) => setRerunQuery(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={`${fieldPrefix}-rerun-council`}>Rerun Council</Label>
-            <Select
-              id={`${fieldPrefix}-rerun-council`}
-              value={rerunCouncil}
-              onChange={(event) => setRerunCouncil(event.target.value)}
-            >
-              {availableCouncils.map((council) => {
-                const value =
-                  council.ref.kind === "built_in"
-                    ? `built_in:${council.ref.slug}`
-                    : `user:${council.ref.councilId}`;
-                return (
-                  <option key={value} value={value}>
-                    {council.name}
-                  </option>
-                );
-              })}
-            </Select>
-          </div>
-        </div>
-      </Card>
-
-      {phaseGroups.map((group) => (
-        <Card key={group.phase} className={cn("p-6", group.phase === 3 && "border-[var(--gold)]")}>
-          <div className="mb-4 flex items-center justify-between">
-            <h3
-              className={cn(
-                "font-semibold tracking-[-0.03em]",
-                group.phase === 3 ? "text-2xl" : "text-xl",
-              )}
-            >
-              Phase {group.phase} · {group.title}
-            </h3>
-            <Badge>{group.artifacts.length} artifact(s)</Badge>
-          </div>
-          <div className="space-y-4">
-            {group.artifacts.map((artifact) => (
-              <div key={artifact.id} className="panel p-5">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <Badge>{artifact.member.label}</Badge>
-                  <Badge>{artifact.modelName}</Badge>
-                  <Badge>{formatCost(artifact.costUsdMicros)}</Badge>
-                </div>
-                <div className="prose prose-sm max-w-none prose-headings:mt-0 prose-p:text-[var(--foreground)]">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{artifact.content}</ReactMarkdown>
-                </div>
-              </div>
-            ))}
-            {group.artifacts.length === 0 ? (
-              <p className="text-sm text-[var(--muted-foreground)]">No artifacts yet.</p>
-            ) : null}
+            <div className="md:col-span-2">
+              <Button onClick={handleRerun}>Run again</Button>
+            </div>
           </div>
         </Card>
-      ))}
+      ) : null}
+
+      {trailOpen ? (
+        <SessionTrail artifacts={detail.artifacts} trailRef={trailRef} formatCost={formatCost} />
+      ) : null}
 
       {diagnostics ? (
-        <Card className="p-6">
-          <h3 className="mb-4 text-xl font-semibold tracking-[-0.03em]">Diagnostics</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
-                  <th className="pb-2">Phase</th>
-                  <th className="pb-2">Member</th>
-                  <th className="pb-2">Request Model</th>
-                  <th className="pb-2">Billed Model</th>
-                  <th className="pb-2">Tokens</th>
-                  <th className="pb-2">Latency</th>
-                  <th className="pb-2">Cost</th>
-                  <th className="pb-2">Finish</th>
-                  <th className="pb-2">Error</th>
-                </tr>
-              </thead>
-              <tbody>
-                {diagnostics.providerCalls.map((call) => (
-                  <tr key={call.id} className="border-b border-[var(--border)]/60 align-top">
-                    <td className="py-3">{call.phase}</td>
-                    <td className="py-3">{call.memberPosition}</td>
-                    <td className="py-3">{call.requestModelName}</td>
-                    <td className="py-3">{call.billedModelId ?? "n/a"}</td>
-                    <td className="py-3">{call.usageTotalTokens ?? "n/a"}</td>
-                    <td className="py-3">{call.latencyMs ?? "n/a"}</td>
-                    <td className="py-3">{formatCost(call.totalCostUsdMicros)}</td>
-                    <td className="py-3">
-                      {call.finishReason ?? call.nativeFinishReason ?? "n/a"}
-                    </td>
-                    <td className="py-3">
-                      {call.errorMessage ?? call.choiceErrorMessage ?? "n/a"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <SessionDiagnosticsTable
+          providerCalls={diagnostics.providerCalls}
+          formatCost={formatCost}
+        />
       ) : null}
     </div>
   );

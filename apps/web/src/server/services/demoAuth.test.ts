@@ -8,6 +8,7 @@ const dbMocks = vi.hoisted(() => ({
   getOrCreateUser: vi.fn(),
   getUserById: vi.fn(),
   markDemoMagicLinkUsed: vi.fn(),
+  revokeDemoSession: vi.fn(),
   touchDemoSession: vi.fn(),
 }));
 
@@ -55,6 +56,7 @@ describe("demoAuth service", () => {
       dbMocks.getOrCreateUser,
       dbMocks.getUserById,
       dbMocks.markDemoMagicLinkUsed,
+      dbMocks.revokeDemoSession,
       dbMocks.touchDemoSession,
       resendMocks.sendResendEmail,
       tokenMocks.createDemoToken,
@@ -164,6 +166,63 @@ describe("demoAuth service", () => {
     expect(result).toMatchObject({
       email: "user@example.com",
       token: "session-token",
+    });
+  });
+
+  test("resolves active demo session context with the session row id", async () => {
+    tokenMocks.hashDemoToken.mockReturnValue("session-hash");
+    dbMocks.getDemoSessionByTokenHash.mockResolvedValue({
+      id: 11,
+      userId: 7,
+      expiresAt: new Date("2026-04-03T12:00:00.000Z"),
+    });
+    dbMocks.getUserById.mockResolvedValue({
+      id: 7,
+      kind: "demo",
+      principal: "user@example.com",
+    });
+
+    const { getDemoSessionContext } = await loadDemoAuth();
+    const result = await getDemoSessionContext({
+      token: "session-token",
+      now: new Date("2026-04-02T12:00:00.000Z"),
+    });
+
+    expect(result).toEqual({
+      kind: "active",
+      sessionId: 11,
+      userId: 7,
+      principal: "user@example.com",
+      expiresAt: new Date("2026-04-03T12:00:00.000Z").getTime(),
+    });
+  });
+
+  test("missing or revoked demo session context is invalid", async () => {
+    tokenMocks.hashDemoToken.mockReturnValue("session-hash");
+    dbMocks.getDemoSessionByTokenHash.mockResolvedValue(null);
+
+    const { getDemoSessionContext } = await loadDemoAuth();
+    const result = await getDemoSessionContext({
+      token: "revoked-token",
+      now: new Date("2026-04-02T12:00:00.000Z"),
+    });
+
+    expect(result).toEqual({ kind: "missing" });
+  });
+
+  test("revokes the active demo session row", async () => {
+    dbMocks.revokeDemoSession.mockResolvedValue(true);
+
+    const { endDemoSession } = await loadDemoAuth();
+    const revoked = await endDemoSession({
+      sessionId: 11,
+      now: new Date("2026-04-02T12:00:00.000Z"),
+    });
+
+    expect(revoked).toBe(true);
+    expect(dbMocks.revokeDemoSession).toHaveBeenCalledWith({
+      id: 11,
+      revokedAt: new Date("2026-04-02T12:00:00.000Z"),
     });
   });
 });
