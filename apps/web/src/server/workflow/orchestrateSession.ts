@@ -1,54 +1,44 @@
 import "server-only";
 
 import {
-  isReviewerMemberPosition,
-  type PhaseTwoEvaluation,
   REVIEWER_MEMBER_POSITIONS,
   type SessionSnapshot,
   SYNTHESIZER_MEMBER_POSITION,
   sessionSnapshotSchema,
 } from "@the-seven/contracts";
 import {
+  ClaimedJobLeaseLostError,
   createSessionArtifact,
   getSessionArtifact,
   getSessionById,
   listSessionArtifacts,
+  markClaimedSessionCompleted,
+  markClaimedSessionFailed,
   markJobCompleted,
   markJobFailed,
-  markSessionCompleted,
-  markSessionFailed,
-  refreshSessionUsageTotals,
   type SessionFailureKind,
-  startSessionProcessing,
+  startClaimedSessionProcessing,
 } from "@the-seven/db";
 import { decryptJobCredential } from "../domain/jobCredential";
 import { redactErrorMessage } from "../domain/redaction";
 import { buildSystemPromptForPhase, getSnapshotMember } from "../domain/sessionSnapshot";
+import { scheduleSessionCostBackfill } from "./openrouterBilling";
+import { OpenRouterPhaseRateLimitError, runOpenRouterPhaseCall } from "./openrouterRun";
 import {
-  backfillSessionCosts,
-  OpenRouterPhaseRateLimitError,
-  runOpenRouterPhaseCall,
-} from "./openrouterRun";
+  buildClaimedLease,
+  type EvaluationArtifact,
+  runParallel,
+  toEvaluationArtifacts,
+  toResponseArtifacts,
+  toReviewArtifacts,
+  verifyClaimedLease,
+} from "./orchestrateSessionState";
 import {
   buildReviewPrompt,
   buildSynthesisPrompt,
   formatPhaseTwoEvaluationContent,
-  parsePhaseTwoEvaluation,
-  phaseTwoCandidateIds,
+  parsePhaseTwoEvaluationResponse,
 } from "./prompts";
-
-type ResponseArtifact = Readonly<{
-  memberPosition: (typeof REVIEWER_MEMBER_POSITIONS)[number];
-  modelId: string;
-  content: string;
-}>;
-
-type ReviewArtifact = ResponseArtifact;
-
-type EvaluationArtifact = Readonly<{
-  memberPosition: (typeof REVIEWER_MEMBER_POSITIONS)[number];
-  evaluation: PhaseTwoEvaluation;
-}>;
 
 function toFailureKind(error: unknown, fallback: SessionFailureKind): SessionFailureKind {
   return error instanceof OpenRouterPhaseRateLimitError ? "openrouter_rate_limited" : fallback;
@@ -61,89 +51,30 @@ async function failSession(input: {
   failureKind: SessionFailureKind;
   error: unknown;
 }) {
-  await refreshSessionUsageTotals(input.sessionId);
-  await markSessionFailed(input.sessionId, input.failureKind);
-  await markJobFailed({
+  if (input.error instanceof ClaimedJobLeaseLostError) {
+    throw input.error;
+  }
+  await markClaimedSessionFailed({
+    sessionId: input.sessionId,
     jobId: input.jobId,
     leaseOwner: input.leaseOwner,
+    failureKind: input.failureKind,
     lastError: redactErrorMessage(input.error, "Unknown orchestration failure"),
   });
 }
 
-function toResponseArtifacts(
-  artifacts: Awaited<ReturnType<typeof listSessionArtifacts>>,
-): ResponseArtifact[] {
-  return artifacts
-    .filter((artifact) => artifact.artifactKind === "response")
-    .map((artifact) => {
-      if (!isReviewerMemberPosition(artifact.memberPosition)) {
-        throw new Error(`Invalid response member position ${artifact.memberPosition}`);
-      }
-      return {
-        memberPosition: artifact.memberPosition,
-        modelId: artifact.modelId,
-        content: artifact.content,
-      };
-    });
-}
-
-function toReviewArtifacts(
-  artifacts: Awaited<ReturnType<typeof listSessionArtifacts>>,
-): ReviewArtifact[] {
-  return artifacts
-    .filter((artifact) => artifact.artifactKind === "review")
-    .map((artifact) => {
-      if (!isReviewerMemberPosition(artifact.memberPosition)) {
-        throw new Error(`Invalid review member position ${artifact.memberPosition}`);
-      }
-      return {
-        memberPosition: artifact.memberPosition,
-        modelId: artifact.modelId,
-        content: artifact.content,
-      };
-    });
-}
-
-function toEvaluationArtifacts(input: {
-  responses: ReadonlyArray<ResponseArtifact>;
-  reviews: ReadonlyArray<ReviewArtifact>;
-}): EvaluationArtifact[] {
-  return input.reviews.map((review) => {
-    const parsed = parsePhaseTwoEvaluation({
-      content: review.content,
-      candidateIds: phaseTwoCandidateIds({
-        responses: input.responses,
-        reviewerMemberPosition: review.memberPosition,
-      }),
-    });
-    if (!parsed.ok) {
-      throw parsed.error;
-    }
-    return {
-      memberPosition: review.memberPosition,
-      evaluation: parsed.evaluation,
-    };
-  });
-}
-
-async function runParallel(tasks: ReadonlyArray<() => Promise<void>>) {
-  if (tasks.length === 0) {
-    return;
-  }
-
-  const results = await Promise.allSettled(tasks.map((task) => task()));
-  const rejected = results.find((result) => result.status === "rejected");
-  if (rejected && rejected.status === "rejected") {
-    throw rejected.reason;
-  }
-}
-
+/**
+ * Orchestrates one claimed session job from pending/resume state to terminal
+ * session state while binding provider and artifact side effects to the lease.
+ */
 export async function orchestrateClaimedJob(input: {
   jobId: number;
   leaseOwner: string;
   sessionId: number;
   credentialCiphertext: string | null;
+  signal?: AbortSignal;
 }) {
+  const claimedLease = buildClaimedLease(input);
   const session = await getSessionById(input.sessionId);
   if (!session) {
     await markJobFailed({
@@ -155,8 +86,11 @@ export async function orchestrateClaimedJob(input: {
   }
 
   if (session.status === "completed") {
-    await refreshSessionUsageTotals(session.id);
-    await markJobCompleted({ jobId: input.jobId, leaseOwner: input.leaseOwner });
+    await markClaimedSessionCompleted({
+      sessionId: session.id,
+      jobId: input.jobId,
+      leaseOwner: input.leaseOwner,
+    });
     return;
   }
 
@@ -171,8 +105,10 @@ export async function orchestrateClaimedJob(input: {
     return;
   }
 
-  const started = await startSessionProcessing(session.id);
+  await verifyClaimedLease({ signal: input.signal, claimedLease });
+  const started = await startClaimedSessionProcessing(claimedLease);
   if (!started) {
+    await verifyClaimedLease({ signal: input.signal, claimedLease });
     await markJobCompleted({ jobId: input.jobId, leaseOwner: input.leaseOwner });
     return;
   }
@@ -215,10 +151,12 @@ export async function orchestrateClaimedJob(input: {
       memberPosition: SYNTHESIZER_MEMBER_POSITION,
     });
     if (synthesis) {
-      await refreshSessionUsageTotals(session.id);
-      await markSessionCompleted(session.id);
-      await markJobCompleted({ jobId: input.jobId, leaseOwner: input.leaseOwner });
-      void backfillSessionCosts({ sessionId: session.id, apiKey });
+      await markClaimedSessionCompleted({
+        sessionId: session.id,
+        jobId: input.jobId,
+        leaseOwner: input.leaseOwner,
+      });
+      scheduleSessionCostBackfill({ sessionId: session.id, apiKey });
       return;
     }
 
@@ -229,7 +167,7 @@ export async function orchestrateClaimedJob(input: {
     );
     const phaseOneTasks = REVIEWER_MEMBER_POSITIONS.filter(
       (position) => !existingResponsePositions.has(position),
-    ).map((memberPosition) => async () => {
+    ).map((memberPosition) => async (signal: AbortSignal) => {
       const member = getSnapshotMember(snapshot, memberPosition);
       const result = await runOpenRouterPhaseCall({
         sessionId: session.id,
@@ -242,12 +180,15 @@ export async function orchestrateClaimedJob(input: {
           { role: "user", content: snapshot.userMessage },
         ],
         tuning: member.tuning,
+        signal,
+        claimedLease,
       });
 
       if (!result.ok) {
         throw result.error;
       }
 
+      await verifyClaimedLease({ signal, claimedLease });
       await createSessionArtifact({
         sessionId: session.id,
         phase: 1,
@@ -255,11 +196,12 @@ export async function orchestrateClaimedJob(input: {
         memberPosition,
         modelId: member.model.modelId,
         content: result.content,
+        claimedLease,
       });
     });
 
     try {
-      await runParallel(phaseOneTasks);
+      await runParallel(phaseOneTasks, input.signal);
     } catch (error) {
       await failSession({
         jobId: input.jobId,
@@ -292,7 +234,7 @@ export async function orchestrateClaimedJob(input: {
     );
     const phaseTwoTasks = REVIEWER_MEMBER_POSITIONS.filter(
       (position) => !phaseTwoExistingPositions.has(position),
-    ).map((memberPosition) => async () => {
+    ).map((memberPosition) => async (signal: AbortSignal) => {
       const member = getSnapshotMember(snapshot, memberPosition);
       const result = await runOpenRouterPhaseCall({
         sessionId: session.id,
@@ -307,28 +249,26 @@ export async function orchestrateClaimedJob(input: {
             content: buildReviewPrompt({
               userMessage: snapshot.userMessage,
               responses: phaseOneArtifacts,
-              reviewerMemberPosition: memberPosition,
             }),
           },
         ],
         tuning: member.tuning,
+        signal,
+        claimedLease,
       });
 
       if (!result.ok) {
         throw result.error;
       }
 
-      const parsedEvaluation = parsePhaseTwoEvaluation({
+      const parsedEvaluation = parsePhaseTwoEvaluationResponse({
         content: result.content,
-        candidateIds: phaseTwoCandidateIds({
-          responses: phaseOneArtifacts,
-          reviewerMemberPosition: memberPosition,
-        }),
       });
       if (!parsedEvaluation.ok) {
         throw parsedEvaluation.error;
       }
 
+      await verifyClaimedLease({ signal, claimedLease });
       await createSessionArtifact({
         sessionId: session.id,
         phase: 2,
@@ -336,11 +276,12 @@ export async function orchestrateClaimedJob(input: {
         memberPosition,
         modelId: member.model.modelId,
         content: formatPhaseTwoEvaluationContent(parsedEvaluation.evaluation),
+        claimedLease,
       });
     });
 
     try {
-      await runParallel(phaseTwoTasks);
+      await runParallel(phaseTwoTasks, input.signal);
     } catch (error) {
       await failSession({
         jobId: input.jobId,
@@ -370,7 +311,6 @@ export async function orchestrateClaimedJob(input: {
     let phaseTwoEvaluations: EvaluationArtifact[];
     try {
       phaseTwoEvaluations = toEvaluationArtifacts({
-        responses: phaseOneArtifacts,
         reviews: phaseTwoArtifacts,
       });
     } catch (error) {
@@ -413,6 +353,8 @@ export async function orchestrateClaimedJob(input: {
           },
         ],
         tuning: synthesizer.tuning,
+        signal: input.signal,
+        claimedLease,
       });
 
       if (!result.ok) {
@@ -426,6 +368,7 @@ export async function orchestrateClaimedJob(input: {
         return;
       }
 
+      await verifyClaimedLease({ signal: input.signal, claimedLease });
       await createSessionArtifact({
         sessionId: session.id,
         phase: 3,
@@ -433,14 +376,20 @@ export async function orchestrateClaimedJob(input: {
         memberPosition: SYNTHESIZER_MEMBER_POSITION,
         modelId: synthesizer.model.modelId,
         content: result.content,
+        claimedLease,
       });
     }
 
-    await refreshSessionUsageTotals(session.id);
-    await markSessionCompleted(session.id);
-    await markJobCompleted({ jobId: input.jobId, leaseOwner: input.leaseOwner });
-    void backfillSessionCosts({ sessionId: session.id, apiKey });
+    await markClaimedSessionCompleted({
+      sessionId: session.id,
+      jobId: input.jobId,
+      leaseOwner: input.leaseOwner,
+    });
+    scheduleSessionCostBackfill({ sessionId: session.id, apiKey });
   } catch (error) {
+    if (error instanceof ClaimedJobLeaseLostError) {
+      throw error;
+    }
     await failSession({
       jobId: input.jobId,
       leaseOwner: input.leaseOwner,

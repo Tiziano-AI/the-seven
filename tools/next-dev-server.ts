@@ -1,7 +1,7 @@
-import { runProjectedNextDevServer } from "./next-dev";
+import { resolveNextDevRepoRoot, runProjectedNextDevServer } from "./next-dev";
 
 await runProjectedNextDevServer({
-  repoRoot: process.cwd(),
+  repoRoot: resolveNextDevRepoRoot(process.cwd()),
   env: process.env,
 }).catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);

@@ -12,44 +12,70 @@ export const ERROR_KINDS = [
 
 export type ErrorKind = (typeof ERROR_KINDS)[number];
 
-export const invalidInputDetailsSchema = z.object({
-  issues: z.array(z.object({ path: z.string(), message: z.string() })),
-});
+export const INVALID_INPUT_REASONS = [
+  "invalid_request",
+  "invalid_json",
+  "invalid_ingress",
+  "body_too_large",
+  "invalid_content_type",
+] as const;
 
-export const unauthorizedDetailsSchema = z.object({
-  reason: z.enum(["missing_auth", "invalid_token", "expired_token"]),
-});
+export type InvalidInputReason = (typeof INVALID_INPUT_REASONS)[number];
 
-export const forbiddenDetailsSchema = z.object({
-  reason: z.string(),
-});
+export const invalidInputDetailsSchema = z
+  .object({
+    reason: z.enum(INVALID_INPUT_REASONS),
+    issues: z.array(z.object({ path: z.string(), message: z.string() }).strict()),
+  })
+  .strict();
 
-export const notFoundDetailsSchema = z.object({
-  resource: z.string(),
-});
+export const unauthorizedDetailsSchema = z
+  .object({
+    reason: z.enum(["missing_auth", "invalid_token", "expired_token"]),
+  })
+  .strict();
 
-export const rateLimitedDetailsSchema = z.object({
-  scope: z.string(),
-  limit: z.number().int(),
-  windowSeconds: z.number().int(),
-  resetAt: z.string().datetime(),
-});
+export const forbiddenDetailsSchema = z
+  .object({
+    reason: z.string(),
+  })
+  .strict();
 
-export const upstreamErrorDetailsSchema = z.object({
-  service: z.enum(["openrouter", "resend"]),
-  status: z.number().int().nullable(),
-});
+export const notFoundDetailsSchema = z
+  .object({
+    resource: z.string(),
+  })
+  .strict();
 
-export const internalErrorDetailsSchema = z.object({
-  errorId: z.string(),
-});
+export const rateLimitedDetailsSchema = z
+  .object({
+    scope: z.string(),
+    limit: z.number().int(),
+    windowSeconds: z.number().int(),
+    resetAt: z.string().datetime(),
+  })
+  .strict();
 
-const baseErrorEnvelopeSchema = z.object({
-  schema_version: z.literal(1),
-  trace_id: z.string(),
-  ts: z.string().datetime(),
-  message: z.string(),
-});
+export const upstreamErrorDetailsSchema = z
+  .object({
+    service: z.enum(["openrouter", "resend"]),
+  })
+  .strict();
+
+export const internalErrorDetailsSchema = z
+  .object({
+    errorId: z.string(),
+  })
+  .strict();
+
+const baseErrorEnvelopeSchema = z
+  .object({
+    schema_version: z.literal(1),
+    trace_id: z.string(),
+    ts: z.string().datetime(),
+    message: z.string(),
+  })
+  .strict();
 
 export const errorEnvelopeSchema = z.discriminatedUnion("kind", [
   baseErrorEnvelopeSchema.extend({
@@ -105,9 +131,12 @@ export class HttpContractError extends Error {
   }
 }
 
-/** Builds canonical `invalid_input` details from public validation issues. */
-export function invalidInputDetails(issues: ReadonlyArray<InvalidInputIssue>) {
-  return invalidInputDetailsSchema.parse({ issues });
+/** Builds canonical `invalid_input` details from one typed denial reason and public validation issues. */
+export function invalidInputDetails(input: {
+  reason: InvalidInputReason;
+  issues: ReadonlyArray<InvalidInputIssue>;
+}) {
+  return invalidInputDetailsSchema.parse(input);
 }
 
 /** Builds canonical `unauthorized` details without leaking credential material. */
@@ -136,10 +165,7 @@ export function rateLimitedDetails(input: {
 }
 
 /** Builds canonical `upstream_error` details for provider transport failures. */
-export function upstreamErrorDetails(input: {
-  service: "openrouter" | "resend";
-  status: number | null;
-}) {
+export function upstreamErrorDetails(input: { service: "openrouter" | "resend" }) {
   return upstreamErrorDetailsSchema.parse(input);
 }
 

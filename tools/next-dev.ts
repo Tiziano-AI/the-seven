@@ -16,11 +16,27 @@ function repoWebRoot(repoRoot: string): string {
   return path.join(repoRoot, "apps", "web");
 }
 
+/** Resolves the workspace root for package-local and repo-root Next dev starts. */
+export function resolveNextDevRepoRoot(startDirectory: string): string {
+  let currentDirectory = path.resolve(startDirectory);
+  while (true) {
+    if (existsSync(path.join(currentDirectory, "pnpm-workspace.yaml"))) {
+      return currentDirectory;
+    }
+    const parentDirectory = path.dirname(currentDirectory);
+    if (parentDirectory === currentDirectory) {
+      throw new Error("Unable to locate workspace root for the launch-owned Next dev server.");
+    }
+    currentDirectory = parentDirectory;
+  }
+}
+
 function nextEnvPath(repoRoot: string): string {
   return path.join(repoWebRoot(repoRoot), "next-env.d.ts");
 }
 
-function requireProjectedPort(env: NodeJS.ProcessEnv): number {
+/** Reads the launch-owned Next dev TCP port from the materialized environment. */
+export function requireProjectedNextDevPort(env: NodeJS.ProcessEnv): number {
   const rawPort = env.PORT?.trim();
   if (!rawPort) {
     throw new Error("PORT is required for the launch-owned Next dev server.");
@@ -32,7 +48,8 @@ function requireProjectedPort(env: NodeJS.ProcessEnv): number {
   return port;
 }
 
-function requireProjectedDistDir(env: NodeJS.ProcessEnv): string {
+/** Reads the launch-owned isolated Next distDir from the materialized environment. */
+export function requireProjectedNextDistDir(env: NodeJS.ProcessEnv): string {
   const distDir = env.SEVEN_NEXT_DIST_DIR?.trim();
   if (!distDir || !nextDistPattern.test(distDir)) {
     throw new Error("SEVEN_NEXT_DIST_DIR must be a launch-owned .next-local/<port> path.");
@@ -44,7 +61,8 @@ function readTextIfPresent(filePath: string): string | null {
   return existsSync(filePath) ? readFileSync(filePath, "utf8") : null;
 }
 
-function restoreNextEnvIfOwned(input: {
+/** Restores Next's generated type reference file when the isolated distDir changed it. */
+export function restoreNextEnvIfOwned(input: {
   repoRoot: string;
   before: string | null;
   distDir: string;
@@ -61,7 +79,11 @@ function restoreNextEnvIfOwned(input: {
   writeFileSync(filePath, input.before, "utf8");
 }
 
-async function removeLocalDistDir(input: { repoRoot: string; distDir: string }): Promise<void> {
+/** Removes only a launch-owned `.next-local/<port>` distDir under the web app root. */
+export async function removeLocalDistDir(input: {
+  repoRoot: string;
+  distDir: string;
+}): Promise<void> {
   const webRoot = repoWebRoot(input.repoRoot);
   const distPath = path.resolve(webRoot, input.distDir);
   const allowedRoot = path.resolve(webRoot, ".next-local");
@@ -124,8 +146,8 @@ export async function runProjectedNextDevServer(input: {
   repoRoot: string;
   env: NodeJS.ProcessEnv;
 }): Promise<void> {
-  const port = requireProjectedPort(input.env);
-  const distDir = requireProjectedDistDir(input.env);
+  const port = requireProjectedNextDevPort(input.env);
+  const distDir = requireProjectedNextDistDir(input.env);
   const beforeNextEnv = readTextIfPresent(nextEnvPath(input.repoRoot));
   const child = spawn(
     "pnpm",

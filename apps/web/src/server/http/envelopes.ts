@@ -2,7 +2,7 @@ import "server-only";
 
 import { buildErrorEnvelope, buildSuccessEnvelope, type ErrorEnvelope } from "@the-seven/contracts";
 import { NextResponse } from "next/server";
-import { redactText } from "../domain/redaction";
+import { redactErrorDetails, redactText } from "../domain/redaction";
 
 export function jsonSuccess(input: {
   traceId: string;
@@ -31,6 +31,7 @@ export function jsonError(input: {
   const envelope = buildErrorEnvelope({
     ...input,
     message: redactText(input.message),
+    details: redactErrorDetails(input.details),
   });
   return NextResponse.json(envelope, {
     status: input.status,

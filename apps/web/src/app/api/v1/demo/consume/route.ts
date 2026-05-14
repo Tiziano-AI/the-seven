@@ -10,11 +10,39 @@ import { NextResponse } from "next/server";
 import { redactRateLimitScope } from "@/server/domain/redaction";
 import { setDemoSessionCookie } from "@/server/http/demoCookie";
 import { EdgeError } from "@/server/http/errors";
+import { parseIngressHeaders } from "@/server/http/ingress";
 import { handleRedirectRoute } from "@/server/http/route";
 import { consumeDemoAuthLink, DemoAuthError } from "@/server/services/demoAuth";
 import { admitDemoConsume } from "@/server/services/demoLimits";
 
 type BrowserDemoLinkState = "invalid" | "expired" | "disabled";
+
+function normalizeHostAuthority(input: { host: string | null; protocol: string }): string | null {
+  const raw = input.host?.trim();
+  if (!raw || /[\r\n]/.test(raw)) {
+    return null;
+  }
+  if (/[\s/@?#\\]/.test(raw)) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(`${input.protocol}//${raw}`);
+    if (
+      parsed.username ||
+      parsed.password ||
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return null;
+    }
+    const hostname = parsed.hostname.toLowerCase().replace(/\.$/, "");
+    return parsed.port ? `${hostname}:${parsed.port}` : hostname;
+  } catch {
+    return null;
+  }
+}
 
 function browserDemoLinkState(error: DemoAuthError): BrowserDemoLinkState {
   if (error.kind === "demo_disabled") {
@@ -65,8 +93,16 @@ export async function GET(request: NextRequest) {
     route: routeContract("demo.consume"),
     preAdmission: (req) => {
       const env = serverRuntime();
-      const publicOriginHost = new URL(env.publicOrigin).host;
-      if (req.headers.get("host") !== publicOriginHost) {
+      const publicOrigin = new URL(env.publicOrigin);
+      const expectedHost = normalizeHostAuthority({
+        host: publicOrigin.host,
+        protocol: publicOrigin.protocol,
+      });
+      const requestHost = normalizeHostAuthority({
+        host: req.headers.get("host"),
+        protocol: publicOrigin.protocol,
+      });
+      if (!requestHost || requestHost !== expectedHost) {
         throw new EdgeError({
           kind: "forbidden",
           message: "Demo consume must use the configured public origin",
@@ -74,9 +110,9 @@ export async function GET(request: NextRequest) {
           status: 403,
         });
       }
-      const isApiIngress = req.headers.get("x-seven-ingress") === "api";
+      const isApiIngress = parseIngressHeaders(req).source === "api";
       const token = req.nextUrl.searchParams.get("token");
-      if (!token && !isApiIngress) {
+      if ((!token || token.trim() === "") && !isApiIngress) {
         return demoLinkRecoveryRedirect({
           publicOrigin: env.publicOrigin,
           state: "invalid",

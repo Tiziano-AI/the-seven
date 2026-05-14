@@ -3,6 +3,7 @@ import "server-only";
 import {
   type CouncilDefinition,
   type CouncilMemberAssignment,
+  invalidInputDetails,
   parseCouncilDefinition,
   parseCouncilMembers,
 } from "@the-seven/contracts";
@@ -20,12 +21,13 @@ function invalidCouncilInput(message: string, error: ZodError): never {
   throw new EdgeError({
     kind: "invalid_input",
     message,
-    details: {
+    details: invalidInputDetails({
+      reason: "invalid_request",
       issues: error.issues.map((issue) => ({
         path: issuePath(issue.path, "members"),
         message: issue.message,
       })),
-    },
+    }),
     status: 400,
   });
 }

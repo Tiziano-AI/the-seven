@@ -1,12 +1,13 @@
 import "server-only";
 
-import { buildOpenRouterAppHeaders, serverRuntime } from "@the-seven/config";
 import type { CouncilMemberTuningInput } from "@the-seven/contracts";
 import { z } from "zod";
+import { OpenRouterRequestFailedError } from "./openrouterErrors";
+import { requestChatCompletion, requestJson } from "./openrouterHttp";
 
-const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const OPENROUTER_REQUEST_TIMEOUT_MS = 120_000;
 const IS_TEST = process.env.NODE_ENV === "test";
+
+export { OpenRouterRequestFailedError } from "./openrouterErrors";
 
 export type OpenRouterMessage = Readonly<{
   role: "system" | "user" | "assistant" | "tool";
@@ -16,6 +17,8 @@ export type OpenRouterMessage = Readonly<{
 export type OpenRouterRequest = Readonly<{
   model: string;
   messages: ReadonlyArray<OpenRouterMessage>;
+  stream?: boolean;
+  max_tokens?: number;
   temperature?: number;
   top_p?: number;
   seed?: number;
@@ -23,7 +26,10 @@ export type OpenRouterRequest = Readonly<{
   include_reasoning?: boolean;
   reasoning?: Readonly<{ effort?: string }>;
   response_format?: OpenRouterResponseFormat;
-  provider?: Readonly<{ require_parameters?: boolean }>;
+  provider?: Readonly<{
+    require_parameters?: boolean;
+    ignore?: ReadonlyArray<string>;
+  }>;
 }>;
 
 export type OpenRouterTuningOptions = Readonly<{
@@ -94,17 +100,6 @@ const openRouterGenerationResponseSchema = z
   })
   .passthrough();
 
-const openRouterErrorBodySchema = z
-  .object({
-    error: z
-      .object({
-        code: z.union([z.string(), z.number()]).optional(),
-        message: z.string().optional(),
-      })
-      .optional(),
-  })
-  .passthrough();
-
 const openRouterModelsResponseSchema = z.object({
   data: z.array(
     z.object({
@@ -112,6 +107,7 @@ const openRouterModelsResponseSchema = z.object({
       name: z.string().nullish(),
       description: z.string().nullish(),
       context_length: z.number().int().nonnegative().nullish(),
+      expiration_date: z.string().nullish(),
       supported_parameters: z.array(z.string()).nullish(),
       architecture: z
         .object({
@@ -135,100 +131,11 @@ export type OpenRouterResponse = z.infer<typeof openRouterChatCompletionSchema>;
 export type OpenRouterGeneration = z.infer<typeof openRouterGenerationResponseSchema>["data"];
 export type OpenRouterModel = z.infer<typeof openRouterModelsResponseSchema>["data"][number];
 
-export class OpenRouterRequestFailedError extends Error {
-  readonly status: number | null;
-  readonly code: string | null;
-
-  constructor(input: { status: number | null; code?: string | number | null; message: string }) {
-    super(input.message);
-    this.name = "OpenRouterRequestFailedError";
-    this.status = input.status;
-    this.code = input.code === undefined || input.code === null ? null : String(input.code);
-  }
-}
-
 export class OpenRouterRateLimitError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "OpenRouterRateLimitError";
   }
-}
-
-function normalizeRequest(input: OpenRouterRequest): Record<string, unknown> {
-  return {
-    ...input,
-    transforms: [],
-    plugins: [],
-  };
-}
-
-function buildHeaders(apiKey?: string): HeadersInit {
-  const headers: Record<string, string> = {
-    ...buildOpenRouterAppHeaders(serverRuntime()),
-    "Content-Type": "application/json",
-  };
-  if (apiKey) {
-    headers.Authorization = `Bearer ${apiKey}`;
-  }
-  return headers;
-}
-
-async function parseJson(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text) return null;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    throw new OpenRouterRequestFailedError({
-      status: response.status,
-      message: `OpenRouter returned non-JSON response (status ${response.status})`,
-    });
-  }
-}
-
-async function requestJson(input: {
-  path: string;
-  apiKey?: string;
-  method?: "GET" | "POST";
-  body?: unknown;
-}): Promise<unknown> {
-  let response: Response;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, OPENROUTER_REQUEST_TIMEOUT_MS);
-
-  try {
-    response = await fetch(`${OPENROUTER_BASE_URL}${input.path}`, {
-      method: input.method ?? "GET",
-      headers: buildHeaders(input.apiKey),
-      body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: controller.signal,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "transport failure";
-    throw new OpenRouterRequestFailedError({
-      status: null,
-      message: `OpenRouter request failed before response: ${message}`,
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  const data = await parseJson(response);
-  if (response.ok) {
-    return data;
-  }
-
-  const parsed = openRouterErrorBodySchema.safeParse(data);
-  const message = parsed.success
-    ? (parsed.data.error?.message ?? response.statusText)
-    : response.statusText;
-  throw new OpenRouterRequestFailedError({
-    status: response.status,
-    code: parsed.success ? parsed.data.error?.code : null,
-    message: `OpenRouter request failed (status ${response.status}): ${message}`,
-  });
 }
 
 function backoffDelayMs(attempt: number): number {
@@ -264,6 +171,7 @@ function retryableChoiceError(response: OpenRouterResponse): OpenRouterRequestFa
     status: choiceError.code,
     code: choiceError.code,
     message: `OpenRouter choice error ${choiceError.code}: ${choiceError.message}`,
+    response,
   });
 }
 
@@ -344,19 +252,17 @@ export function materializeCouncilMemberTuningInput(
 export async function callOpenRouter(
   apiKey: string,
   request: OpenRouterRequest,
+  options: { signal?: AbortSignal } = {},
 ): Promise<OpenRouterResponse> {
-  const normalized = normalizeRequest(request);
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const data = await requestJson({
-        path: "/chat/completions",
+      const response = await requestChatCompletion({
         apiKey,
-        method: "POST",
-        body: normalized,
+        body: request,
+        signal: options.signal,
       });
-      const response = openRouterChatCompletionSchema.parse(data);
       const choiceRetryError = retryableChoiceError(response);
       if (choiceRetryError) {
         throw choiceRetryError;
@@ -365,7 +271,8 @@ export async function callOpenRouter(
     } catch (error) {
       lastError = error;
       const retryable =
-        !(error instanceof OpenRouterRequestFailedError) || isRetryableStatus(error.status);
+        !(error instanceof OpenRouterRequestFailedError) ||
+        (error.code !== "aborted" && isRetryableStatus(error.status));
       if (attempt < 2 && retryable) {
         await sleepMs(backoffDelayMs(attempt));
         continue;
@@ -397,6 +304,7 @@ export async function validateOpenRouterApiKey(apiKey: string): Promise<boolean>
 export async function fetchOpenRouterGeneration(
   apiKey: string,
   generationId: string,
+  options: { signal?: AbortSignal } = {},
 ): Promise<OpenRouterGeneration> {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -404,12 +312,14 @@ export async function fetchOpenRouterGeneration(
       const data = await requestJson({
         path: `/generation?id=${encodeURIComponent(generationId)}`,
         apiKey,
+        signal: options.signal,
       });
       return openRouterGenerationResponseSchema.parse(data).data;
     } catch (error) {
       lastError = error;
       const retryable =
-        !(error instanceof OpenRouterRequestFailedError) || isRetryableStatus(error.status);
+        !(error instanceof OpenRouterRequestFailedError) ||
+        (error.code !== "aborted" && isRetryableStatus(error.status));
       if (attempt < 3 && retryable) {
         await sleepMs(backoffDelayMs(attempt));
         continue;

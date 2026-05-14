@@ -23,7 +23,10 @@ export async function assertCouncilNameAvailable(input: {
     throw new EdgeError({
       kind: "invalid_input",
       message: "Council name already exists",
-      details: invalidInputDetails([{ path: "name", message: "Council name already exists" }]),
+      details: invalidInputDetails({
+        reason: "invalid_request",
+        issues: [{ path: "name", message: "Council name already exists" }],
+      }),
       status: 400,
     });
   }
@@ -46,9 +49,10 @@ export async function validateCouncilMembers(
       throw new EdgeError({
         kind: "invalid_input",
         message: `Unknown model ${member.model.modelId}`,
-        details: invalidInputDetails([
-          { path: "members", message: `Unknown model ${member.model.modelId}` },
-        ]),
+        details: invalidInputDetails({
+          reason: "invalid_request",
+          issues: [{ path: "members", message: `Unknown model ${member.model.modelId}` }],
+        }),
         status: 400,
       });
     }

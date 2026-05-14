@@ -1,19 +1,18 @@
 import http from "node:http";
-import type { LiveProofRuntime, ServerRuntime } from "@the-seven/config";
-import {
-  querySubmitBodySchema,
-  sessionDetailPayloadSchema,
-  sessionDiagnosticsPayloadSchema,
-  submitPayloadSchema,
-  successEnvelopeSchema,
-} from "@the-seven/contracts";
+import { BUILT_IN_COUNCILS, type LiveProofRuntime, type ServerRuntime } from "@the-seven/config";
+import { buildRoutePath, routeContract } from "@the-seven/contracts";
 import { deleteRateLimitBucketsForScopes } from "@the-seven/db";
 import { requestDemoLink } from "../apps/web/src/lib/api";
+import { demoApiRequest } from "./live-demo-api";
+import { resolveProofOrigin } from "./live-demo-origin";
+import { assertLiveSessionProof, assertNoPendingBillingLookups } from "./live-session-proof";
 import { runCommandOrThrow, sleep } from "./process-utils";
 import { assertResendInboundAccess, waitForReceivedDemoEmail } from "./resend-live-proof";
 
 const sessionTerminalStates = new Set(["completed", "failed"]);
 const demoSessionCookieName = "seven_demo_session";
+const demoConsumeRoute = routeContract("demo.consume");
+const LIVE_BILLING_TIMEOUT_MS = 150_000;
 
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) {
@@ -46,8 +45,9 @@ async function clearProofRateLimits(email: string) {
 }
 
 export function extractDemoConsumeUrlFromEmail(input: { text: string }): string {
+  const escapedPath = demoConsumeRoute.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const linkMatch = input.text.match(
-    /https?:\/\/[^\s"'<>]+\/api\/v1\/demo\/consume\?token=[A-Za-z0-9_-]+/,
+    new RegExp(`https?:\\/\\/[^\\s"'<>]+${escapedPath}\\?token=[A-Za-z0-9_-]+`),
   );
   if (!linkMatch) {
     throw new Error("Could not extract an absolute demo consume link from the received email.");
@@ -95,7 +95,11 @@ export function buildDemoConsumeTransport(input: {
     publicOrigin: input.publicOrigin,
   });
   const consume = new URL(input.consumeUrl);
-  const targetUrl = new URL(consume.pathname + consume.search, input.baseUrl);
+  const consumePath = buildRoutePath(demoConsumeRoute);
+  if (consume.pathname !== consumePath) {
+    throw new Error(`Demo consume link path mismatch: ${consume.pathname}`);
+  }
+  const targetUrl = new URL(consumePath + consume.search, input.baseUrl);
   return {
     targetUrl,
     hostHeader: new URL(input.publicOrigin).host,
@@ -151,7 +155,6 @@ export async function requestDemoConsume(input: {
 }): Promise<DemoConsumeResponse> {
   const headers = {
     Host: input.hostHeader,
-    "X-Seven-Ingress": "api",
   };
 
   if (input.targetUrl.protocol === "https:") {
@@ -208,58 +211,6 @@ export async function requestDemoConsume(input: {
   });
 }
 
-type PayloadSchema<T> = Readonly<{ parse(value: unknown): T }>;
-
-async function demoApiRequest<T>(input: {
-  baseUrl: string;
-  publicOrigin: string;
-  cookieHeader: string;
-  path: string;
-  method: "GET" | "POST";
-  body?: unknown;
-  payloadSchema: PayloadSchema<T>;
-}) {
-  const response = await fetch(new URL(input.path, input.baseUrl), {
-    method: input.method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Seven-Ingress": "api",
-      Cookie: input.cookieHeader,
-      Origin: input.publicOrigin.replace(/\/+$/, ""),
-    },
-    body: input.body ? JSON.stringify(input.body) : undefined,
-    redirect: "manual",
-  });
-
-  const raw = await response.text();
-  const data = raw ? (JSON.parse(raw) as unknown) : null;
-  if (!response.ok) {
-    throw new Error(`Demo API ${input.method} ${input.path} failed (${response.status}): ${raw}`);
-  }
-
-  const envelope = successEnvelopeSchema.parse(data);
-  return input.payloadSchema.parse(envelope.result.payload);
-}
-
-const demoSessionPayloadSchema = {
-  parse(value: unknown) {
-    if (
-      value &&
-      typeof value === "object" &&
-      "email" in value &&
-      typeof value.email === "string" &&
-      "expiresAt" in value &&
-      typeof value.expiresAt === "number"
-    ) {
-      return {
-        email: value.email,
-        expiresAt: value.expiresAt,
-      };
-    }
-    throw new Error("Demo session payload is malformed.");
-  },
-} satisfies PayloadSchema<Readonly<{ email: string; expiresAt: number }>>;
-
 async function consumeDemoLink(input: {
   baseUrl: string;
   publicOrigin: string;
@@ -285,9 +236,7 @@ async function consumeDemoLink(input: {
     baseUrl: input.baseUrl,
     publicOrigin: input.publicOrigin,
     cookieHeader: cookie.cookieHeader,
-    path: "/api/v1/demo/session",
-    method: "GET",
-    payloadSchema: demoSessionPayloadSchema,
+    route: routeContract("demo.session"),
   });
 
   assert(session.email === input.email.trim().toLowerCase(), "Demo session email mismatch.");
@@ -305,18 +254,15 @@ async function createDemoSessionRun(input: {
   query: string;
   councilRef: { kind: "built_in"; slug: "commons" };
 }) {
-  const body = querySubmitBodySchema.parse({
-    query: input.query,
-    councilRef: input.councilRef,
-  });
   return demoApiRequest({
     baseUrl: input.baseUrl,
     publicOrigin: input.publicOrigin,
     cookieHeader: input.cookieHeader,
-    path: "/api/v1/sessions",
-    method: "POST",
-    body,
-    payloadSchema: submitPayloadSchema,
+    route: routeContract("sessions.create"),
+    body: {
+      query: input.query,
+      councilRef: input.councilRef,
+    },
   });
 }
 
@@ -330,9 +276,8 @@ async function fetchDemoSession(input: {
     baseUrl: input.baseUrl,
     publicOrigin: input.publicOrigin,
     cookieHeader: input.cookieHeader,
-    path: `/api/v1/sessions/${input.sessionId}`,
-    method: "GET",
-    payloadSchema: sessionDetailPayloadSchema,
+    route: routeContract("sessions.get"),
+    params: { sessionId: input.sessionId },
   });
 }
 
@@ -346,10 +291,31 @@ async function fetchDemoSessionDiagnostics(input: {
     baseUrl: input.baseUrl,
     publicOrigin: input.publicOrigin,
     cookieHeader: input.cookieHeader,
-    path: `/api/v1/sessions/${input.sessionId}/diagnostics`,
-    method: "GET",
-    payloadSchema: sessionDiagnosticsPayloadSchema,
+    route: routeContract("sessions.diagnostics"),
+    params: { sessionId: input.sessionId },
   });
+}
+
+async function waitForDemoBillingDiagnostics(input: {
+  baseUrl: string;
+  publicOrigin: string;
+  cookieHeader: string;
+  sessionId: number;
+  label: string;
+}) {
+  const deadline = Date.now() + LIVE_BILLING_TIMEOUT_MS;
+  let diagnostics = await fetchDemoSessionDiagnostics(input);
+  while (diagnostics.providerCalls.some((call) => call.billingLookupStatus === "pending")) {
+    if (Date.now() >= deadline) {
+      assertNoPendingBillingLookups({
+        providerCalls: diagnostics.providerCalls,
+        label: input.label,
+      });
+    }
+    await sleep(5_000);
+    diagnostics = await fetchDemoSessionDiagnostics(input);
+  }
+  return diagnostics;
 }
 
 async function waitForTerminalDemoSession(input: {
@@ -402,28 +368,28 @@ function assertSessionArtifacts(
     `Expected completed demo session, received ${detail.session.status}.`,
   );
   assert(detail.artifacts.length > 0, "Expected artifacts for a completed session.");
-}
-
-function isLoopbackHost(hostname: string) {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-}
-
-function resolveProofOrigin(input: { baseUrl: string; publicOrigin: string }) {
-  const base = new URL(input.baseUrl);
-  if (isLoopbackHost(base.hostname)) {
-    return new URL(input.publicOrigin).origin;
-  }
-  return base.origin;
+  assertLiveSessionProof({
+    artifacts: detail.artifacts,
+    providerCalls: diagnostics.providerCalls,
+    snapshotMembers: detail.session.snapshot.council.members,
+    expectedMembers: BUILT_IN_COUNCILS.commons.members,
+    label: `demo session ${detail.session.id}`,
+  });
+  assertNoPendingBillingLookups({
+    providerCalls: diagnostics.providerCalls,
+    label: `demo session ${detail.session.id}`,
+  });
 }
 
 export async function runDemoSmoke(input: {
+  baseUrl: string;
   liveEnv: LiveProofRuntime;
   serverEnv: ServerRuntime;
   commonsRef: { kind: "built_in"; slug: "commons" };
 }) {
-  const { liveEnv, serverEnv, commonsRef } = input;
+  const { baseUrl, liveEnv, serverEnv, commonsRef } = input;
   const proofOrigin = resolveProofOrigin({
-    baseUrl: liveEnv.baseUrl,
+    baseUrl,
     publicOrigin: serverEnv.publicOrigin,
   });
 
@@ -444,7 +410,7 @@ export async function runDemoSmoke(input: {
     requestedAt,
   });
   const demoSession = await consumeDemoLink({
-    baseUrl: liveEnv.baseUrl,
+    baseUrl,
     publicOrigin: proofOrigin,
     email: liveEnv.demoTestEmail,
     receivedEmail,
@@ -454,24 +420,25 @@ export async function runDemoSmoke(input: {
   const demoQuestion =
     "Is a council of 7 AI models more likely to produce a better answer than a single top-tier model given the same question? Under what conditions does multi-model deliberation add value versus just adding cost and latency?";
   const demoRun = await createDemoSessionRun({
-    baseUrl: liveEnv.baseUrl,
+    baseUrl,
     publicOrigin: proofOrigin,
     cookieHeader: demoSession.cookieHeader,
     query: demoQuestion,
     councilRef: commonsRef,
   });
   const demoDetail = await waitForTerminalDemoSession({
-    baseUrl: liveEnv.baseUrl,
+    baseUrl,
     publicOrigin: proofOrigin,
     cookieHeader: demoSession.cookieHeader,
     sessionId: demoRun.sessionId,
     label: "Demo session",
   });
-  const demoDiagnostics = await fetchDemoSessionDiagnostics({
-    baseUrl: liveEnv.baseUrl,
+  const demoDiagnostics = await waitForDemoBillingDiagnostics({
+    baseUrl,
     publicOrigin: proofOrigin,
     cookieHeader: demoSession.cookieHeader,
     sessionId: demoRun.sessionId,
+    label: "Demo session",
   });
   assertSessionArtifacts(demoDetail, demoDiagnostics);
 

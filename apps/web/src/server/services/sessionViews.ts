@@ -17,6 +17,10 @@ import {
   listSessionsByUserId,
 } from "@the-seven/db";
 import { EdgeError } from "../http/errors";
+import { parsePhaseTwoEvaluationArtifact } from "../workflow/prompts";
+
+type ProviderCallRows = Awaited<ReturnType<typeof listProviderCalls>>;
+type SessionArtifactRows = Awaited<ReturnType<typeof listSessionArtifacts>>;
 
 function buildModelNameMap(rows: Awaited<ReturnType<typeof listCatalogModelsByIds>>) {
   const map = new Map<string, string>();
@@ -75,19 +79,89 @@ async function requireOwnedSession(userId: number, sessionId: number) {
   return session;
 }
 
-async function buildModelNameLookupForSession(sessionId: number, snapshot: SessionSnapshot) {
-  const artifacts = await listSessionArtifacts(sessionId);
-  const providerCalls = await listProviderCalls(sessionId);
+async function buildModelNameLookupForSession(input: {
+  snapshot: SessionSnapshot;
+  artifacts: SessionArtifactRows;
+  providerCalls: ProviderCallRows;
+}) {
   const modelIds = [
-    ...snapshot.council.members.map((member) => member.model.modelId),
-    ...artifacts.map((artifact) => artifact.modelId),
-    ...providerCalls.flatMap((call) => [
+    ...input.snapshot.council.members.map((member) => member.model.modelId),
+    ...input.artifacts.map((artifact) => artifact.modelId),
+    ...input.providerCalls.flatMap((call) => [
       call.requestModelId,
       ...(call.responseModel ? [call.responseModel] : []),
       ...(call.billedModelId ? [call.billedModelId] : []),
     ]),
   ];
   return buildModelNameMap(await listCatalogModelsByIds(modelIds));
+}
+
+async function buildDiagnosticsModelNameLookup(input: {
+  snapshot: SessionSnapshot;
+  providerCalls: ProviderCallRows;
+}) {
+  const modelIds = [
+    ...input.snapshot.council.members.map((member) => member.model.modelId),
+    ...input.providerCalls.flatMap((call) => [
+      call.requestModelId,
+      ...(call.responseModel ? [call.responseModel] : []),
+      ...(call.billedModelId ? [call.billedModelId] : []),
+    ]),
+  ];
+  return buildModelNameMap(await listCatalogModelsByIds(modelIds));
+}
+
+function mapProviderCall(call: ProviderCallRows[number], modelNames: ReadonlyMap<string, string>) {
+  return {
+    id: call.id,
+    sessionId: call.sessionId,
+    phase: call.phase,
+    memberPosition: call.memberPosition,
+    requestModelId: call.requestModelId,
+    requestModelName: modelNames.get(call.requestModelId) ?? call.requestModelId,
+    requestMaxOutputTokens: call.requestMaxOutputTokens,
+    catalogRefreshedAt: call.catalogRefreshedAt?.toISOString() ?? null,
+    supportedParameters: call.supportedParametersJson,
+    sentParameters: call.sentParametersJson,
+    sentReasoningEffort: call.sentReasoningEffort ?? null,
+    sentProviderRequireParameters: call.sentProviderRequireParameters,
+    sentProviderIgnoredProviders: call.sentProviderIgnoredProvidersJson,
+    deniedParameters: call.deniedParametersJson,
+    responseModel: call.responseModel,
+    billedModelId: call.billedModelId,
+    requestSystemChars: call.requestSystemChars,
+    requestUserChars: call.requestUserChars,
+    requestTotalChars: call.requestTotalChars,
+    requestStartedAt: call.requestStartedAt?.getTime() ?? null,
+    responseCompletedAt: call.responseCompletedAt?.getTime() ?? null,
+    latencyMs: call.latencyMs ?? null,
+    totalCostUsdMicros: call.totalCostUsdMicros ?? null,
+    usagePromptTokens: call.usagePromptTokens ?? null,
+    usageCompletionTokens: call.usageCompletionTokens ?? null,
+    usageTotalTokens: call.usageTotalTokens ?? null,
+    finishReason: call.finishReason ?? null,
+    nativeFinishReason: call.nativeFinishReason ?? null,
+    errorMessage: call.errorMessage ?? null,
+    choiceErrorMessage: call.choiceErrorMessage ?? null,
+    choiceErrorCode: call.choiceErrorCode ?? null,
+    errorStatus: call.errorStatus ?? null,
+    errorCode: call.errorCode ?? null,
+    billingLookupStatus: call.billingLookupStatus,
+    responseId: call.responseId ?? null,
+    createdAt: call.createdAt.toISOString(),
+  };
+}
+
+function validatePublicArtifactContent(artifact: SessionArtifactRows[number]) {
+  if (artifact.phase !== 2 || artifact.artifactKind !== "review") {
+    return artifact.content;
+  }
+
+  const parsed = parsePhaseTwoEvaluationArtifact({ content: artifact.content });
+  if (!parsed.ok) {
+    throw parsed.error;
+  }
+  return artifact.content;
 }
 
 export async function listSessionSummaries(userId: number) {
@@ -98,11 +172,11 @@ export async function listSessionSummaries(userId: number) {
 export async function getSessionDetail(userId: number, sessionId: number) {
   const session = await requireOwnedSession(userId, sessionId);
   const snapshot = sessionSnapshotSchema.parse(session.snapshotJson);
-  const [artifacts, providerCalls, modelNames] = await Promise.all([
+  const [artifacts, providerCalls] = await Promise.all([
     listSessionArtifacts(sessionId),
     listProviderCalls(sessionId),
-    buildModelNameLookupForSession(sessionId, snapshot),
   ]);
+  const modelNames = await buildModelNameLookupForSession({ snapshot, artifacts, providerCalls });
 
   return {
     session: {
@@ -124,54 +198,27 @@ export async function getSessionDetail(userId: number, sessionId: number) {
         member: memberForPosition(position),
         modelId: artifact.modelId,
         modelName: modelNames.get(artifact.modelId) ?? artifact.modelId,
-        content: artifact.content,
+        content: validatePublicArtifactContent(artifact),
         tokensUsed: artifact.tokensUsed ?? null,
         costUsdMicros: artifact.costUsdMicros ?? null,
         createdAt: artifact.createdAt.toISOString(),
       };
     }),
-    providerCalls: providerCalls.map((call) => ({
-      id: call.id,
-      sessionId: call.sessionId,
-      phase: call.phase,
-      memberPosition: call.memberPosition,
-      requestModelId: call.requestModelId,
-      requestModelName: modelNames.get(call.requestModelId) ?? call.requestModelId,
-      catalogRefreshedAt: call.catalogRefreshedAt?.toISOString() ?? null,
-      supportedParameters: call.supportedParametersJson,
-      sentParameters: call.sentParametersJson,
-      deniedParameters: call.deniedParametersJson,
-      responseModel: call.responseModel,
-      billedModelId: call.billedModelId,
-      requestSystemChars: call.requestSystemChars,
-      requestUserChars: call.requestUserChars,
-      requestTotalChars: call.requestTotalChars,
-      requestStartedAt: call.requestStartedAt?.getTime() ?? null,
-      responseCompletedAt: call.responseCompletedAt?.getTime() ?? null,
-      latencyMs: call.latencyMs ?? null,
-      totalCostUsdMicros: call.totalCostUsdMicros ?? null,
-      usagePromptTokens: call.usagePromptTokens ?? null,
-      usageCompletionTokens: call.usageCompletionTokens ?? null,
-      usageTotalTokens: call.usageTotalTokens ?? null,
-      finishReason: call.finishReason ?? null,
-      nativeFinishReason: call.nativeFinishReason ?? null,
-      errorMessage: call.errorMessage ?? null,
-      choiceErrorMessage: call.choiceErrorMessage ?? null,
-      choiceErrorCode: call.choiceErrorCode ?? null,
-      errorStatus: call.errorStatus ?? null,
-      errorCode: call.errorCode ?? null,
-      billingLookupStatus: call.billingLookupStatus,
-      responseId: call.responseId ?? null,
-      createdAt: call.createdAt.toISOString(),
-    })),
+    providerCalls: providerCalls.map((call) => mapProviderCall(call, modelNames)),
   };
 }
 
 export async function getSessionDiagnostics(userId: number, sessionId: number) {
-  const detail = await getSessionDetail(userId, sessionId);
+  const session = await requireOwnedSession(userId, sessionId);
+  const snapshot = sessionSnapshotSchema.parse(session.snapshotJson);
+  const providerCalls = await listProviderCalls(sessionId);
+  const modelNames = await buildDiagnosticsModelNameLookup({ snapshot, providerCalls });
   return {
-    session: detail.session,
-    providerCalls: detail.providerCalls,
+    session: {
+      ...toSessionSummary(session),
+      snapshot,
+    },
+    providerCalls: providerCalls.map((call) => mapProviderCall(call, modelNames)),
   };
 }
 

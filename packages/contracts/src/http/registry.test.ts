@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { ROUTE_CONTRACTS } from "./registry";
+import { ROUTE_CONTRACTS, routeContract, routeDeclaresDenial } from "./registry";
 
 const commonDenialRows = [
   { kind: "invalid_input", status: 400, reason: "invalid_request" },
@@ -30,9 +30,9 @@ describe("route registry denials", () => {
     });
   });
 
-  test("non-public mutating routes declare cookie same-origin denials", () => {
+  test("routes that can mutate with demo-cookie authority declare same-origin denials", () => {
     for (const route of ROUTE_CONTRACTS) {
-      if (route.auth === "public" || route.method === "GET") {
+      if (route.auth === "public" || route.auth === "byok" || route.method === "GET") {
         continue;
       }
 
@@ -41,6 +41,70 @@ describe("route registry denials", () => {
         status: 403,
         reason: "same_origin_required",
       });
+    }
+  });
+
+  test("BYOK-only routes do not advertise cookie same-origin denials", () => {
+    for (const route of ROUTE_CONTRACTS) {
+      if (route.auth !== "byok") {
+        continue;
+      }
+
+      expect(route.denials, route.id).not.toContainEqual({
+        kind: "forbidden",
+        status: 403,
+        reason: "same_origin_required",
+      });
+    }
+  });
+
+  test("BYOK-only routes declare demo-cookie denial", () => {
+    for (const route of ROUTE_CONTRACTS) {
+      if (route.auth !== "byok") {
+        continue;
+      }
+
+      expect(route.denials, route.id).toContainEqual({
+        kind: "forbidden",
+        status: 403,
+        reason: "demo_not_allowed",
+      });
+    }
+  });
+
+  test("public request body schemas reject extra keys instead of stripping them", () => {
+    const bodyFixtures = new Map<string, unknown>([
+      ["demo.request", { email: "demo@example.com", extra: true }],
+      [
+        "councils.duplicate",
+        { source: { kind: "built_in", slug: "commons" }, name: "Copy", extra: true },
+      ],
+      [
+        "councils.update",
+        {
+          name: "Council",
+          phasePrompts: { phase1: "one", phase2: "two", phase3: "three" },
+          members: [1, 2, 3, 4, 5, 6, 7].map((memberPosition) => ({
+            memberPosition,
+            model: { provider: "openrouter", modelId: `provider/model-${memberPosition}` },
+            tuning: null,
+          })),
+          extra: true,
+        },
+      ],
+      ["models.validate", { modelId: "provider/model", extra: true }],
+      ["models.autocomplete", { query: "provider", limit: 3, extra: true }],
+      [
+        "sessions.create",
+        { query: "Question", councilRef: { kind: "built_in", slug: "commons" }, extra: true },
+      ],
+      ["sessions.rerun", { councilRef: { kind: "built_in", slug: "commons" }, extra: true }],
+      ["sessions.export", { sessionIds: [1], extra: true }],
+    ]);
+
+    for (const [id, body] of bodyFixtures) {
+      const route = ROUTE_CONTRACTS.find((candidate) => candidate.id === id);
+      expect(route?.bodySchema.safeParse(body).success, id).toBe(false);
     }
   });
 
@@ -70,6 +134,11 @@ describe("route registry denials", () => {
         reason: "session",
       });
     }
+    expect(route("sessions.rerun")?.denials).toContainEqual({
+      kind: "not_found",
+      status: 404,
+      reason: "council",
+    });
     expect(route("demo.request")?.denials).toContainEqual({
       kind: "upstream_error",
       status: 502,
@@ -80,5 +149,106 @@ describe("route registry denials", () => {
       status: 502,
       reason: "openrouter",
     });
+  });
+
+  test("route denial matcher rejects undeclared upstream denials", () => {
+    expect(
+      routeDeclaresDenial({
+        route: routeContract("models.validate"),
+        status: 502,
+        envelope: {
+          schema_version: 1,
+          trace_id: "trace",
+          ts: "2026-05-12T10:00:00.000Z",
+          kind: "upstream_error",
+          message: "OpenRouter request failed",
+          details: { service: "openrouter" },
+        },
+      }),
+    ).toBe(true);
+
+    expect(
+      routeDeclaresDenial({
+        route: routeContract("demo.logout"),
+        status: 502,
+        envelope: {
+          schema_version: 1,
+          trace_id: "trace",
+          ts: "2026-05-12T10:00:00.000Z",
+          kind: "upstream_error",
+          message: "OpenRouter request failed",
+          details: { service: "openrouter" },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  test("route denial matcher accepts declared internal errors", () => {
+    expect(
+      routeDeclaresDenial({
+        route: routeContract("demo.logout"),
+        status: 500,
+        envelope: {
+          schema_version: 1,
+          trace_id: "trace",
+          ts: "2026-05-12T10:00:00.000Z",
+          kind: "internal_error",
+          message: "Internal server error",
+          details: { errorId: "opaque-error-id" },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("route denial matcher requires exact invalid_input reasons", () => {
+    const baseEnvelope = {
+      schema_version: 1 as const,
+      trace_id: "trace",
+      ts: "2026-05-12T10:00:00.000Z",
+      kind: "invalid_input" as const,
+      message: "Invalid request",
+    };
+
+    expect(
+      routeDeclaresDenial({
+        route: routeContract("sessions.create"),
+        status: 400,
+        envelope: {
+          ...baseEnvelope,
+          details: {
+            reason: "invalid_request",
+            issues: [{ path: "body.query", message: "Required" }],
+          },
+        },
+      }),
+    ).toBe(true);
+
+    expect(
+      routeDeclaresDenial({
+        route: routeContract("sessions.create"),
+        status: 413,
+        envelope: {
+          ...baseEnvelope,
+          details: {
+            reason: "invalid_request",
+            issues: [{ path: "", message: "Body exceeds byte limit" }],
+          },
+        },
+      }),
+    ).toBe(false);
+
+    expect(
+      routeDeclaresDenial({
+        route: routeContract("sessions.create"),
+        status: 413,
+        envelope: {
+          ...baseEnvelope,
+          details: {
+            reason: "body_too_large",
+            issues: [{ path: "", message: "Body exceeds byte limit" }],
+          },
+        },
+      }),
+    ).toBe(true);
   });
 });

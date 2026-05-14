@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { serverRuntime } from "@the-seven/config";
 import {
+  buildErrorEnvelope,
   forbiddenDetails,
   internalErrorDetails,
   invalidInputDetails,
@@ -11,6 +12,7 @@ import {
   type RouteParams,
   type RouteQuery,
   rateLimitedDetails,
+  routeDeclaresDenial,
 } from "@the-seven/contracts";
 import type { NextRequest, NextResponse } from "next/server";
 import { redactRateLimitScope } from "../domain/redaction";
@@ -20,6 +22,7 @@ import { resolveAuthContext } from "./auth";
 import { createRequestMetadataContext, type RequestContext } from "./context";
 import { jsonError, jsonSuccess } from "./envelopes";
 import { EdgeError, mapProviderErrorToEdgeError } from "./errors";
+import { parseIngressHeaders } from "./ingress";
 import { parseJsonBody, parseNoBody } from "./parse";
 
 type RawRouteParams = Promise<Readonly<Record<string, string>>> | Readonly<Record<string, string>>;
@@ -34,26 +37,7 @@ function unauthenticatedContext(): AuthContext {
   return { kind: "none" };
 }
 
-function assertSameOrigin(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  const referer = request.headers.get("referer");
-  const fetchSite = request.headers.get("sec-fetch-site")?.trim().toLowerCase();
-  const configuredOrigin = serverRuntime().publicOrigin.replace(/\/+$/, "");
-  const requestOrigin = request.nextUrl.origin;
-  const allowed = new Set([configuredOrigin, requestOrigin]);
-  if (origin && allowed.has(origin.replace(/\/+$/, ""))) {
-    return;
-  }
-  if (referer) {
-    const refererOrigin = parseUrlOrigin(referer);
-    if (refererOrigin && allowed.has(refererOrigin)) {
-      return;
-    }
-  }
-  if (fetchSite === "same-origin") {
-    return;
-  }
-
+function throwSameOriginRequired(): never {
   throw new EdgeError({
     kind: "forbidden",
     message: "Same-origin request required for cookie authentication",
@@ -62,9 +46,83 @@ function assertSameOrigin(request: NextRequest) {
   });
 }
 
-function parseUrlOrigin(value: string): string | null {
+function normalizedHostname(value: string): string {
+  return value.replace(/^\[/, "").replace(/\]$/, "");
+}
+
+function isLoopbackHostname(value: string): boolean {
+  const hostname = normalizedHostname(value);
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function sameOriginAdmissionKey(origin: string, nodeEnv: "development" | "production" | "test") {
+  const parsed = new URL(origin);
+  if (
+    nodeEnv !== "production" &&
+    parsed.protocol === "http:" &&
+    isLoopbackHostname(parsed.hostname)
+  ) {
+    return `http://loopback:${parsed.port || "80"}`;
+  }
+  return parsed.origin;
+}
+
+function assertSameOrigin(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  const referer = request.headers.get("referer");
+  const fetchSite = request.headers.get("sec-fetch-site")?.trim().toLowerCase();
+  const env = serverRuntime();
+  const configuredOrigin = env.publicOrigin.replace(/\/+$/, "");
+  const requestOrigin = request.nextUrl.origin;
+  const allowed = new Set(
+    env.nodeEnv === "production"
+      ? [sameOriginAdmissionKey(configuredOrigin, env.nodeEnv)]
+      : [
+          sameOriginAdmissionKey(configuredOrigin, env.nodeEnv),
+          sameOriginAdmissionKey(requestOrigin, env.nodeEnv),
+        ],
+  );
+  const explicitOrigins = new Set<string>();
+  if (origin) {
+    const originValue = parseUrlOrigin(origin, env.nodeEnv);
+    if (!originValue) {
+      throwSameOriginRequired();
+    }
+    explicitOrigins.add(originValue);
+  }
+  if (referer) {
+    const refererOrigin = parseUrlOrigin(referer, env.nodeEnv);
+    if (!refererOrigin) {
+      throwSameOriginRequired();
+    }
+    explicitOrigins.add(refererOrigin);
+  }
+  if (fetchSite && fetchSite !== "same-origin") {
+    throwSameOriginRequired();
+  }
+  if (explicitOrigins.size > 1) {
+    throwSameOriginRequired();
+  }
+  const [explicitOrigin] = explicitOrigins;
+  if (explicitOrigin) {
+    if (!allowed.has(explicitOrigin)) {
+      throwSameOriginRequired();
+    }
+    return;
+  }
+  if (fetchSite === "same-origin") {
+    return;
+  }
+
+  throwSameOriginRequired();
+}
+
+function parseUrlOrigin(
+  value: string,
+  nodeEnv: "development" | "production" | "test",
+): string | null {
   try {
-    return new URL(value).origin;
+    return sameOriginAdmissionKey(new URL(value).origin, nodeEnv);
   } catch {
     return null;
   }
@@ -95,10 +153,10 @@ async function admitRequest(request: NextRequest, route: RouteContract): Promise
     auth:
       route.auth === "public"
         ? unauthenticatedContext()
-        : await resolveAuthContext(request, metadata.now),
+        : await resolveAuthContext(request, metadata.now, route.auth),
   };
 
-  if (ctx.auth.kind === "demo" && request.method !== "GET") {
+  if (ctx.auth.kind === "demo" && route.auth !== "byok" && request.method !== "GET") {
     assertSameOrigin(request);
   }
 
@@ -142,12 +200,13 @@ async function parseRouteInput<Contract extends RouteContract>(
     throw new EdgeError({
       kind: "invalid_input",
       message: "Invalid path parameters",
-      details: invalidInputDetails(
-        paramsResult.error.issues.map((issue) => ({
+      details: invalidInputDetails({
+        reason: "invalid_request",
+        issues: paramsResult.error.issues.map((issue) => ({
           path: `params.${issue.path.join(".")}`,
           message: issue.message,
         })),
-      ),
+      }),
       status: 400,
     });
   }
@@ -157,12 +216,13 @@ async function parseRouteInput<Contract extends RouteContract>(
     throw new EdgeError({
       kind: "invalid_input",
       message: "Invalid query parameters",
-      details: invalidInputDetails(
-        queryResult.error.issues.map((issue) => ({
+      details: invalidInputDetails({
+        reason: "invalid_request",
+        issues: queryResult.error.issues.map((issue) => ({
           path: `query.${issue.path.join(".")}`,
           message: issue.message,
         })),
-      ),
+      }),
       status: 400,
     });
   }
@@ -175,27 +235,72 @@ async function parseRouteInput<Contract extends RouteContract>(
   };
 }
 
-function mapErrorToResponse(input: { error: unknown; traceId: string; now: Date }) {
-  if (input.error instanceof EdgeError) {
-    return jsonError({
-      traceId: input.traceId,
-      kind: input.error.kind,
-      message: input.error.message,
-      details: input.error.details,
-      now: input.now,
+function undeclaredRouteDenial(input: { route: RouteContract; traceId: string; now: Date }) {
+  return jsonError({
+    traceId: input.traceId,
+    kind: "internal_error",
+    message: "Internal server error",
+    details: internalErrorDetails(randomUUID()),
+    now: input.now,
+    status: 500,
+  });
+}
+
+function edgeErrorToResponse(input: {
+  route: RouteContract;
+  error: EdgeError;
+  traceId: string;
+  now: Date;
+}) {
+  const envelope = buildErrorEnvelope({
+    traceId: input.traceId,
+    now: input.now,
+    kind: input.error.kind,
+    message: input.error.message,
+    details: input.error.details,
+  });
+  if (
+    !routeDeclaresDenial({
+      route: input.route,
       status: input.error.status,
+      envelope,
+    })
+  ) {
+    return undeclaredRouteDenial(input);
+  }
+
+  return jsonError({
+    traceId: input.traceId,
+    kind: input.error.kind,
+    message: input.error.message,
+    details: input.error.details,
+    now: input.now,
+    status: input.error.status,
+  });
+}
+
+function mapErrorToResponse(input: {
+  route: RouteContract;
+  error: unknown;
+  traceId: string;
+  now: Date;
+}) {
+  if (input.error instanceof EdgeError) {
+    return edgeErrorToResponse({
+      route: input.route,
+      error: input.error,
+      traceId: input.traceId,
+      now: input.now,
     });
   }
 
   const mappedProviderError = mapProviderErrorToEdgeError(input.error);
   if (mappedProviderError) {
-    return jsonError({
+    return edgeErrorToResponse({
+      route: input.route,
+      error: mappedProviderError,
       traceId: input.traceId,
-      kind: mappedProviderError.kind,
-      message: mappedProviderError.message,
-      details: mappedProviderError.details,
       now: input.now,
-      status: mappedProviderError.status,
     });
   }
 
@@ -251,6 +356,7 @@ export async function handleRoute<Contract extends RouteContract>(
   } catch (error) {
     return mapErrorToResponse({
       error,
+      route: input.route,
       traceId: ctx?.traceId ?? fallback.traceId,
       now: ctx?.now ?? fallback.now,
     });
@@ -277,8 +383,17 @@ export async function handleRedirectRoute<Contract extends RouteContract>(
 
   try {
     if (input.preAdmission) {
+      parseIngressHeaders(request);
       const earlyResponse = await input.preAdmission(request);
       if (earlyResponse) {
+        if (earlyResponse.status !== input.route.status) {
+          throw new EdgeError({
+            kind: "internal_error",
+            message: "Internal server error",
+            details: internalErrorDetails(randomUUID()),
+            status: 500,
+          });
+        }
         earlyResponse.headers.set("X-Trace-Id", fallback.traceId);
         return earlyResponse;
       }
@@ -286,11 +401,20 @@ export async function handleRedirectRoute<Contract extends RouteContract>(
     ctx = await admitRequest(request, input.route);
     const parsed = await parseRouteInput(request, input.route, input.params);
     const response = await input.handler(ctx, request, parsed);
+    if (input.route.responseMode !== "redirect" || response.status !== input.route.status) {
+      throw new EdgeError({
+        kind: "internal_error",
+        message: "Internal server error",
+        details: internalErrorDetails(randomUUID()),
+        status: 500,
+      });
+    }
     response.headers.set("X-Trace-Id", ctx.traceId);
     return response;
   } catch (error) {
     return mapErrorToResponse({
       error,
+      route: input.route,
       traceId: ctx?.traceId ?? fallback.traceId,
       now: ctx?.now ?? fallback.now,
     });

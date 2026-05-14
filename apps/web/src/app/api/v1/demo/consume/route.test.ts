@@ -113,12 +113,54 @@ describe("demo consume route", () => {
     expect(cookieMocks.setDemoSessionCookie).toHaveBeenCalledOnce();
   });
 
+  test.each([
+    "THESEVEN.AI",
+    "theseven.ai.",
+    "theseven.ai:443",
+  ])("accepts equivalent public host authority %s", async (host) => {
+    const response = await GET(
+      new NextRequest(
+        new Request("https://theseven.ai/api/v1/demo/consume?token=magic-token", {
+          headers: { host },
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://theseven.ai/");
+    expect(cookieMocks.setDemoSessionCookie).toHaveBeenCalledOnce();
+  });
+
   test("denies wrong-host consume before rate-limit or token mutation", async () => {
     await expect(
       GET(
         new NextRequest(
           new Request("http://localhost:8080/api/v1/demo/consume?token=magic-token", {
             headers: { host: "localhost:8080" },
+          }),
+        ),
+      ),
+    ).rejects.toMatchObject({
+      kind: "forbidden",
+      details: { reason: "public_origin_required" },
+    });
+
+    expect(demoLimitMocks.admitDemoConsume).not.toHaveBeenCalled();
+    expect(demoAuthMocks.consumeDemoAuthLink).not.toHaveBeenCalled();
+    expect(cookieMocks.setDemoSessionCookie).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    "user@theseven.ai",
+    "theseven.ai/path",
+    "theseven.ai?x=1",
+    "theseven.ai#x",
+  ])("denies malformed public host authority %s before token mutation", async (host) => {
+    await expect(
+      GET(
+        new NextRequest(
+          new Request("https://theseven.ai/api/v1/demo/consume?token=magic-token", {
+            headers: { host },
           }),
         ),
       ),
@@ -150,6 +192,42 @@ describe("demo consume route", () => {
     expect(cookieMocks.setDemoSessionCookie).not.toHaveBeenCalled();
   });
 
+  test("redirects expired browser links to the expired recovery state", async () => {
+    demoAuthMocks.consumeDemoAuthLink.mockRejectedValueOnce(
+      new demoAuthMocks.DemoAuthError({ kind: "link_expired", message: "expired" }),
+    );
+
+    const response = await GET(
+      new NextRequest(
+        new Request("https://theseven.ai/api/v1/demo/consume?token=magic-token", {
+          headers: { host: "theseven.ai" },
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://theseven.ai/?demo_link=expired");
+    expect(cookieMocks.setDemoSessionCookie).not.toHaveBeenCalled();
+  });
+
+  test("redirects disabled browser links to the disabled recovery state", async () => {
+    demoAuthMocks.consumeDemoAuthLink.mockRejectedValueOnce(
+      new demoAuthMocks.DemoAuthError({ kind: "demo_disabled", message: "disabled" }),
+    );
+
+    const response = await GET(
+      new NextRequest(
+        new Request("https://theseven.ai/api/v1/demo/consume?token=magic-token", {
+          headers: { host: "theseven.ai" },
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://theseven.ai/?demo_link=disabled");
+    expect(cookieMocks.setDemoSessionCookie).not.toHaveBeenCalled();
+  });
+
   test("keeps API invalid links on the typed denial path", async () => {
     demoAuthMocks.consumeDemoAuthLink.mockRejectedValueOnce(
       new demoAuthMocks.DemoAuthError({ kind: "link_expired", message: "expired" }),
@@ -172,18 +250,23 @@ describe("demo consume route", () => {
   });
 
   test("redirects browser requests with missing tokens to the home recovery state before mutation", async () => {
-    const response = await GET(
-      new NextRequest(
-        new Request("https://theseven.ai/api/v1/demo/consume", {
-          headers: { host: "theseven.ai" },
-        }),
-      ),
-    );
+    for (const url of [
+      "https://theseven.ai/api/v1/demo/consume",
+      "https://theseven.ai/api/v1/demo/consume?token=%20%20",
+    ]) {
+      const response = await GET(
+        new NextRequest(
+          new Request(url, {
+            headers: { host: "theseven.ai" },
+          }),
+        ),
+      );
 
-    expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("https://theseven.ai/?demo_link=invalid");
-    expect(demoLimitMocks.admitDemoConsume).not.toHaveBeenCalled();
-    expect(demoAuthMocks.consumeDemoAuthLink).not.toHaveBeenCalled();
-    expect(cookieMocks.setDemoSessionCookie).not.toHaveBeenCalled();
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe("https://theseven.ai/?demo_link=invalid");
+      expect(demoLimitMocks.admitDemoConsume).not.toHaveBeenCalled();
+      expect(demoAuthMocks.consumeDemoAuthLink).not.toHaveBeenCalled();
+      expect(cookieMocks.setDemoSessionCookie).not.toHaveBeenCalled();
+    }
   });
 });

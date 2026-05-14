@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
-import { type AuthContext, resolveAuthContext } from "./auth";
+import type { AuthContext } from "./auth";
 import { type IngressContext, parseIngressHeaders } from "./ingress";
 
 export type RequestMetadataContext = Readonly<{
@@ -48,13 +48,5 @@ export function createRequestMetadataContext(request: NextRequest): RequestMetad
     now: new Date(),
     ip: getRequestIp(request),
     ingress: parseIngressHeaders(request),
-  };
-}
-
-export async function createRequestContext(request: NextRequest): Promise<RequestContext> {
-  const metadata = createRequestMetadataContext(request);
-  return {
-    ...metadata,
-    auth: await resolveAuthContext(request, metadata.now),
   };
 }

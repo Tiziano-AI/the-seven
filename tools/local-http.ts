@@ -1,4 +1,5 @@
 import net from "node:net";
+import { parsePublicOrigin } from "@the-seven/config";
 
 const LOCAL_PUBLIC_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const LOOPBACK_HOST = "127.0.0.1";
@@ -12,13 +13,8 @@ export type LocalHttpProjection = Readonly<{
   env: NodeJS.ProcessEnv;
 }>;
 
-function normalizeOrigin(value: string): string {
-  const parsed = new URL(value.trim());
-  return parsed.origin;
-}
-
 function isLoopbackOrigin(value: string): boolean {
-  const parsed = new URL(value.trim());
+  const parsed = new URL(parsePublicOrigin(value));
   const host = parsed.hostname.replace(/^\[/, "").replace(/\]$/, "");
   return LOCAL_PUBLIC_HOSTS.has(host);
 }
@@ -65,7 +61,7 @@ export function buildLocalHttpProjection(input: {
   const configuredPublicOrigin = input.env.SEVEN_PUBLIC_ORIGIN?.trim();
   const publicOrigin =
     configuredPublicOrigin && !isLoopbackOrigin(configuredPublicOrigin)
-      ? normalizeOrigin(configuredPublicOrigin)
+      ? parsePublicOrigin(configuredPublicOrigin)
       : `http://localhost:${input.port}`;
 
   return {

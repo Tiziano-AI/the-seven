@@ -3,41 +3,17 @@ import { BUILT_IN_COUNCILS, serverRuntime } from "@the-seven/config";
 import { closeDatabaseClient, createDatabaseClient, type DatabaseClient } from "@the-seven/db";
 import { runMigrationsForTarget } from "@the-seven/db/migrate";
 import {
+  EXPECTED_BILLING_LOOKUP_LABELS,
+  EXPECTED_ENUMS,
+  EXPECTED_TABLES,
+  expectedColumnRefs,
+} from "./local-db-schema";
+import {
+  describeCanonicalLocalPostgresPort,
   formatCanonicalLocalPostgresBootstrapMessage,
   isCanonicalLocalPostgresConnectionFailure,
   readCanonicalLocalPostgresStatus,
 } from "./local-postgres";
-
-const EXPECTED_TABLES = [
-  "catalog_cache",
-  "councils",
-  "demo_magic_links",
-  "demo_sessions",
-  "jobs",
-  "provider_calls",
-  "rate_limit_buckets",
-  "session_artifacts",
-  "sessions",
-  "users",
-] as const;
-
-const EXPECTED_ENUMS = [
-  "artifact_kind",
-  "ingress_source",
-  "job_state",
-  "session_failure_kind",
-  "session_status",
-  "user_kind",
-] as const;
-
-const EXPECTED_COLUMNS = {
-  users: ["principal"],
-  demo_sessions: ["revoked_at"],
-  councils: ["definition_json"],
-  sessions: ["snapshot_json", "trace_id", "status", "question_hash"],
-  jobs: ["state", "credential_ciphertext", "lease_owner", "next_run_at"],
-  provider_calls: ["request_total_chars", "total_cost_usd_micros", "error_status"],
-} as const;
 
 function buildSchemaName() {
   return `seven_bootstrap_${randomUUID().replaceAll("-", "_")}`;
@@ -112,6 +88,20 @@ async function listObjects(
   return result.rows.map((row) => row.typname);
 }
 
+async function listEnumLabels(client: DatabaseClient, schemaName: string, enumName: string) {
+  const result = await client.pool.query<{ enumlabel: string }>(
+    `select e.enumlabel
+       from pg_enum e
+       join pg_type t on t.oid = e.enumtypid
+       join pg_namespace n on n.oid = t.typnamespace
+      where n.nspname = $1
+        and t.typname = $2
+      order by e.enumsortorder`,
+    [schemaName, enumName],
+  );
+  return result.rows.map((row) => row.enumlabel);
+}
+
 function requireMembersOnBuiltIns() {
   for (const council of Object.values(BUILT_IN_COUNCILS)) {
     if (council.members.length !== 7) {
@@ -146,12 +136,13 @@ async function verifyBootstrap(connectionString: string, schemaName: string) {
 
     const enumNames = await listObjects(client, schemaName, "pg_type");
     requireExpectedSet("Enums", enumNames, [...EXPECTED_ENUMS]);
+    const billingLookupLabels = await listEnumLabels(client, schemaName, "billing_lookup_status");
+    requireExpectedSet("billing_lookup_status labels", billingLookupLabels, [
+      ...EXPECTED_BILLING_LOOKUP_LABELS,
+    ]);
 
     const columnNames = await listObjects(client, schemaName, "information_schema.columns");
-    const expectedColumns = Object.entries(EXPECTED_COLUMNS).flatMap(([tableName, columns]) => {
-      return columns.map((column) => `${tableName}.${column}`);
-    });
-    requireExpectedSet("Columns", columnNames, expectedColumns);
+    requireExpectedSet("Columns", columnNames, expectedColumnRefs());
 
     for (const tableName of EXPECTED_TABLES) {
       await client.pool.query(
@@ -167,6 +158,14 @@ async function main() {
   requireMembersOnBuiltIns();
   const env = serverRuntime();
   const schemaName = buildSchemaName();
+  const localPostgresStatus = await readCanonicalLocalPostgresStatus({
+    composeFilePath: new URL("./../compose.yaml", import.meta.url).pathname,
+    connectionString: env.databaseUrl,
+  });
+  const localPostgresAdmission = describeCanonicalLocalPostgresPort(localPostgresStatus);
+  if (!localPostgresAdmission.ok) {
+    throw new Error(`${localPostgresAdmission.detail}; ${localPostgresAdmission.fix}`);
+  }
 
   try {
     await createSchema(env.databaseUrl, schemaName);

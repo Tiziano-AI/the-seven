@@ -11,7 +11,10 @@ import {
   checkLegacyEnvRuntimeKeys,
   readEnvAssignments,
 } from "./env-doctor";
+import { buildLocalGateCommand } from "./gate-command";
+import { readLocalDatabaseSchemaState, toLocalDatabaseSchemaCheck } from "./local-db-schema";
 import { materializeLocalHttpProjection } from "./local-http";
+import { buildLocalOperatorEnv } from "./local-operator-env";
 import {
   ensureComposePostgresHealthy,
   type OperatorCheckResult,
@@ -19,6 +22,7 @@ import {
   toCanonicalLocalPostgresCheck,
   waitForComposePostgresHealthy,
 } from "./local-postgres";
+import { assertNoSiblingLocalWorkers } from "./local-processes";
 import { buildNextDevServerCommand } from "./next-dev";
 import { runCommand, runCommandOrThrow, sleep, stopChild } from "./process-utils";
 
@@ -30,6 +34,13 @@ const healthcheckTimeoutMs = 60_000;
 const appReadyTimeoutMs = 120_000;
 const brewFormulae = ["libpq", "uv", "node", "pnpm"] as const;
 const brewCasks = ["docker"] as const;
+
+function localOperatorEnv() {
+  return buildLocalOperatorEnv({
+    assignments: readEnvAssignments(envLocalPath),
+    env: process.env,
+  });
+}
 
 function buildComposeArgs(args: ReadonlyArray<string>) {
   return ["compose", "-f", composeFilePath, ...args];
@@ -150,19 +161,33 @@ async function checkPlaywrightBrowser() {
 
 async function collectDoctorChecks(live: boolean) {
   const databaseStatus = readEnvAssignments(envLocalPath).get("DATABASE_URL");
-  const localPostgresCheck =
+  const localPostgresStatus =
     typeof databaseStatus === "string" && databaseStatus.trim().length > 0
-      ? toCanonicalLocalPostgresCheck(
-          await readCanonicalLocalPostgresStatus({
-            composeFilePath,
-            connectionString: databaseStatus,
-          }),
-        )
+      ? await readCanonicalLocalPostgresStatus({
+          composeFilePath,
+          connectionString: databaseStatus,
+        })
+      : null;
+  const localPostgresCheck =
+    localPostgresStatus !== null
+      ? toCanonicalLocalPostgresCheck(localPostgresStatus)
       : ({
           label: "local postgres port",
           ok: false,
           detail: "DATABASE_URL is missing from .env.local",
           fix: "Set DATABASE_URL in `.env.local` before running local commands.",
+        } satisfies OperatorCheckResult);
+  const localSchemaCheck =
+    typeof databaseStatus === "string" &&
+    databaseStatus.trim().length > 0 &&
+    localPostgresCheck.ok &&
+    localPostgresStatus?.composeHealth === "healthy"
+      ? toLocalDatabaseSchemaCheck(await readLocalDatabaseSchemaState(databaseStatus))
+      : ({
+          label: "local postgres schema",
+          ok: true,
+          detail: "not checked until compose Postgres is healthy",
+          fix: null,
         } satisfies OperatorCheckResult);
 
   return [
@@ -175,6 +200,7 @@ async function collectDoctorChecks(live: boolean) {
     await checkCommand("pg_isready", ["--version"], "pg_isready"),
     await checkPlaywrightBrowser(),
     localPostgresCheck,
+    localSchemaCheck,
     checkEnvFilePresence({ envLocalPath, envLegacyPath }),
     checkEnvFileMode(envLocalPath),
     checkLegacyEnvRuntimeKeys(envLegacyPath),
@@ -210,19 +236,29 @@ async function ensureDockerReady() {
 }
 
 async function waitForComposeHealth() {
+  const env = localOperatorEnv();
   await waitForComposePostgresHealthy({
     composeFilePath,
-    connectionString: serverRuntime().databaseUrl,
+    connectionString: serverRuntime(env).databaseUrl,
     healthcheckTimeoutMs,
     sleep,
   });
 }
 
 async function ensureComposeDbHealthy() {
+  const env = localOperatorEnv();
   await ensureComposePostgresHealthy({
     composeFilePath,
-    connectionString: serverRuntime().databaseUrl,
+    connectionString: serverRuntime(env).databaseUrl,
   });
+  await ensureLocalDatabaseSchemaCompatible(serverRuntime(env).databaseUrl);
+}
+
+async function ensureLocalDatabaseSchemaCompatible(connectionString: string) {
+  const check = toLocalDatabaseSchemaCheck(await readLocalDatabaseSchemaState(connectionString));
+  if (!check.ok) {
+    throw new Error(`${check.detail}; ${check.fix}`);
+  }
 }
 
 async function waitForHttpReady(baseUrl: string) {
@@ -291,9 +327,10 @@ async function installPrerequisites() {
 
 async function runDbUp() {
   await ensureDockerReady();
+  const env = localOperatorEnv();
   const diagnosis = await readCanonicalLocalPostgresStatus({
     composeFilePath,
-    connectionString: serverRuntime().databaseUrl,
+    connectionString: serverRuntime(env).databaseUrl,
   });
   const portCheck = toCanonicalLocalPostgresCheck(diagnosis);
   if (!portCheck.ok) {
@@ -301,6 +338,7 @@ async function runDbUp() {
   }
   await runCommandOrThrow("docker", buildComposeArgs(["up", "-d", "postgres"]));
   await waitForComposeHealth();
+  await ensureLocalDatabaseSchemaCompatible(serverRuntime(env).databaseUrl);
   console.log("Postgres is healthy on 127.0.0.1:5432.");
 }
 
@@ -319,7 +357,7 @@ async function runDbReset() {
 async function runDev() {
   ensureEnvLocalExists();
   await ensureComposeDbHealthy();
-  const projection = await materializeLocalHttpProjection(process.env);
+  const projection = await materializeLocalHttpProjection(localOperatorEnv());
   const app = buildNextDevServerCommand();
   console.log(`Local app: ${projection.baseUrl}`);
   await runCommandOrThrow(app.command, app.args, {
@@ -328,10 +366,11 @@ async function runDev() {
   });
 }
 
-async function runGate() {
+async function runGate(args: readonly string[]) {
   ensureEnvLocalExists();
   await ensureComposeDbHealthy();
-  await runCommandOrThrow("uv", ["run", "devtools/gate.py"], {
+  const gate = buildLocalGateCommand(args);
+  await runCommandOrThrow(gate.command, gate.args, {
     env: process.env,
     stdio: "inherit",
   });
@@ -343,9 +382,10 @@ async function runLive() {
   if (!doctorOk) {
     throw new Error("Live proof environment is not ready. Run `pnpm local:doctor --live`.");
   }
+  await assertNoSiblingLocalWorkers({ repoRoot, currentPid: process.pid });
   await runDbUp();
 
-  const projection = await materializeLocalHttpProjection(process.env);
+  const projection = await materializeLocalHttpProjection(localOperatorEnv());
   const baseUrl = projection.baseUrl;
   const app = buildNextDevServerCommand();
   console.log(`Live proof app: ${projection.baseUrl}`);
@@ -406,7 +446,7 @@ async function main() {
   }
 
   if (command === "gate") {
-    await runGate();
+    await runGate(args);
     return;
   }
 

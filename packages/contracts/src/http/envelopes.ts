@@ -1,24 +1,27 @@
 import { z } from "zod";
 import { type ErrorEnvelope, type ErrorKind, errorEnvelopeSchema } from "./errors";
 
-export const successEnvelopeSchema = z.object({
-  schema_version: z.literal(1),
-  trace_id: z.string(),
-  ts: z.string().datetime(),
-  result: z.object({
+const successEnvelopeResultSchema = z
+  .object({
     resource: z.string(),
     payload: z.unknown(),
-  }),
-});
+  })
+  .strict();
+
+export const successEnvelopeSchema = z
+  .object({
+    schema_version: z.literal(1),
+    trace_id: z.string(),
+    ts: z.string().datetime(),
+    result: successEnvelopeResultSchema,
+  })
+  .strict();
 
 export type SuccessEnvelope = z.infer<typeof successEnvelopeSchema>;
 
 export function successPayloadSchema<T extends z.ZodTypeAny>(payload: T) {
   return successEnvelopeSchema.extend({
-    result: z.object({
-      resource: z.string(),
-      payload,
-    }),
+    result: successEnvelopeResultSchema.extend({ payload }).strict(),
   });
 }
 

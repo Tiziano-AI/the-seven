@@ -4,27 +4,36 @@ import { councilDefinitionSchema } from "../domain/councilDefinition";
 import { councilRefSchema } from "../domain/councilRef";
 import { INGRESS_SOURCES } from "../domain/ingress";
 import { outputFormatsSchema } from "../domain/phasePrompts";
+import { BILLING_LOOKUP_STATUSES } from "../domain/providerDiagnostics";
 import { sessionSnapshotSchema } from "../domain/sessionSnapshot";
 import { memberPositionSchema } from "../domain/sevenMembers";
 
 const timestampSchema = z.string().datetime();
 
-export const validateKeyPayloadSchema = z.object({
-  valid: z.boolean(),
-});
+export const validateKeyPayloadSchema = z
+  .object({
+    valid: z.literal(true),
+  })
+  .strict();
 
-export const demoRequestBodySchema = z.object({
-  email: z.string().trim().email(),
-});
+export const demoRequestBodySchema = z
+  .object({
+    email: z.string().trim().email(),
+  })
+  .strict();
 
-export const demoRequestPayloadSchema = z.object({
-  email: z.string().trim().email(),
-});
+export const demoRequestPayloadSchema = z
+  .object({
+    email: z.string().trim().email(),
+  })
+  .strict();
 
-export const demoConsumePayloadSchema = z.object({
-  email: z.string().trim().email(),
-  expiresAt: z.number().int(),
-});
+export const demoSessionPayloadSchema = z
+  .object({
+    email: z.string().email(),
+    expiresAt: z.number().int(),
+  })
+  .strict();
 
 export const councilListItemSchema = z.object({
   ref: councilRefSchema,
@@ -50,26 +59,34 @@ export const outputFormatsPayloadSchema = z.object({
   outputFormats: outputFormatsSchema,
 });
 
-export const duplicateCouncilBodySchema = z.object({
-  source: councilRefSchema,
-  name: z.string().trim().min(1).max(120),
-});
+export const duplicateCouncilBodySchema = z
+  .object({
+    source: councilRefSchema,
+    name: z.string().trim().min(1).max(120),
+  })
+  .strict();
 
 export const duplicateCouncilPayloadSchema = z.object({
   councilId: z.number().int().positive(),
 });
 
-export const updateCouncilBodySchema = z.object({
-  ...councilDefinitionSchema.shape,
-});
+export const updateCouncilBodySchema = z
+  .object({
+    ...councilDefinitionSchema.shape,
+  })
+  .strict();
 
-export const successFlagPayloadSchema = z.object({
-  success: z.literal(true),
-});
+export const successFlagPayloadSchema = z
+  .object({
+    success: z.literal(true),
+  })
+  .strict();
 
-export const modelValidateBodySchema = z.object({
-  modelId: z.string().trim().min(1),
-});
+export const modelValidateBodySchema = z
+  .object({
+    modelId: z.string().trim().min(1),
+  })
+  .strict();
 
 export const openRouterModelDetailsSchema = z.object({
   modelId: z.string(),
@@ -77,6 +94,7 @@ export const openRouterModelDetailsSchema = z.object({
   description: z.string(),
   contextLength: z.number().int().nullable(),
   maxCompletionTokens: z.number().int().nullable(),
+  expirationDate: z.string().nullable(),
   supportedParameters: z.array(z.string()),
   inputModalities: z.array(z.string()),
   outputModalities: z.array(z.string()),
@@ -87,10 +105,12 @@ export const modelValidatePayloadSchema = z.object({
   model: openRouterModelDetailsSchema.nullable(),
 });
 
-export const modelAutocompleteBodySchema = z.object({
-  query: z.string().trim().min(1),
-  limit: z.number().int().positive().max(20).optional(),
-});
+export const modelAutocompleteBodySchema = z
+  .object({
+    query: z.string().trim().min(1),
+    limit: z.number().int().positive().max(20).optional(),
+  })
+  .strict();
 
 export const modelAutocompletePayloadSchema = z.object({
   suggestions: z.array(
@@ -100,15 +120,18 @@ export const modelAutocompletePayloadSchema = z.object({
       description: z.string(),
       contextLength: z.number().int().nullable(),
       maxCompletionTokens: z.number().int().nullable(),
+      expirationDate: z.string().nullable(),
     }),
   ),
 });
 
-export const querySubmitBodySchema = z.object({
-  query: z.string().trim().min(1),
-  councilRef: councilRefSchema,
-  attachments: z.array(attachmentUploadSchema).max(MAX_ATTACHMENT_COUNT).optional(),
-});
+export const querySubmitBodySchema = z
+  .object({
+    query: z.string().trim().min(1),
+    councilRef: councilRefSchema,
+    attachments: z.array(attachmentUploadSchema).max(MAX_ATTACHMENT_COUNT).optional(),
+  })
+  .strict();
 
 export const queryContinueBodySchema = z.object({}).strict();
 
@@ -169,9 +192,13 @@ export const providerCallSchema = z.object({
   memberPosition: memberPositionSchema,
   requestModelId: z.string(),
   requestModelName: z.string(),
+  requestMaxOutputTokens: z.number().int().nullable(),
   catalogRefreshedAt: timestampSchema.nullable(),
   supportedParameters: z.array(z.string()),
   sentParameters: z.array(z.string()),
+  sentReasoningEffort: z.string().nullable(),
+  sentProviderRequireParameters: z.boolean(),
+  sentProviderIgnoredProviders: z.array(z.string()),
   deniedParameters: z.array(z.string()),
   responseModel: z.string().nullable(),
   billedModelId: z.string().nullable(),
@@ -192,7 +219,7 @@ export const providerCallSchema = z.object({
   choiceErrorCode: z.number().int().nullable(),
   errorStatus: z.number().int().nullable(),
   errorCode: z.string().nullable(),
-  billingLookupStatus: z.string(),
+  billingLookupStatus: z.enum(BILLING_LOOKUP_STATUSES),
   responseId: z.string().nullable(),
   createdAt: timestampSchema,
 });
@@ -212,9 +239,13 @@ export const sessionDiagnosticsPayloadSchema = z.object({
   providerCalls: z.array(providerCallSchema),
 });
 
-export const exportSessionsBodySchema = z.object({
-  sessionIds: z.array(z.number().int().positive()).min(1),
-});
+export type DemoSessionPayload = z.infer<typeof demoSessionPayloadSchema>;
+
+export const exportSessionsBodySchema = z
+  .object({
+    sessionIds: z.array(z.number().int().positive()).min(1),
+  })
+  .strict();
 
 export const exportSessionsPayloadSchema = z.object({
   markdown: z.string(),

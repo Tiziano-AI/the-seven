@@ -38,3 +38,12 @@ export const JOB_SUPERVISOR_POLL_INTERVAL_MS = 1_000;
 export const JOB_LEASE_SECONDS = 60;
 export const JOB_LEASE_RENEW_INTERVAL_MS = 10_000;
 export const JOB_MAX_CONCURRENCY = 2;
+export const JOB_MAX_ATTEMPTS = 3;
+
+export const PROVIDER_OUTPUT_TOKEN_LIMITS = {
+  phase1: 8192,
+  phase2: 16_384,
+  phase3: 16_384,
+} as const;
+
+export const PROVIDER_CHAT_REQUEST_TIMEOUT_MS = 900_000;

@@ -28,6 +28,7 @@ export type CanonicalLocalPostgresStatus = Readonly<{
 const CANONICAL_COMPOSE_SERVICE = "postgres";
 const CANONICAL_CONTAINER_NAME = "the-seven-postgres";
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
+const CANONICAL_TARGET_DETAIL = "127.0.0.1:5432/the_seven";
 
 function parsePostgresTarget(connectionString: string): PostgresTarget {
   const url = new URL(connectionString);
@@ -40,6 +41,10 @@ function parsePostgresTarget(connectionString: string): PostgresTarget {
 
 function isCanonicalLocalTarget(target: PostgresTarget): boolean {
   return LOCAL_HOSTS.has(target.host) && target.port === "5432";
+}
+
+function formatTarget(target: PostgresTarget): string {
+  return `${target.host}:${target.port}/${target.database}`;
 }
 
 function normalizeComposeHealthStatus(value: string): ComposeHealthStatus {
@@ -172,9 +177,9 @@ export async function readCanonicalLocalPostgresStatus(input: {
 export function describeCanonicalLocalPostgresPort(status: CanonicalLocalPostgresStatus) {
   if (!isCanonicalLocalTarget(status.target)) {
     return {
-      ok: true,
-      detail: `DATABASE_URL points to ${status.target.host}:${status.target.port}`,
-      fix: null,
+      ok: false,
+      detail: `DATABASE_URL points to ${formatTarget(status.target)}, not canonical local Postgres ${CANONICAL_TARGET_DETAIL}`,
+      fix: "Point DATABASE_URL at the compose-managed local Postgres target from `.env.local.example`.",
     };
   }
 
@@ -282,12 +287,17 @@ export async function ensureComposePostgresHealthy(input: {
   composeFilePath: string;
   connectionString: string;
 }) {
+  const diagnosis = await readCanonicalLocalPostgresStatus(input);
+  const portCheck = describeCanonicalLocalPostgresPort(diagnosis);
+  if (!portCheck.ok) {
+    throw new Error(`${portCheck.detail}; ${portCheck.fix}`);
+  }
+
   const status = await readComposeHealthStatus(input.composeFilePath);
   if (status === "healthy") {
     return;
   }
 
-  const diagnosis = await readCanonicalLocalPostgresStatus(input);
   throw new Error(formatCanonicalLocalPostgresUnavailableMessage(diagnosis));
 }
 
@@ -297,6 +307,15 @@ export async function waitForComposePostgresHealthy(input: {
   healthcheckTimeoutMs: number;
   sleep: (ms: number) => Promise<void>;
 }) {
+  const initialDiagnosis = await readCanonicalLocalPostgresStatus({
+    composeFilePath: input.composeFilePath,
+    connectionString: input.connectionString,
+  });
+  const initialPortCheck = describeCanonicalLocalPostgresPort(initialDiagnosis);
+  if (!initialPortCheck.ok) {
+    throw new Error(`${initialPortCheck.detail}; ${initialPortCheck.fix}`);
+  }
+
   const deadline = Date.now() + input.healthcheckTimeoutMs;
   while (Date.now() < deadline) {
     const status = await readComposeHealthStatus(input.composeFilePath);

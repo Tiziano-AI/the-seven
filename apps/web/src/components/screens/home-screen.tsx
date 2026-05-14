@@ -1,5 +1,6 @@
 "use client";
 
+import { FILE_INPUT_ACCEPT } from "@the-seven/contracts";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -139,6 +140,10 @@ export function HomeScreen() {
       setHasStoredByok(true);
       toast.success("BYOK session unlocked");
     } catch (error) {
+      if (error instanceof ApiErrorResponse && error.kind === "unauthorized") {
+        toast.error("OpenRouter rejected this key");
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "BYOK setup failed");
     }
   }
@@ -384,7 +389,7 @@ export function HomeScreen() {
               id="ask-attachments"
               type="file"
               multiple
-              accept=".txt,.md,.markdown,.json,.yaml,.yml,.csv,.pdf,.docx,.pptx,.xlsx,.odt,.odp,.ods"
+              accept={FILE_INPUT_ACCEPT}
               onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
             />
             {selectedFiles.length > 0 ? (

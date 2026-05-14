@@ -2,9 +2,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const dbMocks = vi.hoisted(() => ({
   createSessionWithJob: vi.fn(),
-  enqueueSessionJob: vi.fn(),
   getSessionById: vi.fn(),
-  setSessionPending: vi.fn(),
+  requeueFailedSessionJob: vi.fn(),
 }));
 
 const attachmentMocks = vi.hoisted(() => ({
@@ -57,9 +56,8 @@ describe("sessionSubmission service", () => {
     vi.resetModules();
     for (const mock of [
       dbMocks.createSessionWithJob,
-      dbMocks.enqueueSessionJob,
       dbMocks.getSessionById,
-      dbMocks.setSessionPending,
+      dbMocks.requeueFailedSessionJob,
       attachmentMocks.decodeAttachmentToText,
       credentialMocks.encryptJobCredential,
       hashMocks.hashQuestion,
@@ -158,13 +156,12 @@ describe("sessionSubmission service", () => {
     });
 
     expect(result).toEqual({ sessionId: 12 });
-    expect(dbMocks.setSessionPending).toHaveBeenCalledWith(12);
-    expect(dbMocks.enqueueSessionJob).toHaveBeenCalledWith({
+    expect(dbMocks.requeueFailedSessionJob).toHaveBeenCalledWith({
       sessionId: 12,
       buildCredentialCiphertext: expect.any(Function),
     });
-    const enqueueInput = dbMocks.enqueueSessionJob.mock.calls[0]?.[0];
-    expect(enqueueInput.buildCredentialCiphertext({ sessionId: 12, jobId: 99 })).toBe("ciphertext");
+    const requeueInput = dbMocks.requeueFailedSessionJob.mock.calls[0]?.[0];
+    expect(requeueInput.buildCredentialCiphertext({ sessionId: 12, jobId: 99 })).toBe("ciphertext");
     expect(credentialMocks.encryptJobCredential).toHaveBeenCalledWith("byok-key", {
       sessionId: 12,
       jobId: 99,

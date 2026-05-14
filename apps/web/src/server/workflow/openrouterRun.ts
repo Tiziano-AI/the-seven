@@ -1,16 +1,15 @@
 import "server-only";
 
+import { PROVIDER_OUTPUT_TOKEN_LIMITS } from "@the-seven/config";
 import type { CouncilMemberTuning, MemberPosition } from "@the-seven/contracts";
-import { parseUsdAmountToMicros, phaseTwoEvaluationResponseFormat } from "@the-seven/contracts";
+import { phaseTwoEvaluationResponseFormat } from "@the-seven/contracts";
 import {
-  createProviderCall,
-  listProviderCalls,
-  refreshSessionUsageTotals,
-  updateProviderCallCost,
+  type ClaimedJobLease,
+  ClaimedJobLeaseLostError,
+  verifyActiveClaimedJobLease,
 } from "@the-seven/db";
 import {
   callOpenRouter,
-  fetchOpenRouterGeneration,
   materializeCouncilMemberTuningInput,
   type OpenRouterMessage,
   type OpenRouterRequest,
@@ -18,8 +17,8 @@ import {
   type OpenRouterResponse,
   type OpenRouterResponseFormat,
 } from "../adapters/openrouter";
-import { redactErrorMessage } from "../domain/redaction";
 import { getModelCapability } from "../services/models";
+import { recordOpenRouterProviderCall } from "./openrouterRunDiagnostics";
 
 export class OpenRouterPhaseRateLimitError extends Error {
   readonly status: number | null;
@@ -43,39 +42,23 @@ export class OpenRouterUnsupportedParameterError extends Error {
   }
 }
 
-type MessageCharCounts = Readonly<{
-  systemChars: number;
-  userChars: number;
-  totalChars: number;
-}>;
-
 type PhaseResponseFormat = Readonly<{
   options: Readonly<{
     response_format?: OpenRouterResponseFormat;
-    provider?: Readonly<{ require_parameters: true }>;
+    provider?: NonNullable<OpenRouterRequest["provider"]>;
   }>;
   sentParameters: string[];
   deniedParameters: string[];
 }>;
 
-function getMessageCharCounts(messages: ReadonlyArray<OpenRouterMessage>): MessageCharCounts {
-  let systemChars = 0;
-  let userChars = 0;
-  let totalChars = 0;
+type OutputTokenCap = Readonly<{
+  maxTokens: number | null;
+  options: Readonly<{ max_tokens?: number }>;
+  sentParameters: string[];
+  deniedParameters: string[];
+}>;
 
-  for (const message of messages) {
-    const size = message.content.length;
-    totalChars += size;
-    if (message.role === "system") {
-      systemChars += size;
-    }
-    if (message.role === "user") {
-      userChars += size;
-    }
-  }
-
-  return { systemChars, userChars, totalChars };
-}
+const OPENROUTER_CHAT_PROVIDER_IGNORES = ["amazon-bedrock", "azure"] as const;
 
 function buildOpenRouterRequest(input: {
   modelId: string;
@@ -86,6 +69,23 @@ function buildOpenRouterRequest(input: {
     model: input.modelId,
     messages: input.messages,
     ...input.tuningOptions,
+  };
+}
+
+function materializeOpenRouterProviderOptions(input: {
+  sentParameters: ReadonlyArray<string>;
+  phaseProvider?: NonNullable<OpenRouterRequest["provider"]>;
+}): Readonly<{ provider?: NonNullable<OpenRouterRequest["provider"]> }> {
+  if (input.sentParameters.length === 0 && !input.phaseProvider) {
+    return {};
+  }
+
+  return {
+    provider: {
+      ...input.phaseProvider,
+      ...(input.sentParameters.length > 0 ? { require_parameters: true as const } : {}),
+      ignore: OPENROUTER_CHAT_PROVIDER_IGNORES,
+    },
   };
 }
 
@@ -104,7 +104,7 @@ function extractAssistantContent(input: {
 
   if (firstChoice.error?.code === 429) {
     throw new OpenRouterPhaseRateLimitError({
-      message: firstChoice.error.message || "OpenRouter rate limit exceeded",
+      message: "OpenRouter rate limit exceeded",
       status: firstChoice.error.code,
     });
   }
@@ -134,140 +134,101 @@ function materializePhaseResponseFormat(input: {
   }
 
   const supported = new Set(input.supportedParameters);
-  if (!supported.has("response_format") || !supported.has("structured_outputs")) {
+  const deniedParameters = ["response_format", "structured_outputs"].filter(
+    (parameter) => !supported.has(parameter),
+  );
+  if (deniedParameters.length > 0) {
     return {
       options: {},
       sentParameters: [],
-      deniedParameters: ["response_format"],
+      deniedParameters,
     };
   }
 
   return {
     options: {
       response_format: phaseTwoEvaluationResponseFormat,
-      provider: { require_parameters: true },
+      provider: { ignore: OPENROUTER_CHAT_PROVIDER_IGNORES },
     },
     sentParameters: ["response_format"],
     deniedParameters: [],
   };
 }
 
-async function fetchGenerationBestEffort(apiKey: string, generationId: string) {
-  try {
-    return await fetchOpenRouterGeneration(apiKey, generationId);
-  } catch {
-    return null;
-  }
+function phaseOutputLimit(phase: 1 | 2 | 3): number {
+  if (phase === 1) return PROVIDER_OUTPUT_TOKEN_LIMITS.phase1;
+  if (phase === 2) return PROVIDER_OUTPUT_TOKEN_LIMITS.phase2;
+  return PROVIDER_OUTPUT_TOKEN_LIMITS.phase3;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * After a session completes, OpenRouter needs time to compute billing.
- * This function waits, then re-fetches generation data for all provider
- * calls that are missing cost, and updates the DB.
- */
-export async function backfillSessionCosts(input: { sessionId: number; apiKey: string }) {
-  const BILLING_DELAY_MS = 30_000;
-  const MAX_RETRIES = 2;
-  const RETRY_DELAY_MS = 15_000;
-
-  await sleep(BILLING_DELAY_MS);
-
-  for (let retry = 0; retry <= MAX_RETRIES; retry += 1) {
-    const calls = await listProviderCalls(input.sessionId);
-    const missing = calls.filter(
-      (call) => call.totalCostUsdMicros === null && call.responseId !== null,
-    );
-    if (missing.length === 0) {
-      break;
-    }
-
-    for (const call of missing) {
-      const responseId = call.responseId;
-      if (!responseId) continue;
-      try {
-        const gen = await fetchOpenRouterGeneration(input.apiKey, responseId);
-        const costMicros = parseUsdAmountToMicros(gen.total_cost);
-        if (costMicros !== null) {
-          await updateProviderCallCost(call.id, costMicros, gen.model ?? null);
-        }
-      } catch {
-        // Individual call cost fetch failed — continue with others
-      }
-    }
-
-    await refreshSessionUsageTotals(input.sessionId);
-
-    const updatedCalls = await listProviderCalls(input.sessionId);
-    const stillMissing = updatedCalls.filter((c) => c.totalCostUsdMicros === null);
-    if (stillMissing.length === 0 || retry === MAX_RETRIES) {
-      break;
-    }
-    await sleep(RETRY_DELAY_MS);
-  }
-}
-
-async function recordProviderCall(input: {
-  sessionId: number;
+function materializeOutputTokenCap(input: {
   phase: 1 | 2 | 3;
-  memberPosition: MemberPosition;
-  modelId: string;
-  messages: ReadonlyArray<OpenRouterMessage>;
-  catalogRefreshedAt: Date | null;
   supportedParameters: ReadonlyArray<string>;
-  sentParameters: ReadonlyArray<string>;
-  deniedParameters: ReadonlyArray<string>;
-  requestStartedAt: Date;
-  responseCompletedAt: Date;
-  response: OpenRouterResponse | null;
-  generation: Awaited<ReturnType<typeof fetchGenerationBestEffort>>;
-  billingLookupStatus: string;
-  error: Error | null;
-}) {
-  const counts = getMessageCharCounts(input.messages);
-  const firstChoice = input.response?.choices[0];
+  maxCompletionTokens: number | null;
+  expirationDate: string | null;
+}): OutputTokenCap {
+  if (input.expirationDate !== null) {
+    return {
+      maxTokens: null,
+      options: {},
+      sentParameters: [],
+      deniedParameters: ["model_expiration"],
+    };
+  }
 
-  await createProviderCall({
-    sessionId: input.sessionId,
-    phase: input.phase,
-    memberPosition: input.memberPosition,
-    requestModelId: input.modelId,
-    requestSystemChars: counts.systemChars,
-    requestUserChars: counts.userChars,
-    requestTotalChars: counts.totalChars,
-    catalogRefreshedAt: input.catalogRefreshedAt,
-    supportedParametersJson: Array.from(input.supportedParameters),
-    sentParametersJson: Array.from(input.sentParameters),
-    deniedParametersJson: Array.from(input.deniedParameters),
-    requestStartedAt: input.requestStartedAt,
-    responseCompletedAt: input.responseCompletedAt,
-    latencyMs: input.responseCompletedAt.getTime() - input.requestStartedAt.getTime(),
-    responseId: input.response?.id ?? null,
-    responseModel: input.response?.model ?? null,
-    billedModelId: input.generation?.model ?? input.response?.model ?? null,
-    totalCostUsdMicros: parseUsdAmountToMicros(input.generation?.total_cost),
-    usagePromptTokens: input.response?.usage?.prompt_tokens ?? null,
-    usageCompletionTokens: input.response?.usage?.completion_tokens ?? null,
-    usageTotalTokens: input.response?.usage?.total_tokens ?? null,
-    finishReason: firstChoice?.finish_reason ?? null,
-    nativeFinishReason: firstChoice?.native_finish_reason ?? null,
-    errorMessage: input.error ? redactErrorMessage(input.error, "OpenRouter request failed") : null,
-    choiceErrorMessage: firstChoice?.error?.message
-      ? redactErrorMessage(firstChoice.error, "OpenRouter choice failed")
-      : null,
-    choiceErrorCode: firstChoice?.error?.code ?? null,
-    errorStatus:
-      input.error instanceof OpenRouterRequestFailedError
-        ? input.error.status
-        : input.error instanceof OpenRouterPhaseRateLimitError
-          ? input.error.status
-          : null,
-    errorCode: input.error instanceof OpenRouterRequestFailedError ? input.error.code : null,
-    billingLookupStatus: input.billingLookupStatus,
-  });
+  const supported = new Set(input.supportedParameters);
+  if (!supported.has("max_tokens")) {
+    return {
+      maxTokens: null,
+      options: {},
+      sentParameters: [],
+      deniedParameters: ["max_tokens"],
+    };
+  }
+
+  if (input.maxCompletionTokens !== null && input.maxCompletionTokens < 1) {
+    return {
+      maxTokens: null,
+      options: {},
+      sentParameters: [],
+      deniedParameters: ["max_tokens"],
+    };
+  }
+
+  const requested = phaseOutputLimit(input.phase);
+  if (input.maxCompletionTokens !== null && input.maxCompletionTokens < requested) {
+    return {
+      maxTokens: null,
+      options: {},
+      sentParameters: [],
+      deniedParameters: ["max_tokens"],
+    };
+  }
+
+  const maxTokens = requested;
+  return {
+    maxTokens,
+    options: { max_tokens: maxTokens },
+    sentParameters: ["max_tokens"],
+    deniedParameters: [],
+  };
+}
+
+function throwLeaseAbort(input: { signal?: AbortSignal }) {
+  if (input.signal?.aborted && input.signal.reason instanceof ClaimedJobLeaseLostError) {
+    throw input.signal.reason;
+  }
+}
+
+async function verifyProviderEgressLease(input: {
+  signal?: AbortSignal;
+  claimedLease?: ClaimedJobLease;
+}) {
+  throwLeaseAbort(input);
+  if (input.claimedLease) {
+    await verifyActiveClaimedJobLease({ ...input.claimedLease, now: new Date() });
+  }
+  throwLeaseAbort(input);
 }
 
 export async function runOpenRouterPhaseCall(input: {
@@ -278,40 +239,64 @@ export async function runOpenRouterPhaseCall(input: {
   modelId: string;
   messages: ReadonlyArray<OpenRouterMessage>;
   tuning: CouncilMemberTuning | null;
+  signal?: AbortSignal;
+  claimedLease?: ClaimedJobLease;
 }) {
+  await verifyProviderEgressLease(input);
   const capability = await getModelCapability(input.modelId);
   const supportedParameters = capability?.supportedParameters ?? [];
   const materialized = materializeCouncilMemberTuningInput(input.tuning, supportedParameters);
+  const outputTokenCap = capability
+    ? materializeOutputTokenCap({
+        phase: input.phase,
+        supportedParameters,
+        maxCompletionTokens: capability.maxCompletionTokens,
+        expirationDate: capability.expirationDate,
+      })
+    : { maxTokens: null, options: {}, sentParameters: [], deniedParameters: [] };
   const phaseResponseFormat = materializePhaseResponseFormat({
     phase: input.phase,
     supportedParameters,
   });
+  const deniedParameters = [
+    ...materialized.deniedParameters,
+    ...outputTokenCap.deniedParameters,
+    ...phaseResponseFormat.deniedParameters,
+  ];
+  const sentParameters = [
+    ...materialized.sentParameters,
+    ...outputTokenCap.sentParameters,
+    ...phaseResponseFormat.sentParameters,
+  ];
+  const sentReasoningEffort = sentParameters.includes("reasoning")
+    ? (input.tuning?.reasoningEffort ?? null)
+    : null;
   const request = buildOpenRouterRequest({
     modelId: input.modelId,
     messages: input.messages,
     tuningOptions: {
       ...materialized.options,
+      ...outputTokenCap.options,
       ...phaseResponseFormat.options,
+      ...materializeOpenRouterProviderOptions({
+        sentParameters,
+        phaseProvider: phaseResponseFormat.options.provider,
+      }),
     },
   });
+  const sentProviderRequireParameters = request.provider?.require_parameters === true;
+  const sentProviderIgnoredProviders = request.provider?.ignore ?? [];
   const requestStartedAt = new Date();
   let response: OpenRouterResponse | null = null;
-  let generation: Awaited<ReturnType<typeof fetchGenerationBestEffort>> = null;
-  let billingLookupStatus = "not_requested";
-
-  const deniedParameters = [
-    ...materialized.deniedParameters,
-    ...phaseResponseFormat.deniedParameters,
-  ];
-  const sentParameters = [...materialized.sentParameters, ...phaseResponseFormat.sentParameters];
 
   if (!capability || deniedParameters.length > 0) {
+    throwLeaseAbort(input);
     const responseCompletedAt = new Date();
     const error = new OpenRouterUnsupportedParameterError({
       modelId: input.modelId,
       deniedParameters: capability ? deniedParameters : ["model"],
     });
-    await recordProviderCall({
+    await recordOpenRouterProviderCall({
       sessionId: input.sessionId,
       phase: input.phase,
       memberPosition: input.memberPosition,
@@ -320,21 +305,27 @@ export async function runOpenRouterPhaseCall(input: {
       catalogRefreshedAt: capability?.refreshedAt ?? null,
       supportedParameters,
       sentParameters: [],
+      sentReasoningEffort: null,
+      sentProviderRequireParameters: false,
+      sentProviderIgnoredProviders: [],
       deniedParameters: capability ? deniedParameters : ["model"],
       requestStartedAt,
+      requestMaxOutputTokens: null,
       responseCompletedAt,
       response: null,
-      generation: null,
-      billingLookupStatus,
+      billingLookupStatus: "not_requested",
       error,
+      errorStatus: null,
+      errorCode: null,
+      claimedLease: input.claimedLease,
     });
     return { ok: false as const, error };
   }
 
   try {
-    response = await callOpenRouter(input.apiKey, request);
-    generation = await fetchGenerationBestEffort(input.apiKey, response.id);
-    billingLookupStatus = generation ? "succeeded" : "failed";
+    await verifyProviderEgressLease(input);
+    response = await callOpenRouter(input.apiKey, request, { signal: input.signal });
+    throwLeaseAbort(input);
     const content = extractAssistantContent({
       phase: input.phase,
       memberPosition: input.memberPosition,
@@ -343,7 +334,7 @@ export async function runOpenRouterPhaseCall(input: {
     });
     const responseCompletedAt = new Date();
 
-    await recordProviderCall({
+    await recordOpenRouterProviderCall({
       sessionId: input.sessionId,
       phase: input.phase,
       memberPosition: input.memberPosition,
@@ -352,21 +343,41 @@ export async function runOpenRouterPhaseCall(input: {
       catalogRefreshedAt: capability.refreshedAt,
       supportedParameters,
       sentParameters,
+      sentReasoningEffort,
+      sentProviderRequireParameters,
+      sentProviderIgnoredProviders,
       deniedParameters,
       requestStartedAt,
+      requestMaxOutputTokens: outputTokenCap.maxTokens,
       responseCompletedAt,
       response,
-      generation,
-      billingLookupStatus,
+      billingLookupStatus: response.id ? "pending" : "not_requested",
       error: null,
+      errorStatus: null,
+      errorCode: null,
+      claimedLease: input.claimedLease,
     });
 
     return { ok: true as const, content };
   } catch (error) {
+    if (error instanceof ClaimedJobLeaseLostError) {
+      throw error;
+    }
+    throwLeaseAbort(input);
     const responseCompletedAt = new Date();
+    if (error instanceof OpenRouterRequestFailedError && error.response) {
+      response = error.response;
+    }
+    const phaseRateLimitError =
+      error instanceof OpenRouterRequestFailedError && error.status === 429
+        ? new OpenRouterPhaseRateLimitError({
+            message: "OpenRouter rate limit exceeded",
+            status: error.status,
+          })
+        : null;
     const normalizedError = error instanceof Error ? error : new Error("OpenRouter request failed");
 
-    await recordProviderCall({
+    await recordOpenRouterProviderCall({
       sessionId: input.sessionId,
       phase: input.phase,
       memberPosition: input.memberPosition,
@@ -375,23 +386,29 @@ export async function runOpenRouterPhaseCall(input: {
       catalogRefreshedAt: capability.refreshedAt,
       supportedParameters,
       sentParameters,
+      sentReasoningEffort,
+      sentProviderRequireParameters,
+      sentProviderIgnoredProviders,
       deniedParameters,
       requestStartedAt,
+      requestMaxOutputTokens: outputTokenCap.maxTokens,
       responseCompletedAt,
       response,
-      generation,
-      billingLookupStatus,
+      billingLookupStatus: response?.id ? "pending" : "not_requested",
       error: normalizedError,
+      errorStatus:
+        normalizedError instanceof OpenRouterRequestFailedError
+          ? normalizedError.status
+          : normalizedError instanceof OpenRouterPhaseRateLimitError
+            ? normalizedError.status
+            : null,
+      errorCode:
+        normalizedError instanceof OpenRouterRequestFailedError ? normalizedError.code : null,
+      claimedLease: input.claimedLease,
     });
 
-    if (error instanceof OpenRouterRequestFailedError && error.status === 429) {
-      return {
-        ok: false as const,
-        error: new OpenRouterPhaseRateLimitError({
-          message: "OpenRouter rate limit exceeded",
-          status: error.status,
-        }),
-      };
+    if (phaseRateLimitError) {
+      return { ok: false as const, error: phaseRateLimitError };
     }
 
     return {

@@ -2,13 +2,11 @@
 
 import {
   type CandidateId,
-  candidateIdSchema,
   isMemberPosition,
   isReviewerMemberPosition,
   type MemberPosition,
   memberForPosition,
   phaseTwoEvaluationSchema,
-  type ReviewerMemberPosition,
 } from "@the-seven/contracts";
 import { Sigil } from "@/components/app/sigil";
 import { cn } from "@/lib/utils";
@@ -57,10 +55,6 @@ function reviewerVote(evaluationArtifact: InspectorArtifact | null): {
   } catch {
     return { top: null, raw: "—" };
   }
-}
-
-function selfAliasOf(reviewerPosition: ReviewerMemberPosition): CandidateId {
-  return candidateIdSchema.parse(aliasFor(reviewerPosition));
 }
 
 function modeOf(values: ReadonlyArray<CandidateId>) {
@@ -136,12 +130,6 @@ export function CouncilTrack(props: {
       if (result.top) {
         reviewerVotes.push(result.top);
       }
-      const selfAlias = selfAliasOf(position);
-      const dissent =
-        result.top !== null &&
-        // a reviewer's top vote being any non-converging answer is treated as default;
-        // we mark the cell as dissent only after we know the mode in a second pass.
-        false;
       cells.push({
         position,
         alias,
@@ -149,9 +137,6 @@ export function CouncilTrack(props: {
         vote: artifact ? (result.top ? `votes §${result.top}§` : "—") : "deliberating",
         voteAccent: artifact ? "default" : "vacant",
       });
-      // self-reference suppresses the "votes self" outcome since reviewers cannot rank themselves.
-      void selfAlias;
-      void dissent;
     } else {
       cells.push({
         position,

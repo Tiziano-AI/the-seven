@@ -29,6 +29,7 @@ function buildCatalogRow(modelId: string) {
     description: `${modelId} description`,
     contextLength: 128_000,
     maxCompletionTokens: 8_192,
+    expirationDate: null,
     supportedParametersJson: ["temperature"],
     inputModalitiesJson: ["text"],
     outputModalitiesJson: ["text"],
@@ -45,6 +46,7 @@ function buildOpenRouterModel(modelId: string) {
     name: `${modelId} name`,
     description: `${modelId} description`,
     context_length: 128_000,
+    expiration_date: null,
     supported_parameters: ["temperature"],
     architecture: {
       input_modalities: ["text"],
@@ -102,6 +104,38 @@ describe("models service", () => {
       valid: true,
       model: {
         modelId: "model-a",
+        expirationDate: null,
+      },
+    });
+  });
+
+  test("persists OpenRouter expiration metadata during catalog refresh", async () => {
+    modelDbMocks.getCatalogLastRefreshAt.mockResolvedValue(null);
+    openRouterMocks.fetchOpenRouterModels.mockResolvedValue([
+      {
+        ...buildOpenRouterModel("model-expiring"),
+        expiration_date: "2026-05-15",
+      },
+    ]);
+    modelDbMocks.replaceCatalogEntries.mockResolvedValue(undefined);
+    modelDbMocks.getCatalogModelById.mockResolvedValue({
+      ...buildCatalogRow("model-expiring"),
+      expirationDate: "2026-05-15",
+    });
+
+    const { validateModelId } = await loadModelsService();
+    const result = await validateModelId("model-expiring");
+
+    expect(modelDbMocks.replaceCatalogEntries).toHaveBeenCalledWith([
+      expect.objectContaining({
+        modelId: "model-expiring",
+        expirationDate: "2026-05-15",
+      }),
+    ]);
+    expect(result).toMatchObject({
+      valid: true,
+      model: {
+        expirationDate: "2026-05-15",
       },
     });
   });

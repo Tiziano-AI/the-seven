@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { councilRefSchema } from "../domain/councilRef";
+import type { ErrorEnvelope } from "./errors";
 import { ROUTE_CONTRACTS } from "./registryRoutes";
 
 export const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE"] as const;
@@ -64,6 +65,43 @@ export function routeContract<const Id extends RouteContractId>(
 }
 
 export type RoutePathParams = Readonly<Record<string, string | number>>;
+
+function denialDetailReason(details: ErrorEnvelope["details"]): string | null {
+  if ("reason" in details && typeof details.reason === "string") {
+    return details.reason;
+  }
+  if ("scope" in details && typeof details.scope === "string") {
+    return "rate_limited";
+  }
+  if ("resource" in details && typeof details.resource === "string") {
+    return details.resource;
+  }
+  if ("service" in details && typeof details.service === "string") {
+    return details.service;
+  }
+  if ("errorId" in details && typeof details.errorId === "string") {
+    return "internal_error";
+  }
+  return null;
+}
+
+/** Returns whether an emitted public error is declared by one route registry row. */
+export function routeDeclaresDenial(input: {
+  route: RouteContract;
+  status: number;
+  envelope: ErrorEnvelope;
+}): boolean {
+  const reason = denialDetailReason(input.envelope.details);
+  if (reason === null) {
+    return false;
+  }
+  return input.route.denials.some((row) => {
+    if (row.kind !== input.envelope.kind || row.status !== input.status) {
+      return false;
+    }
+    return row.reason === reason;
+  });
+}
 
 /** Builds a canonical concrete path from a registry route row and path params. */
 export function buildRoutePath(route: RouteContract, params: RoutePathParams = {}) {

@@ -1,17 +1,28 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const dbMocks = vi.hoisted(() => ({
-  createSessionArtifact: vi.fn(),
-  getSessionArtifact: vi.fn(),
-  getSessionById: vi.fn(),
-  listSessionArtifacts: vi.fn(),
-  markJobCompleted: vi.fn(),
-  markJobFailed: vi.fn(),
-  markSessionCompleted: vi.fn(),
-  markSessionFailed: vi.fn(),
-  refreshSessionUsageTotals: vi.fn(),
-  startSessionProcessing: vi.fn(),
-}));
+const dbMocks = vi.hoisted(() => {
+  class MockClaimedJobLeaseLostError extends Error {
+    constructor() {
+      super("Claimed job lease lost");
+      this.name = "ClaimedJobLeaseLostError";
+    }
+  }
+
+  return {
+    ClaimedJobLeaseLostError: MockClaimedJobLeaseLostError,
+    createSessionArtifact: vi.fn(),
+    getSessionArtifact: vi.fn(),
+    getSessionById: vi.fn(),
+    listSessionArtifacts: vi.fn(),
+    markClaimedSessionCompleted: vi.fn(),
+    markClaimedSessionFailed: vi.fn(),
+    markJobCompleted: vi.fn(),
+    markJobFailed: vi.fn(),
+    refreshSessionUsageTotals: vi.fn(),
+    startClaimedSessionProcessing: vi.fn(),
+    verifyActiveClaimedJobLease: vi.fn(),
+  };
+});
 
 const snapshotMocks = vi.hoisted(() => ({
   buildSystemPromptForPhase: vi.fn(),
@@ -26,7 +37,7 @@ const runMocks = vi.hoisted(() => {
   class MockRateLimitError extends Error {}
 
   return {
-    backfillSessionCosts: vi.fn(),
+    scheduleSessionCostBackfill: vi.fn(),
     OpenRouterPhaseRateLimitError: MockRateLimitError,
     runOpenRouterPhaseCall: vi.fn(),
   };
@@ -36,25 +47,33 @@ const promptMocks = vi.hoisted(() => ({
   buildReviewPrompt: vi.fn(),
   buildSynthesisPrompt: vi.fn(),
   formatPhaseTwoEvaluationContent: vi.fn(),
-  parsePhaseTwoEvaluation: vi.fn(),
-  phaseTwoCandidateIds: vi.fn(),
+  parsePhaseTwoEvaluationArtifact: vi.fn(),
+  parsePhaseTwoEvaluationResponse: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 
-vi.mock("@the-seven/contracts", () => ({
-  REVIEWER_MEMBER_POSITIONS: [1, 2, 3, 4, 5, 6],
-  SYNTHESIZER_MEMBER_POSITION: 7,
-  isReviewerMemberPosition: (value: number) => value >= 1 && value <= 6,
-  sessionSnapshotSchema: {
-    parse: (value: unknown) => value,
-  },
-}));
+vi.mock("@the-seven/contracts", async () => {
+  const actual =
+    await vi.importActual<typeof import("@the-seven/contracts")>("@the-seven/contracts");
+  return {
+    ...actual,
+    sessionSnapshotSchema: {
+      parse: (value: unknown) => value,
+    },
+  };
+});
 
 vi.mock("@the-seven/db", () => dbMocks);
 vi.mock("../domain/jobCredential", () => credentialMocks);
 vi.mock("../domain/sessionSnapshot", () => snapshotMocks);
-vi.mock("./openrouterRun", () => runMocks);
+vi.mock("./openrouterBilling", () => ({
+  scheduleSessionCostBackfill: runMocks.scheduleSessionCostBackfill,
+}));
+vi.mock("./openrouterRun", () => ({
+  OpenRouterPhaseRateLimitError: runMocks.OpenRouterPhaseRateLimitError,
+  runOpenRouterPhaseCall: runMocks.runOpenRouterPhaseCall,
+}));
 vi.mock("./prompts", () => promptMocks);
 
 async function loadWorkflow() {
@@ -78,6 +97,17 @@ function buildSession(status: "completed" | "pending" | "failed" | "processing" 
   };
 }
 
+function phaseTwoReview(candidateId: string, score: number) {
+  return {
+    score,
+    strengths: [`Candidate ${candidateId} identifies concrete support.`],
+    weaknesses: [`Candidate ${candidateId} misses a concrete caveat.`],
+    critical_errors: [],
+    missing_evidence: [],
+    verdict_input: `Candidate ${candidateId} should inform the final verdict.`,
+  };
+}
+
 describe("orchestrateClaimedJob", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -86,32 +116,34 @@ describe("orchestrateClaimedJob", () => {
       dbMocks.getSessionArtifact,
       dbMocks.getSessionById,
       dbMocks.listSessionArtifacts,
+      dbMocks.markClaimedSessionCompleted,
+      dbMocks.markClaimedSessionFailed,
       dbMocks.markJobCompleted,
       dbMocks.markJobFailed,
-      dbMocks.markSessionCompleted,
-      dbMocks.markSessionFailed,
       dbMocks.refreshSessionUsageTotals,
-      dbMocks.startSessionProcessing,
+      dbMocks.startClaimedSessionProcessing,
+      dbMocks.verifyActiveClaimedJobLease,
       snapshotMocks.buildSystemPromptForPhase,
       snapshotMocks.getSnapshotMember,
       credentialMocks.decryptJobCredential,
-      runMocks.backfillSessionCosts,
+      runMocks.scheduleSessionCostBackfill,
       runMocks.runOpenRouterPhaseCall,
       promptMocks.buildReviewPrompt,
       promptMocks.buildSynthesisPrompt,
       promptMocks.formatPhaseTwoEvaluationContent,
-      promptMocks.parsePhaseTwoEvaluation,
-      promptMocks.phaseTwoCandidateIds,
+      promptMocks.parsePhaseTwoEvaluationArtifact,
+      promptMocks.parsePhaseTwoEvaluationResponse,
     ]) {
       mock.mockReset();
     }
 
     dbMocks.refreshSessionUsageTotals.mockResolvedValue(undefined);
+    dbMocks.markClaimedSessionCompleted.mockResolvedValue(undefined);
+    dbMocks.markClaimedSessionFailed.mockResolvedValue(undefined);
     dbMocks.markJobCompleted.mockResolvedValue(undefined);
     dbMocks.markJobFailed.mockResolvedValue(undefined);
-    dbMocks.markSessionCompleted.mockResolvedValue(undefined);
-    dbMocks.markSessionFailed.mockResolvedValue(undefined);
-    dbMocks.startSessionProcessing.mockResolvedValue(true);
+    dbMocks.startClaimedSessionProcessing.mockResolvedValue(true);
+    dbMocks.verifyActiveClaimedJobLease.mockResolvedValue(undefined);
     snapshotMocks.buildSystemPromptForPhase.mockReturnValue("prompt");
     snapshotMocks.getSnapshotMember.mockImplementation(
       (
@@ -124,22 +156,26 @@ describe("orchestrateClaimedJob", () => {
     credentialMocks.decryptJobCredential.mockReturnValue("api-key");
     promptMocks.buildReviewPrompt.mockReturnValue("review-prompt");
     promptMocks.buildSynthesisPrompt.mockReturnValue("synthesis-prompt");
-    promptMocks.phaseTwoCandidateIds.mockReturnValue(["A", "B", "C", "D", "E"]);
-    promptMocks.parsePhaseTwoEvaluation.mockReturnValue({
-      ok: true,
-      evaluation: {
-        ranking: ["A", "B", "C", "D", "E"],
-        reviews: ["A", "B", "C", "D", "E"].map((candidateId) => ({
-          candidate_id: candidateId,
-          strengths: ["strong"],
-          weaknesses: ["weak"],
-          critical_errors: [],
-          missing_evidence: [],
-          verdict_input: "Useful.",
-        })),
-        best_final_answer_inputs: ["useful"],
-        major_disagreements: [],
+    const evaluation = {
+      ranking: ["A", "B", "C", "D", "E", "F"],
+      reviews: {
+        A: phaseTwoReview("A", 100),
+        B: phaseTwoReview("B", 90),
+        C: phaseTwoReview("C", 80),
+        D: phaseTwoReview("D", 70),
+        E: phaseTwoReview("E", 60),
+        F: phaseTwoReview("F", 50),
       },
+      best_final_answer_inputs: ["Keep the strongest factual basis."],
+      major_disagreements: [],
+    };
+    promptMocks.parsePhaseTwoEvaluationArtifact.mockReturnValue({
+      ok: true,
+      evaluation,
+    });
+    promptMocks.parsePhaseTwoEvaluationResponse.mockReturnValue({
+      ok: true,
+      evaluation,
     });
     promptMocks.formatPhaseTwoEvaluationContent.mockReturnValue("canonical-evaluation-json\n");
     runMocks.runOpenRouterPhaseCall.mockImplementation(
@@ -161,11 +197,13 @@ describe("orchestrateClaimedJob", () => {
       credentialCiphertext: "ciphertext",
     });
 
-    expect(dbMocks.refreshSessionUsageTotals).toHaveBeenCalledWith(41);
-    expect(dbMocks.markJobCompleted).toHaveBeenCalledWith({
+    expect(dbMocks.markClaimedSessionCompleted).toHaveBeenCalledWith({
+      sessionId: 41,
       jobId: 5,
       leaseOwner: "worker:1",
     });
+    expect(dbMocks.refreshSessionUsageTotals).not.toHaveBeenCalled();
+    expect(dbMocks.markJobCompleted).not.toHaveBeenCalled();
     expect(runMocks.runOpenRouterPhaseCall).not.toHaveBeenCalled();
   });
 
@@ -180,12 +218,75 @@ describe("orchestrateClaimedJob", () => {
       credentialCiphertext: null,
     });
 
-    expect(dbMocks.markSessionFailed).toHaveBeenCalledWith(41, "server_restart");
-    expect(dbMocks.markJobFailed).toHaveBeenCalledWith({
+    expect(dbMocks.markClaimedSessionFailed).toHaveBeenCalledWith({
+      sessionId: 41,
       jobId: 6,
       leaseOwner: "worker:2",
+      failureKind: "server_restart",
       lastError: "Missing encrypted job credential",
     });
+    expect(dbMocks.markJobFailed).not.toHaveBeenCalled();
+  });
+
+  test("lost leases abort before provider execution", async () => {
+    dbMocks.getSessionById.mockResolvedValue(buildSession("pending"));
+    dbMocks.verifyActiveClaimedJobLease.mockRejectedValue(new dbMocks.ClaimedJobLeaseLostError());
+
+    const { orchestrateClaimedJob } = await loadWorkflow();
+    await expect(
+      orchestrateClaimedJob({
+        jobId: 31,
+        leaseOwner: "worker:lost",
+        sessionId: 41,
+        credentialCiphertext: "ciphertext",
+      }),
+    ).rejects.toThrow("Claimed job lease lost");
+
+    expect(runMocks.runOpenRouterPhaseCall).not.toHaveBeenCalled();
+    expect(dbMocks.createSessionArtifact).not.toHaveBeenCalled();
+    expect(dbMocks.markClaimedSessionFailed).not.toHaveBeenCalled();
+    expect(dbMocks.startClaimedSessionProcessing).not.toHaveBeenCalled();
+  });
+
+  test("lost leases abort after provider execution before artifact writes", async () => {
+    const artifacts: Array<{
+      sessionId: number;
+      phase: number;
+      artifactKind: "response" | "review" | "synthesis";
+      memberPosition: number;
+      modelId: string;
+      content: string;
+    }> = [];
+    dbMocks.getSessionById.mockResolvedValue(buildSession("pending"));
+    dbMocks.getSessionArtifact.mockResolvedValue(null);
+    dbMocks.listSessionArtifacts.mockImplementation(async () =>
+      artifacts.map((artifact, index) => ({
+        ...artifact,
+        id: index + 1,
+        createdAt: new Date("2026-04-02T12:00:00.000Z"),
+      })),
+    );
+    dbMocks.verifyActiveClaimedJobLease
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValue(new dbMocks.ClaimedJobLeaseLostError());
+
+    const { orchestrateClaimedJob } = await loadWorkflow();
+    await expect(
+      orchestrateClaimedJob({
+        jobId: 32,
+        leaseOwner: "worker:lost",
+        sessionId: 41,
+        credentialCiphertext: "ciphertext",
+      }),
+    ).rejects.toThrow("Claimed job lease lost");
+
+    expect(runMocks.runOpenRouterPhaseCall).toHaveBeenCalled();
+    expect(runMocks.runOpenRouterPhaseCall.mock.calls[0]?.[0]).toMatchObject({
+      phase: 1,
+      claimedLease: { sessionId: 41, jobId: 32, leaseOwner: "worker:lost" },
+    });
+    expect(dbMocks.createSessionArtifact).not.toHaveBeenCalled();
+    expect(dbMocks.markClaimedSessionFailed).not.toHaveBeenCalled();
   });
 
   test("resumes from existing phase-one artifacts instead of rerunning them", async () => {
@@ -246,12 +347,12 @@ describe("orchestrateClaimedJob", () => {
       memberPosition: 6,
       modelId: "model-6",
     });
-    expect(dbMocks.markSessionCompleted).toHaveBeenCalledWith(41);
-    expect(dbMocks.markJobCompleted).toHaveBeenCalledWith({
+    expect(dbMocks.markClaimedSessionCompleted).toHaveBeenCalledWith({
+      sessionId: 41,
       jobId: 7,
       leaseOwner: "worker:3",
     });
-    expect(runMocks.backfillSessionCosts).toHaveBeenCalledWith({
+    expect(runMocks.scheduleSessionCostBackfill).toHaveBeenCalledWith({
       sessionId: 41,
       apiKey: "api-key",
     });

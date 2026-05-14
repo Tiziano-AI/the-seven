@@ -19,6 +19,7 @@ function buildDynamicSuggestion(model: {
   description: string;
   contextLength: number | null;
   maxCompletionTokens: number | null;
+  expirationDate: string | null;
 }) {
   return {
     modelId: model.modelId,
@@ -26,6 +27,7 @@ function buildDynamicSuggestion(model: {
     description: model.description,
     contextLength: model.contextLength,
     maxCompletionTokens: model.maxCompletionTokens,
+    expirationDate: model.expirationDate,
   };
 }
 
@@ -42,6 +44,7 @@ function buildBuiltInSuggestions(query: string) {
     description: "",
     contextLength: null,
     maxCompletionTokens: null,
+    expirationDate: null,
   }));
 }
 
@@ -77,6 +80,7 @@ async function refreshModelCatalogOnce() {
           description: model.description ?? "",
           contextLength: model.context_length ?? null,
           maxCompletionTokens: model.top_provider?.max_completion_tokens ?? null,
+          expirationDate: model.expiration_date ?? null,
           supportedParametersJson: model.supported_parameters ?? [],
           inputModalitiesJson: model.architecture?.input_modalities ?? [],
           outputModalitiesJson: model.architecture?.output_modalities ?? [],
@@ -124,6 +128,7 @@ export async function validateModelId(modelId: string) {
           description: found.description,
           contextLength: found.contextLength,
           maxCompletionTokens: found.maxCompletionTokens,
+          expirationDate: found.expirationDate,
           supportedParameters: found.supportedParametersJson,
           inputModalities: found.inputModalitiesJson,
           outputModalities: found.outputModalitiesJson,
@@ -152,6 +157,8 @@ export async function getModelCapability(modelId: string) {
   return {
     modelId: found.modelId,
     supportedParameters: found.supportedParametersJson,
+    maxCompletionTokens: found.maxCompletionTokens,
+    expirationDate: found.expirationDate,
     refreshedAt: found.refreshedAt,
   };
 }

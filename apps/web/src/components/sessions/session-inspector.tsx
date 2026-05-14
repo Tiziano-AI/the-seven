@@ -1,11 +1,8 @@
 "use client";
 
-import { isMemberPosition, type MemberPosition } from "@the-seven/contracts";
+import { memberForPosition } from "@the-seven/contracts";
 import { useEffect, useId, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
-import { Sigil } from "@/components/app/sigil";
 import { CouncilTrack, type InspectorArtifact } from "@/components/inspector/council-track";
 import { VerdictCard } from "@/components/inspector/verdict-card";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +19,8 @@ import {
   fetchSessionDiagnostics,
   rerunSession,
 } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { SessionDiagnosticsTable } from "./session-diagnostics-table";
+import { SessionTrail } from "./session-trail";
 import { SessionStatusBadge } from "./status-badge";
 
 function downloadText(filename: string, text: string, type: string) {
@@ -293,7 +291,9 @@ export function SessionInspector(props: {
         members={detail.session.snapshot.council.members}
         artifacts={inspectorArtifacts}
         onCellSelect={(position) => {
-          const target = window.document.getElementById(`cand-${position}`);
+          const target = window.document.getElementById(
+            `cand-${memberForPosition(position).alias}`,
+          );
           target?.scrollIntoView({ behavior: "smooth", block: "center" });
         }}
       />
@@ -392,92 +392,14 @@ export function SessionInspector(props: {
       ) : null}
 
       {trailOpen ? (
-        <div ref={trailRef} className="space-y-4">
-          {[1, 2].map((phase) => {
-            const artifacts = detail.artifacts.filter((a) => a.phase === phase);
-            if (artifacts.length === 0) return null;
-            return (
-              <section key={phase} className="space-y-3">
-                <h3 className="surface-title text-xl uppercase tracking-[0.18em]">
-                  {phase === 1 ? "Phase 1 · Drafts" : "Phase 2 · Critiques"}
-                </h3>
-                <div className="grid gap-3">
-                  {artifacts.map((artifact) => {
-                    const position = artifact.memberPosition;
-                    return (
-                      <div key={artifact.id} className="panel space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {isMemberPosition(position) ? (
-                            <Sigil
-                              position={position as MemberPosition}
-                              className="h-5 w-5 text-[var(--gold-soft)]"
-                            />
-                          ) : null}
-                          <Badge>{artifact.member.label}</Badge>
-                          <Badge>{artifact.modelName}</Badge>
-                          <Badge>{formatCost(artifact.costUsdMicros)}</Badge>
-                        </div>
-                        <div
-                          className={cn(
-                            "prose prose-sm max-w-none",
-                            "prose-headings:mt-0 prose-p:text-[var(--foreground)]",
-                            phase === 2 && "font-mono text-xs leading-5",
-                          )}
-                        >
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {artifact.content}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+        <SessionTrail artifacts={detail.artifacts} trailRef={trailRef} formatCost={formatCost} />
       ) : null}
 
       {diagnostics ? (
-        <Card className="p-6">
-          <h3 className="surface-title mb-4 text-xl uppercase tracking-[0.18em]">Diagnostics</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-[var(--text-muted)]">
-                  <th className="pb-2">Phase</th>
-                  <th className="pb-2">Member</th>
-                  <th className="pb-2">Request Model</th>
-                  <th className="pb-2">Billed Model</th>
-                  <th className="pb-2">Tokens</th>
-                  <th className="pb-2">Latency</th>
-                  <th className="pb-2">Cost</th>
-                  <th className="pb-2">Finish</th>
-                  <th className="pb-2">Error</th>
-                </tr>
-              </thead>
-              <tbody>
-                {diagnostics.providerCalls.map((call) => (
-                  <tr key={call.id} className="border-b border-[var(--border)]/60 align-top">
-                    <td className="py-3">{call.phase}</td>
-                    <td className="py-3">{call.memberPosition}</td>
-                    <td className="py-3">{call.requestModelName}</td>
-                    <td className="py-3">{call.billedModelId ?? "n/a"}</td>
-                    <td className="py-3">{call.usageTotalTokens ?? "n/a"}</td>
-                    <td className="py-3">{call.latencyMs ?? "n/a"}</td>
-                    <td className="py-3">{formatCost(call.totalCostUsdMicros)}</td>
-                    <td className="py-3">
-                      {call.finishReason ?? call.nativeFinishReason ?? "n/a"}
-                    </td>
-                    <td className="py-3">
-                      {call.errorMessage ?? call.choiceErrorMessage ?? "n/a"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <SessionDiagnosticsTable
+          providerCalls={diagnostics.providerCalls}
+          formatCost={formatCost}
+        />
       ) : null}
     </div>
   );

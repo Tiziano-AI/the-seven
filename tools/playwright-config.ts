@@ -45,7 +45,7 @@ export function buildPlaywrightConfig(env: NodeJS.ProcessEnv): PlaywrightTestCon
           env: buildWebServerEnv({ env, port, baseUrl: baseURL }),
           gracefulShutdown: { signal: "SIGTERM" as const, timeout: 10_000 },
           url: baseURL,
-          reuseExistingServer: !env.CI,
+          reuseExistingServer: false,
           timeout: 120_000,
         };
       })();

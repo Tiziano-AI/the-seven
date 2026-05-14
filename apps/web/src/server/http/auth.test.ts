@@ -13,7 +13,13 @@ const demoMocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@the-seven/db", () => dbMocks);
-vi.mock("../adapters/openrouter", () => openRouterMocks);
+vi.mock("../adapters/openrouter", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../adapters/openrouter")>();
+  return {
+    ...actual,
+    validateOpenRouterApiKey: openRouterMocks.validateOpenRouterApiKey,
+  };
+});
 vi.mock("../services/demoAuth", () => demoMocks);
 vi.mock("@the-seven/config", () => ({
   serverRuntime: () => ({
@@ -24,6 +30,7 @@ vi.mock("@the-seven/config", () => ({
   }),
 }));
 
+import { OpenRouterRequestFailedError } from "../adapters/openrouter";
 import { DEMO_SESSION_COOKIE, resolveAuthContext } from "./auth";
 
 function buildRequest(input: { authorization?: string; cookie?: string }) {
@@ -54,7 +61,25 @@ describe("resolveAuthContext", () => {
     expect(dbMocks.getOrCreateUser).not.toHaveBeenCalled();
   });
 
-  test("legacy Demo authorization header is invalid", async () => {
+  test("BYOK validation transport failures do not create a user", async () => {
+    const failure = new OpenRouterRequestFailedError({
+      status: null,
+      code: "timeout",
+      message: "OpenRouter request failed before complete response: timeout",
+    });
+    openRouterMocks.validateOpenRouterApiKey.mockRejectedValue(failure);
+
+    await expect(
+      resolveAuthContext(
+        buildRequest({ authorization: "Bearer sk-or-transport-failure" }),
+        new Date("2026-05-09T00:00:00.000Z"),
+      ),
+    ).rejects.toBe(failure);
+
+    expect(dbMocks.getOrCreateUser).not.toHaveBeenCalled();
+  });
+
+  test("non-Bearer authorization header is invalid", async () => {
     const auth = await resolveAuthContext(
       buildRequest({ authorization: "Demo demo-token" }),
       new Date("2026-05-09T00:00:00.000Z"),
@@ -86,6 +111,36 @@ describe("resolveAuthContext", () => {
       openRouterKey: "demo-openrouter-key",
       expiresAt: 1_800_000_000_000,
     });
+  });
+
+  test("demo-cookie policy ignores bearer headers instead of validating BYOK", async () => {
+    demoMocks.getDemoSessionContext.mockResolvedValue({
+      kind: "active",
+      sessionId: 11,
+      userId: 4,
+      principal: "demo@example.com",
+      expiresAt: 1_800_000_000_000,
+    });
+
+    const auth = await resolveAuthContext(
+      buildRequest({
+        authorization: "Bearer sk-or-valid-but-irrelevant",
+        cookie: `${DEMO_SESSION_COOKIE}=cookie-token`,
+      }),
+      new Date("2026-05-09T00:00:00.000Z"),
+      "demo-cookie",
+    );
+
+    expect(auth).toEqual({
+      kind: "demo",
+      demoSessionId: 11,
+      userId: 4,
+      principal: "demo@example.com",
+      openRouterKey: "demo-openrouter-key",
+      expiresAt: 1_800_000_000_000,
+    });
+    expect(openRouterMocks.validateOpenRouterApiKey).not.toHaveBeenCalled();
+    expect(dbMocks.getOrCreateUser).not.toHaveBeenCalled();
   });
 
   test("revoked demo cookies resolve to invalid token", async () => {

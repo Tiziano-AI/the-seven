@@ -63,6 +63,41 @@ describe("local HTTP projection", () => {
     expect(projection.env.SEVEN_PUBLIC_ORIGIN).toBe("https://theseven.ai");
   });
 
+  test("fails closed on invalid explicit public origins", () => {
+    const invalidOrigins = [
+      {
+        value: "https://user:pass@theseven.ai",
+        message: "SEVEN_PUBLIC_ORIGIN must not include credentials",
+      },
+      {
+        value: "ftp://theseven.ai",
+        message: "SEVEN_PUBLIC_ORIGIN must use http:// or https://",
+      },
+      {
+        value: "https://theseven.ai//",
+        message: "SEVEN_PUBLIC_ORIGIN must be a bare origin",
+      },
+    ];
+    for (const invalidOrigin of invalidOrigins) {
+      expect(() =>
+        buildLocalHttpProjection({
+          env: { NODE_ENV: "test", SEVEN_PUBLIC_ORIGIN: invalidOrigin.value },
+          port: 43_218,
+        }),
+      ).toThrow(invalidOrigin.message);
+    }
+  });
+
+  test("projects a loopback public origin when none is configured", () => {
+    const projection = buildLocalHttpProjection({
+      env: { NODE_ENV: "test" },
+      port: 43_219,
+    });
+
+    expect(projection.publicOrigin).toBe("http://localhost:43219");
+    expect(projection.env.SEVEN_PUBLIC_ORIGIN).toBe("http://localhost:43219");
+  });
+
   test("allocates a port that is not already occupied", async () => {
     const occupied = await listen(0);
     const address = occupied.address();

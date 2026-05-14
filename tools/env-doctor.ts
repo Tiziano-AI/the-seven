@@ -34,14 +34,6 @@ function assignmentsToEnv(assignments: ReadonlyMap<string, string>): NodeJS.Proc
   };
 }
 
-function assignmentsToLiveProfileEnv(assignments: ReadonlyMap<string, string>): NodeJS.ProcessEnv {
-  const env = assignmentsToEnv(assignments);
-  if (!env.SEVEN_BASE_URL) {
-    env.SEVEN_BASE_URL = "http://127.0.0.1:1";
-  }
-  return env;
-}
-
 function formatZodFailure(error: unknown) {
   if (error && typeof error === "object" && "issues" in error && Array.isArray(error.issues)) {
     return error.issues
@@ -72,6 +64,10 @@ function placeholderKeys(assignments: ReadonlyMap<string, string>, keys: Readonl
     const value = assignments.get(key);
     return typeof value === "string" && PLACEHOLDER_PATTERN.test(value);
   });
+}
+
+function uniqueKeys(keys: ReadonlyArray<string>): string[] {
+  return [...new Set(keys)];
 }
 
 export function checkEnvFilePresence(input: {
@@ -143,7 +139,9 @@ export function checkEnvProfile(input: {
   live: boolean;
 }): OperatorCheckResult {
   const assignments = readEnvAssignments(input.envLocalPath);
-  const requiredKeys = input.live ? LIVE_PROOF_REQUIRED_KEYS : OPERATOR_DOCTOR_REQUIRED_KEYS;
+  const requiredKeys = input.live
+    ? uniqueKeys([...OPERATOR_DOCTOR_REQUIRED_KEYS, ...LIVE_PROOF_REQUIRED_KEYS])
+    : [...OPERATOR_DOCTOR_REQUIRED_KEYS];
   const missing = missingKeys(assignments, requiredKeys);
   if (missing.length > 0) {
     return {
@@ -168,7 +166,8 @@ export function checkEnvProfile(input: {
 
   try {
     if (input.live) {
-      liveProof(assignmentsToLiveProfileEnv(assignments));
+      operatorDoctor(assignmentsToEnv(assignments));
+      liveProof(assignmentsToEnv(assignments));
     } else {
       operatorDoctor(assignmentsToEnv(assignments));
     }

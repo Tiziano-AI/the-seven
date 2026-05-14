@@ -5,24 +5,17 @@ import {
   encodeCouncilRef,
   routeContract,
 } from "@the-seven/contracts";
-import { ApiErrorResponse, apiRequest } from "./apiClient";
+import { apiRequest } from "./apiClient";
 
 export function readCouncilRef(encoded: string | null) {
   return encoded ? decodeCouncilRef(encoded) : null;
 }
 
 export async function validateByokKey(apiKey: string) {
-  try {
-    return await apiRequest({
-      route: routeContract("auth.validate"),
-      authHeader: `Bearer ${apiKey}`,
-    });
-  } catch (error) {
-    if (error instanceof ApiErrorResponse && error.kind === "unauthorized") {
-      return { valid: false };
-    }
-    throw error;
-  }
+  return apiRequest({
+    route: routeContract("auth.validate"),
+    authHeader: `Bearer ${apiKey}`,
+  });
 }
 
 export async function requestDemoLink(email: string) {

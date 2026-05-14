@@ -4,11 +4,13 @@ import { phasePromptsSchema } from "./phasePrompts";
 import { providerModelRefSchema } from "./providerModels";
 import { MEMBER_POSITIONS, memberPositionSchema } from "./sevenMembers";
 
-export const councilMemberAssignmentSchema = z.object({
-  memberPosition: memberPositionSchema,
-  model: providerModelRefSchema,
-  tuning: councilMemberTuningSchema.nullable(),
-});
+export const councilMemberAssignmentSchema = z
+  .object({
+    memberPosition: memberPositionSchema,
+    model: providerModelRefSchema,
+    tuning: councilMemberTuningSchema.nullable(),
+  })
+  .strict();
 
 function compareCouncilMembers(
   left: z.infer<typeof councilMemberAssignmentSchema>,
@@ -47,15 +49,19 @@ export const councilMembersSchema = z
   })
   .transform((members) => [...members].sort(compareCouncilMembers));
 
-export const councilPersistedDefinitionSchema = z.object({
-  phasePrompts: phasePromptsSchema,
-  members: councilMembersSchema,
-});
+export const councilPersistedDefinitionSchema = z
+  .object({
+    phasePrompts: phasePromptsSchema,
+    members: councilMembersSchema,
+  })
+  .strict();
 
-export const councilDefinitionSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  ...councilPersistedDefinitionSchema.shape,
-});
+export const councilDefinitionSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    ...councilPersistedDefinitionSchema.shape,
+  })
+  .strict();
 
 export function parseCouncilMembers(input: unknown) {
   return councilMembersSchema.parse(input);

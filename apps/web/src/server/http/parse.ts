@@ -10,22 +10,27 @@ function rejectOversized(): never {
   throw new EdgeError({
     kind: "invalid_input",
     message: "Request body too large",
-    details: invalidInputDetails([
-      { path: "", message: `Body exceeds ${MAX_REQUEST_BODY_BYTES} byte limit` },
-    ]),
+    details: invalidInputDetails({
+      reason: "body_too_large",
+      issues: [{ path: "", message: `Body exceeds ${MAX_REQUEST_BODY_BYTES} byte limit` }],
+    }),
     status: 413,
   });
 }
 
 function requireJsonContentType(request: Request) {
   const contentType = request.headers.get("content-type");
-  if (!contentType?.toLowerCase().includes("application/json")) {
+  const mediaType = contentType?.split(";", 1)[0]?.trim().toLowerCase();
+  if (mediaType !== "application/json") {
     throw new EdgeError({
       kind: "invalid_input",
       message: "Invalid content type",
-      details: invalidInputDetails([
-        { path: "headers.content-type", message: "Content-Type must be application/json" },
-      ]),
+      details: invalidInputDetails({
+        reason: "invalid_content_type",
+        issues: [
+          { path: "headers.content-type", message: "Content-Type must be application/json" },
+        ],
+      }),
       status: 415,
     });
   }
@@ -74,7 +79,10 @@ async function readBoundedBodyText(request: Request): Promise<string> {
     throw new EdgeError({
       kind: "invalid_input",
       message: "Request body must be valid UTF-8",
-      details: invalidInputDetails([{ path: "", message: "Request body must be valid UTF-8" }]),
+      details: invalidInputDetails({
+        reason: "invalid_request",
+        issues: [{ path: "", message: "Request body must be valid UTF-8" }],
+      }),
       status: 400,
     });
   }
@@ -95,7 +103,10 @@ export async function parseJsonBody<T>(request: Request, schema: ZodType<T>): Pr
       throw new EdgeError({
         kind: "invalid_input",
         message: "Invalid JSON body",
-        details: invalidInputDetails([{ path: "", message: "Request body must be valid JSON" }]),
+        details: invalidInputDetails({
+          reason: "invalid_json",
+          issues: [{ path: "", message: "Request body must be valid JSON" }],
+        }),
         status: 400,
       });
     }
@@ -103,12 +114,13 @@ export async function parseJsonBody<T>(request: Request, schema: ZodType<T>): Pr
       throw new EdgeError({
         kind: "invalid_input",
         message: "Invalid request body",
-        details: invalidInputDetails(
-          error.issues.map((issue) => ({
+        details: invalidInputDetails({
+          reason: "invalid_request",
+          issues: error.issues.map((issue) => ({
             path: issue.path.join("."),
             message: issue.message,
           })),
-        ),
+        }),
         status: 400,
       });
     }
@@ -137,7 +149,10 @@ export async function parseNoBody(request: Request): Promise<void> {
     throw new EdgeError({
       kind: "invalid_input",
       message: "Invalid JSON body",
-      details: invalidInputDetails([{ path: "", message: "Request body must be valid JSON" }]),
+      details: invalidInputDetails({
+        reason: "invalid_json",
+        issues: [{ path: "", message: "Request body must be valid JSON" }],
+      }),
       status: 400,
     });
   }
@@ -145,7 +160,10 @@ export async function parseNoBody(request: Request): Promise<void> {
   throw new EdgeError({
     kind: "invalid_input",
     message: "Request body must be empty",
-    details: invalidInputDetails([{ path: "", message: "Request body must be empty" }]),
+    details: invalidInputDetails({
+      reason: "invalid_request",
+      issues: [{ path: "", message: "Request body must be empty" }],
+    }),
     status: 400,
   });
 }

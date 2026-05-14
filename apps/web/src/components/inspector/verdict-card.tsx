@@ -57,7 +57,7 @@ export function VerdictCard(props: {
       {props.onOpenTrail ? (
         <footer className="verdict-foot">
           <button type="button" className="trail-link" onClick={props.onOpenTrail}>
-            {props.trailLabel ?? "Open the full reasoning trail — drafts, critiques, rankings →"}
+            {props.trailLabel ?? "Open the full reasoning trail — drafts, critiques, ranking →"}
           </button>
         </footer>
       ) : null}

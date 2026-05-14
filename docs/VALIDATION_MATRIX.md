@@ -23,11 +23,13 @@ This is the required verification pyramid for the launch-candidate milestone.
 - every JSON route typed error path validates against the error envelope
 - invalid path params, invalid query, invalid body, invalid ingress, and missing
   auth denials include a server trace header
+- public request body schemas reject extra keys instead of stripping them
 - transformed path params such as council `locator` reach handlers as parsed
   contract values and are not parsed a second time
 - continue and rerun bodies do not duplicate `sessionId`; path params own session
   identity
-- BYOK auth, demo-cookie auth, and missing-auth denials are distinct
+- BYOK auth, demo-cookie auth, missing-auth, and `demo_not_allowed` denials are
+  distinct
 - demo Commons-only enforcement
 - council CRUD validation
 - submit, continue, rerun, diagnostics, and export payloads
@@ -36,13 +38,15 @@ This is the required verification pyramid for the launch-candidate milestone.
 
 - invalid BYOK cannot create a user, list councils, enqueue sessions, or write
   jobs
-- provider validation transport failure does not mutate DB and maps to
-  `upstream_error`
+- provider validation transport failure does not mutate DB and maps to public
+  `502 upstream_error` with upstream status retained only in diagnostics
 - spoofed proxy/trace headers cannot bypass rate limits or replace server trace
   truth
 - invalid `X-Seven-Ingress` and multiline or oversized ingress version deny as
   `invalid_input`
-- cookie-demo mutating routes enforce same-origin checks
+- cookie-demo mutating routes enforce same-origin checks, accept only local HTTP
+  loopback aliases on the same non-production port, and reject contradictory
+  explicit origin evidence before accepting Fetch Metadata fallback
 - BYOK routes remain header-based
 - HTTP errors, DB diagnostics, logs, and UI diagnostics are redacted
 
@@ -50,39 +54,69 @@ This is the required verification pyramid for the launch-candidate milestone.
 
 - magic-link request creates one email link
 - `GET /api/v1/demo/consume` validates token, sets a cookie, and redirects to
-  `/`
-- token reuse, expired token, and missing token return typed denials
+  `<SEVEN_PUBLIC_ORIGIN>/`
+- API-ingress token reuse, expired token, and missing token return typed denials
+- browser-ingress missing, reused, expired, invalid, or disabled demo links
+  redirect to the public origin with a recovery state
+- malformed demo consume `Host` authority denies before rate-limit or token
+  mutation
 - browser demo authority is the server-issued cookie
-- legacy demo header ingress returns a typed denial
+- revoked demo cookies deny as `invalid_token`
 - demo mode remains Commons-only
 
 ## Provider
 
-- built-in councils validate against a mocked 2026-05-10 OpenRouter catalog
+- built-in councils validate against a mocked 2026-05-14 OpenRouter catalog
 - Founding uses current best-of-best OpenRouter model IDs for BYOK and treats
   provider diversity as a tie-breaker only
+- each built-in tier uses its strongest selected model as the synthesizer
 - Lantern uses a declared mid-tier bridge roster rather than leftovers
 - Commons uses paid low-cost demo model IDs with nonzero pricing and no
-  `:free`, `~latest`, preview aliases, or catalog expiration date
+  `:free`, `~latest`, preview aliases, catalog expiration date, or row above the
+  current selected GPT-5 Mini blended row ceiling
 - all 21 built-in model IDs are distinct across tier clusters
+- OpenRouter catalog refresh persists catalog expiration dates and maximum
+  completion-token metadata
 - unsupported built-in tuning defaults are `null`
 - unsupported non-null user tuning is denied before provider execution
-- phase-2 review calls require OpenRouter structured-output support and send
-  `response_format` with provider parameter enforcement
+- built-in tier effort materializes through OpenRouter `reasoning.effort`, and
+  provider diagnostics expose the sent effort value: Commons `low`, Lantern
+  `medium`, Founding `xhigh`
+- every OpenRouter call sends the phase-owned server `max_tokens` cap
+  (8192/16384/16384) and denies models that do not support that required request
+  parameter or publish a lower maximum completion-token cap
+- chat completions use the OpenRouter streaming transport internally while
+  preserving the stored complete-response artifact contract
+- phase-2 review calls require `response_format` and `structured_outputs`, record
+  the exact missing capability list on denial, and send the compact provider-facing `response_format` with
+  provider parameter enforcement
+- phase-3 synthesis calls receive compact synthesis material rather than the
+  canonical persisted phase-2 review object; exact phase-3 probes and full live proof own
+  synthesizer acceptance
 - supported tuning is sent
 - retryable OpenRouter choice-level upstream errors retry before a terminal
-  provider-call result is recorded
+  provider-call result is recorded, and final structured retry failures still
+  persist response ID/model plus choice-error diagnostics
+- OpenRouter's fifteen-minute request timeout covers response-body consumption after
+  headers and records a typed timeout instead of leaving the job leased
+  indefinitely
+- successful streaming responses may omit the chunk-level `model`; diagnostics
+  fall back to the exact requested model only when a generation ID is present
 - OpenRouter/Resend errors are redacted
 - provider diagnostics persist requested model, catalog freshness, supported
-  params, sent params, denied params, upstream status/code, response model,
-  generation ID, and billing lookup status without secrets
+  params, sent params, denied params, requested output cap, sent reasoning
+  effort, sent OpenRouter provider-routing controls, upstream status/code,
+  response model, generation ID, and finite billing lookup status without secrets
 
 ## Database
 
 - schema constraints
 - one squashed init migration
-- transaction semantics for submit/continue/rerun
-- job claim, lease renewal, expiry, and reclaim
+- transaction semantics for submit, atomic failed-session continue, and rerun
+- job claim, lease renewal, expiry, reclaim, and max-attempt terminalization
+- lease-loss cancellation and active-lease verification before processing
+  transitions, provider egress, artifact writes, and diagnostic writes
+- job-only and claimed terminal writes deny after lease expiry
 - rate-limit buckets
 - session snapshot integrity
 - prompt materialization inserts one canonical separator between phase
@@ -99,14 +133,22 @@ This is the required verification pyramid for the launch-candidate milestone.
 - completed-session idempotency
 - rerun isolation
 - provider rate-limit surfacing
-- phase-2 evaluation JSON validates, normalizes, and rejects missing, extra, or
-  duplicated candidate IDs before phase 3
+- phase-2 evaluation JSON validates, normalizes, and rejects duplicate, missing, or extra
+  candidate review rows and invalid scores before phase 3
 - phase-2 and phase-3 JSON payload builders preserve hostile strings as data
   and do not create delimiter-based instruction surfaces
 - bounded retry behavior
-- restart recovery from leased jobs
+- restart recovery from leased jobs until max attempts, then terminal failure
+- DB and supervisor startup terminalization of abandoned terminal-session
+  billing lookup diagnostics after bounded recovery retry, while nonterminal
+  pending rows remain untouched
 
 ## Browser
+
+Full-gate browser proof uses deterministic mocked API acceptance for UI-only
+state transitions. `pnpm local:live` projects the live authenticated smoke state
+and proves demo-cookie server authority, End Demo revocation, and stale-cookie
+denial against the running app.
 
 - BYOK setup, unlock, and lock
 - demo magic-link flow through cookie
@@ -121,13 +163,21 @@ This is the required verification pyramid for the launch-candidate milestone.
 
 ## Local Operator
 
-- `pnpm local:dev`, `pnpm local:live`, and full-gate e2e allocate a free
+- `pnpm dev`, `pnpm local:dev`, `pnpm local:live`, and full-gate e2e allocate a free
   loopback HTTP port instead of requiring `127.0.0.1:3000`
 - local proof projects one consistent `PORT` and `SEVEN_BASE_URL`
 - loopback `SEVEN_PUBLIC_ORIGIN` is materialized to the allocated local port;
   explicit non-loopback public origins are preserved
+- local operator preflight reads reserved runtime keys from `.env.local` rather
+  than ambient shell overrides
+- `pnpm local:gate --full` scrubs reserved runtime/projection keys before
+  build/test phases and lets full-gate e2e materialize its own projection
 - local proof isolates Next's dev `distDir` so an existing `apps/web`
   `.next/dev/lock` cannot break a launch-owned browser proof
+- `pnpm local:live` refuses to run while another same-repo `pnpm local:dev` or
+  `next dev` worker can claim jobs from the same database
+- Playwright self-start mode never reuses an ambient server; external-server
+  mode is explicit
 
 - `pnpm local:doctor` verifies:
   - Homebrew presence
@@ -135,20 +185,25 @@ This is the required verification pyramid for the launch-candidate milestone.
   - Node, pnpm, and uv
   - `psql` and `pg_isready`
   - Playwright browser availability
+  - `DATABASE_URL` targets the canonical local Postgres authority
   - `127.0.0.1:5432` is either free for `the-seven-postgres` or already owned
     by it
   - effective `.env.local` presence
   - minimal development keys
   - secret-slice mode no broader than `0600`
   - no placeholder credential values
-- `pnpm local:doctor --live` additionally verifies live BYOK, demo OpenRouter,
-  Resend, sender, and test-inbox key presence
-- `tiz-home --json secrets doctor` separately verifies the `ALL.env` master
-  pool, `THE_SEVEN__...` source keys, generated app slice, and projection drift
+- `pnpm local:doctor --live` verifies the same local readiness plus live BYOK,
+  demo OpenRouter, Resend, sender, and test-inbox key presence
+- workstation-specific secret-manager doctors are outside the tracked product
+  contract; The Seven consumes only the resulting `.env.local` variable names,
+  values, and file mode
 - `pnpm local:bootstrap -- --install` installs missing Homebrew-managed
   prerequisites and Playwright browsers
-- `pnpm local:db:up` fails fast if another service owns `127.0.0.1:5432`,
-  otherwise waits for a healthy compose-managed Postgres instance
+- `pnpm local:db:up` fails fast if `DATABASE_URL` points outside local compose
+  Postgres or if another service owns `127.0.0.1:5432`, otherwise waits for a
+  healthy compose-managed Postgres instance. A blank database is accepted. A
+  database with stale The Seven tables fails closed and instructs the operator
+  to run `pnpm local:db:reset`.
 - `pnpm local:db:reset` destroys the named volume and returns a blank database
 - `pnpm run db:bootstrap:check` verifies the squashed init migration against an
   isolated schema and fails fast if the canonical compose-managed database is
@@ -158,14 +213,33 @@ This is the required verification pyramid for the launch-candidate milestone.
 
 - `pnpm test:live` asserts:
   - BYOK auth validate against real OpenRouter
-  - model validate/autocomplete through the live catalog path
+  - every built-in model ID validates through the live catalog path
+  - model autocomplete through the live catalog path
   - council CRUD against the local app and local Postgres
-  - session submit plus `completed` terminal-state polling and diagnostics
-    retrieval
+  - demo Commons submit before the heavy BYOK completion sequence, then session
+    submit for every built-in BYOK tier plus `completed` terminal-state
+    polling, diagnostics retrieval, and no remaining pending billing lookup
+    diagnostics after bounded billing recovery
+  - completed BYOK and demo sessions include the exact selected built-in roster
+    in the run snapshot, six nonblank phase-1 response artifacts, six phase-2
+    review artifacts, schema-valid material review prose, one nonblank phase-3
+    synthesis artifact from the tier synthesizer, and successful provider-call
+    diagnostics for six phase-1 calls, six phase-2 calls, and the member-7
+    phase-3 synthesizer call
+  - provider-call diagnostics match the exact model ID for each expected roster
+    position, include catalog freshness, supported `reasoning`/`max_tokens`, the
+    tier-owned sent reasoning effort, sent `provider.require_parameters`, sent
+    `provider.ignore` for `amazon-bedrock` and `azure`, no denied parameters,
+    response IDs/models, no provider or choice errors, and exact
+    8192/16384/16384 provider output caps across expected phase calls
+  - phase-2 provider-call diagnostics include supported `response_format` and
+    `structured_outputs`, sent `response_format`, and provider parameter
+    enforcement
   - demo request/consume through real Resend outbound email plus Receiving API
     listing and body retrieval
   - BYOK and demo sessions must reach `completed`; failed sessions with provider
     diagnostics are evidence for debugging, not launch proof
+  - demo proof cannot be skipped by environment flag
 - `pnpm local:live` additionally asserts:
   - `pnpm local:doctor --live`
   - Playwright browser coverage against the externally started local server
@@ -178,13 +252,14 @@ The final delivery gate is:
 pnpm local:doctor
 pnpm local:db:up
 pnpm run db:bootstrap:check
-uv run --python 3.12 devtools/gate.py --full
+pnpm local:gate --full
 ```
 
 Live proof runs when live keys are present:
 
 ```bash
 pnpm local:doctor --live
+pnpm local:db:reset
 pnpm local:live
 ```
 
@@ -197,3 +272,19 @@ limits remain product behavior and are tested separately.
 All always-on commands must pass on a blank compose-managed Postgres database
 with the current init migration. Live commands must pass before launch when live
 keys are available.
+
+## Production Release Smoke
+
+After Railway deployment reports success, public smoke proves the public surface
+without provider, email, or authenticated side effects:
+
+- `GET https://theseven.ai/` returns a rendered app response.
+- unauthenticated `GET https://theseven.ai/api/v1/demo/session` returns the
+  declared 401 error envelope with a server trace header through the normal
+  ingress and rate-limit path.
+
+The executable public smoke command is:
+
+```bash
+pnpm public:smoke https://theseven.ai
+```

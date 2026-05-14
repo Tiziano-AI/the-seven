@@ -34,6 +34,18 @@ describe("Playwright config projection", () => {
     expect(config.webServer).toBeUndefined();
   });
 
+  test("self-start mode never reuses an ambient server", () => {
+    const config = buildPlaywrightConfig({
+      NODE_ENV: "test",
+      SEVEN_BASE_URL: "http://127.0.0.1:43217",
+    });
+
+    expect(config.webServer).toMatchObject({
+      reuseExistingServer: false,
+      url: "http://127.0.0.1:43217",
+    });
+  });
+
   test("fails closed when the base URL is missing", () => {
     expect(() => buildPlaywrightConfig({ NODE_ENV: "test" })).toThrow("SEVEN_BASE_URL is required");
   });

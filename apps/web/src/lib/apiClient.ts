@@ -5,6 +5,7 @@ import {
   type RouteContract,
   type RoutePathParams,
   type RouteSuccessPayload,
+  routeDeclaresDenial,
   successEnvelopeSchema,
 } from "@the-seven/contracts";
 import type { z } from "zod";
@@ -85,6 +86,11 @@ export async function apiRequest<Contract extends RouteContract>(input: {
 
   const data = await parseJsonResponse(response);
   if (response.ok) {
+    if (response.status !== input.route.status) {
+      throw new Error(
+        `API status mismatch: expected ${input.route.status}, received ${response.status}`,
+      );
+    }
     const envelope = successEnvelopeSchema.parse(data);
     if (envelope.result.resource !== input.route.resource) {
       throw new Error(
@@ -95,6 +101,17 @@ export async function apiRequest<Contract extends RouteContract>(input: {
   }
 
   const errorEnvelope = errorEnvelopeSchema.parse(data);
+  if (
+    !routeDeclaresDenial({
+      route: input.route,
+      status: response.status,
+      envelope: errorEnvelope,
+    })
+  ) {
+    throw new Error(
+      `API denial mismatch: ${input.route.method} ${input.route.path} returned ${response.status} ${errorEnvelope.kind}`,
+    );
+  }
   throw new ApiErrorResponse({
     kind: errorEnvelope.kind,
     message: errorEnvelope.message,

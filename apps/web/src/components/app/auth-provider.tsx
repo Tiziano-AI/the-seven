@@ -1,5 +1,6 @@
 "use client";
 
+import type { DemoSessionPayload } from "@the-seven/contracts";
 import {
   createContext,
   useCallback,
@@ -12,11 +13,9 @@ import {
 import { fetchDemoSession, logoutDemoSession } from "@/lib/api";
 import { clearEncryptedKey } from "@/lib/crypto";
 import { writeActiveSessionId } from "@/lib/storage";
+import { shouldClearLocalDemoSessionAfterLogoutError } from "./demo-logout";
 
-type DemoSession = Readonly<{
-  email: string;
-  expiresAt: number;
-}>;
+type DemoSession = DemoSessionPayload;
 
 type AuthMode = "none" | "byok" | "demo";
 
@@ -80,8 +79,16 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
   }, []);
 
   const clearDemoSession = useCallback(async () => {
-    await logoutDemoSession();
-    clearLocalDemoSession();
+    try {
+      await logoutDemoSession();
+      clearLocalDemoSession();
+    } catch (error) {
+      if (shouldClearLocalDemoSessionAfterLogoutError(error)) {
+        clearLocalDemoSession();
+        return;
+      }
+      throw error;
+    }
   }, [clearLocalDemoSession]);
 
   const resetExpiredDemoSession = useCallback(() => {

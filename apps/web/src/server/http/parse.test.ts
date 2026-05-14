@@ -3,7 +3,7 @@ import { z } from "zod";
 
 vi.mock("server-only", () => ({}));
 
-import { parseJsonBody } from "./parse";
+import { parseJsonBody, parseNoBody } from "./parse";
 
 const payloadSchema = z.object({
   name: z.string().min(1),
@@ -24,6 +24,7 @@ describe("parseJsonBody", () => {
       kind: "invalid_input",
       status: 400,
       details: {
+        reason: "invalid_json",
         issues: [{ path: "", message: "Request body must be valid JSON" }],
       },
     });
@@ -60,6 +61,9 @@ describe("parseJsonBody", () => {
     ).rejects.toMatchObject({
       kind: "invalid_input",
       status: 413,
+      details: {
+        reason: "body_too_large",
+      },
     });
   });
 
@@ -77,6 +81,9 @@ describe("parseJsonBody", () => {
     ).rejects.toMatchObject({
       kind: "invalid_input",
       status: 413,
+      details: {
+        reason: "body_too_large",
+      },
     });
   });
 
@@ -94,6 +101,7 @@ describe("parseJsonBody", () => {
       kind: "invalid_input",
       status: 415,
       details: {
+        reason: "invalid_content_type",
         issues: [
           {
             path: "headers.content-type",
@@ -102,5 +110,55 @@ describe("parseJsonBody", () => {
         ],
       },
     });
+  });
+
+  test("rejects content types that only mention JSON as a parameter", async () => {
+    await expect(
+      parseJsonBody(
+        new Request("https://example.com", {
+          method: "POST",
+          headers: { "content-type": "text/plain; foo=application/json" },
+          body: '{"name":"ok"}',
+        }),
+        payloadSchema,
+      ),
+    ).rejects.toMatchObject({
+      kind: "invalid_input",
+      status: 415,
+      details: {
+        reason: "invalid_content_type",
+      },
+    });
+  });
+
+  test("no-body routes reject non-empty JSON bodies", async () => {
+    await expect(
+      parseNoBody(
+        new Request("https://example.com", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: '{"unexpected":true}',
+        }),
+      ),
+    ).rejects.toMatchObject({
+      kind: "invalid_input",
+      status: 400,
+      details: {
+        reason: "invalid_request",
+        issues: [{ path: "", message: "Request body must be empty" }],
+      },
+    });
+  });
+
+  test("no-body routes accept empty JSON objects", async () => {
+    await expect(
+      parseNoBody(
+        new Request("https://example.com", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        }),
+      ),
+    ).resolves.toBeUndefined();
   });
 });

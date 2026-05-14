@@ -4,6 +4,7 @@ import {
   LIVE_PROOF_REQUIRED_KEYS,
   liveProof,
   operatorDoctor,
+  parsePublicOrigin,
   serverRuntime,
 } from "./env";
 
@@ -19,7 +20,6 @@ const baseServerEnv = {
 
 const liveEnv = {
   ...baseServerEnv,
-  SEVEN_BASE_URL: "http://127.0.0.1:43217",
   SEVEN_PUBLIC_ORIGIN: "https://theseven.ai",
   SEVEN_BYOK_KEY: "sk-or-byok",
   SEVEN_DEMO_ENABLED: "1",
@@ -40,12 +40,29 @@ describe("env materialization", () => {
   });
 
   test("rejects public origins with paths or query strings", () => {
-    expect(() =>
-      serverRuntime({
-        ...baseServerEnv,
-        SEVEN_PUBLIC_ORIGIN: "https://theseven.ai/app?x=1",
-      }),
-    ).toThrow("SEVEN_PUBLIC_ORIGIN must be a bare origin");
+    const invalidOrigins = [
+      "https://theseven.ai/app?x=1",
+      "https://theseven.ai//",
+      "https://theseven.ai#/",
+      "https://theseven.ai/#/",
+    ];
+    for (const origin of invalidOrigins) {
+      expect(() =>
+        serverRuntime({
+          ...baseServerEnv,
+          SEVEN_PUBLIC_ORIGIN: origin,
+        }),
+      ).toThrow("SEVEN_PUBLIC_ORIGIN must be a bare origin");
+    }
+  });
+
+  test("rejects public origins with credentials or non-HTTP schemes", () => {
+    expect(() => parsePublicOrigin("https://user:pass@theseven.ai")).toThrow(
+      "SEVEN_PUBLIC_ORIGIN must not include credentials",
+    );
+    expect(() => parsePublicOrigin("ftp://theseven.ai")).toThrow(
+      "SEVEN_PUBLIC_ORIGIN must use http:// or https://",
+    );
   });
 
   test("rejects loopback public origins in production", () => {
@@ -78,19 +95,29 @@ describe("env materialization", () => {
     ).toThrow();
   });
 
-  test("requires explicit local transport URL for cli and live proof profiles", () => {
+  test("requires explicit local transport URL for cli only", () => {
     expect(() =>
       cliRuntime({
         NODE_ENV: "test",
         SEVEN_BYOK_KEY: "sk-or",
       }),
     ).toThrow();
+  });
+
+  test("does not treat SEVEN_BASE_URL as a live credential", () => {
+    expect(liveProof(liveEnv).byokKey).toBe("sk-or-byok");
     expect(() =>
       liveProof({
         ...liveEnv,
         SEVEN_BASE_URL: "",
       }),
-    ).toThrow();
+    ).not.toThrow();
+  });
+
+  test("server runtime requires an explicit public origin from config or launch projection", () => {
+    const { SEVEN_PUBLIC_ORIGIN: _unused, ...missingPublicOrigin } = baseServerEnv;
+
+    expect(() => serverRuntime(missingPublicOrigin)).toThrow();
   });
 
   test("materializes live proof and operator profiles with the same public origin rule", () => {

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { serverRuntime } from "@the-seven/config";
+import type { AuthPolicy } from "@the-seven/contracts";
 import { getOrCreateUser } from "@the-seven/db";
 import type { NextRequest } from "next/server";
 import { validateOpenRouterApiKey } from "../adapters/openrouter";
@@ -41,8 +42,15 @@ function parseAuthorizationHeader(value: string | null): ParsedAuthorization {
   return { kind: "invalid" };
 }
 
-export async function resolveAuthContext(request: NextRequest, now: Date): Promise<AuthContext> {
-  const parsed = parseAuthorizationHeader(request.headers.get("authorization"));
+export async function resolveAuthContext(
+  request: NextRequest,
+  now: Date,
+  policy: AuthPolicy = "any",
+): Promise<AuthContext> {
+  const parsed =
+    policy === "demo-cookie"
+      ? ({ kind: "none" } as const)
+      : parseAuthorizationHeader(request.headers.get("authorization"));
   if (parsed.kind === "invalid") {
     return { kind: "invalid", reason: "invalid_token" };
   }
