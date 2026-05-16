@@ -99,6 +99,13 @@ describe("demoAuth service", () => {
         payload: expect.objectContaining({
           from: "hello@example.com",
           to: ["user@example.com"],
+          subject: "Your The Seven demo seal",
+          html: expect.stringMatching(
+            /one-time demo seal[\s\S]*24-hour Commons Council demo seal/u,
+          ),
+          text: expect.stringMatching(
+            /Open the Commons Council demo: http:\/\/localhost:3000\/api\/v1\/demo\/consume\?token=demo-token[\s\S]*24-hour Commons Council demo seal/u,
+          ),
         }),
       }),
     );

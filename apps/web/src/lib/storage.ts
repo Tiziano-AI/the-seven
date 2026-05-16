@@ -1,6 +1,7 @@
 export const ACTIVE_SESSION_ID_KEY = "seven.active_session_id";
 export const DRAFT_QUERY_KEY = "seven.draft.query";
 export const LAST_COUNCIL_REF_KEY = "seven.last_council_ref";
+export const FOUNDING_COUNCIL_CHOICE = "built_in:founding";
 
 export function readActiveSessionId() {
   if (typeof window === "undefined") {

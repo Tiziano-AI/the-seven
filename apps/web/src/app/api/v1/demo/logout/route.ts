@@ -1,9 +1,9 @@
 import { serverRuntime } from "@the-seven/config";
-import { forbiddenDetails, routeContract, unauthorizedDetails } from "@the-seven/contracts";
+import { routeContract, unauthorizedDetails } from "@the-seven/contracts";
 import type { NextRequest } from "next/server";
 import { clearDemoSessionCookie } from "@/server/http/demoCookie";
 import { EdgeError } from "@/server/http/errors";
-import { requireAuth } from "@/server/http/requireAuth";
+import { requireDemoAuth } from "@/server/http/requireAuth";
 import { handleRoute } from "@/server/http/route";
 import { endDemoSession } from "@/server/services/demoAuth";
 
@@ -11,15 +11,7 @@ export async function POST(request: NextRequest) {
   const response = await handleRoute(request, {
     route: routeContract("demo.logout"),
     handler: async (ctx) => {
-      const auth = requireAuth(ctx.auth);
-      if (auth.kind !== "demo") {
-        throw new EdgeError({
-          kind: "forbidden",
-          message: "Demo session required",
-          details: forbiddenDetails("demo_required"),
-          status: 403,
-        });
-      }
+      const auth = requireDemoAuth(ctx.auth);
       const revoked = await endDemoSession({
         sessionId: auth.demoSessionId,
         now: ctx.now,
@@ -35,7 +27,7 @@ export async function POST(request: NextRequest) {
       return { success: true };
     },
   });
-  if (response.ok) {
+  if (response.ok || response.status === 401) {
     clearDemoSessionCookie(response, serverRuntime());
   }
   return response;

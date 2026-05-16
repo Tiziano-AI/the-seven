@@ -1,6 +1,7 @@
 import { serverRuntime } from "@the-seven/config";
 import {
   forbiddenDetails,
+  invalidInputDetails,
   rateLimitedDetails,
   routeContract,
   unauthorizedDetails,
@@ -10,7 +11,6 @@ import { NextResponse } from "next/server";
 import { redactRateLimitScope } from "@/server/domain/redaction";
 import { setDemoSessionCookie } from "@/server/http/demoCookie";
 import { EdgeError } from "@/server/http/errors";
-import { parseIngressHeaders } from "@/server/http/ingress";
 import { handleRedirectRoute } from "@/server/http/route";
 import { consumeDemoAuthLink, DemoAuthError } from "@/server/services/demoAuth";
 import { admitDemoConsume } from "@/server/services/demoLimits";
@@ -110,17 +110,27 @@ export async function GET(request: NextRequest) {
           status: 403,
         });
       }
-      const isApiIngress = parseIngressHeaders(req).source === "api";
-      const token = req.nextUrl.searchParams.get("token");
-      if ((!token || token.trim() === "") && !isApiIngress) {
+    },
+    handler: async (ctx, _rawRequest, input) => {
+      const env = serverRuntime();
+      const token = input.query.token;
+      if (!token) {
+        if (ctx.ingress.source === "api") {
+          throw new EdgeError({
+            kind: "invalid_input",
+            message: "Invalid query parameters",
+            details: invalidInputDetails({
+              reason: "invalid_request",
+              issues: [{ path: "query.token", message: "Required" }],
+            }),
+            status: 400,
+          });
+        }
         return demoLinkRecoveryRedirect({
           publicOrigin: env.publicOrigin,
           state: "invalid",
         });
       }
-    },
-    handler: async (ctx, _rawRequest, input) => {
-      const env = serverRuntime();
 
       const limited = await admitDemoConsume({
         ip: ctx.ip,
@@ -142,7 +152,7 @@ export async function GET(request: NextRequest) {
 
       try {
         const session = await consumeDemoAuthLink({
-          token: input.query.token,
+          token,
           consumedIp: ctx.ip,
           now: ctx.now,
         });

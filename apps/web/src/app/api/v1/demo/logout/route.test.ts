@@ -86,7 +86,7 @@ describe("demo logout route", () => {
     expect(cookieMocks.clearDemoSessionCookie).toHaveBeenCalledWith(response, { nodeEnv: "test" });
   });
 
-  test("does not clear the demo cookie when revocation loses the race", async () => {
+  test("clears the demo cookie when revocation proves the cookie is stale", async () => {
     serviceMocks.endDemoSession.mockResolvedValue(false);
     mockHandleRouteWithAuth({ kind: "demo", demoSessionId: 11 });
 
@@ -95,22 +95,22 @@ describe("demo logout route", () => {
     );
 
     expect(response.status).toBe(401);
-    expect(cookieMocks.clearDemoSessionCookie).not.toHaveBeenCalled();
+    expect(cookieMocks.clearDemoSessionCookie).toHaveBeenCalledWith(response, { nodeEnv: "test" });
   });
 
-  test("does not revoke or clear for non-demo authenticated sessions", async () => {
+  test("clears stale demo cookies only after same-origin admission reaches auth denial", async () => {
     mockHandleRouteWithAuth({ kind: "byok" });
 
     const response = await POST(
       new NextRequest(new Request("http://localhost/api/v1/demo/logout")),
     );
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(401);
     expect(serviceMocks.endDemoSession).not.toHaveBeenCalled();
-    expect(cookieMocks.clearDemoSessionCookie).not.toHaveBeenCalled();
+    expect(cookieMocks.clearDemoSessionCookie).toHaveBeenCalledWith(response, { nodeEnv: "test" });
   });
 
-  test("does not revoke or clear for missing authentication", async () => {
+  test("clears missing-auth stale demo cookies only after same-origin admission reaches auth denial", async () => {
     mockHandleRouteWithAuth({ kind: "none" });
 
     const response = await POST(
@@ -119,6 +119,6 @@ describe("demo logout route", () => {
 
     expect(response.status).toBe(401);
     expect(serviceMocks.endDemoSession).not.toHaveBeenCalled();
-    expect(cookieMocks.clearDemoSessionCookie).not.toHaveBeenCalled();
+    expect(cookieMocks.clearDemoSessionCookie).toHaveBeenCalledWith(response, { nodeEnv: "test" });
   });
 });

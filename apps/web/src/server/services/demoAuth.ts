@@ -30,10 +30,33 @@ function addHours(date: Date, hours: number): Date {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildDemoEmail(input: { email: string; link: string }) {
-  const subject = "Your demo link for The Seven";
-  const html = `<p>Open the demo: <a href="${input.link}">${input.link}</a></p>`;
-  const text = `Open the demo: ${input.link}\nRequested for: ${input.email}`;
+  const subject = "Your The Seven demo seal";
+  const escapedLink = escapeHtml(input.link);
+  const escapedEmail = escapeHtml(input.email);
+  const html = [
+    "<p>Your one-time demo seal is ready.</p>",
+    `<p><a href="${escapedLink}">Open the Commons Council demo</a></p>`,
+    `<p>This link expires in ${DEMO_AUTH_LINK_TTL_HOURS} hours and opens a ${DEMO_SESSION_TTL_HOURS}-hour Commons Council demo seal using The Seven's provider credentials.</p>`,
+    `<p>Requested for: ${escapedEmail}</p>`,
+    "<p>For Founding, Lantern, custom councils, or your own provider authority, unlock with Bring Your Own Key instead.</p>",
+  ].join("");
+  const text = [
+    "Your one-time demo seal is ready.",
+    `Open the Commons Council demo: ${input.link}`,
+    `This link expires in ${DEMO_AUTH_LINK_TTL_HOURS} hours and opens a ${DEMO_SESSION_TTL_HOURS}-hour Commons Council demo seal using The Seven's provider credentials.`,
+    `Requested for: ${input.email}`,
+    "For Founding, Lantern, custom councils, or your own provider authority, unlock with Bring Your Own Key instead.",
+  ].join("\n");
   return { subject, html, text };
 }
 

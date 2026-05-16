@@ -1,5 +1,16 @@
-import { PHASE_TWO_CANDIDATE_IDS } from "@the-seven/contracts";
+import {
+  outputFormatsPayloadSchema,
+  outputFormatsSchema,
+  PHASE_TWO_CANDIDATE_IDS,
+  PHASE_TWO_REVIEW_LIST_MAX_ITEMS,
+  PHASE_TWO_SUMMARY_LIST_MAX_ITEMS,
+  PHASE_TWO_TEXT_MAX_CHARS,
+  PHASE_TWO_TEXT_MIN_CHARS,
+  PHASE_TWO_VERDICT_INPUT_MAX_CHARS,
+  sessionSnapshotSchema,
+} from "@the-seven/contracts";
 import { describe, expect, test } from "vitest";
+import { BUILT_IN_COUNCILS } from "./builtInCouncils";
 import { DEFAULT_OUTPUT_FORMATS, DEFAULT_PHASE_PROMPTS } from "./prompts";
 
 describe("default prompt corpus", () => {
@@ -18,19 +29,35 @@ describe("default prompt corpus", () => {
       "Each review row must include `candidate_id`, `score`, `strengths`, `weaknesses`, `critical_errors`, `missing_evidence`, and `verdict_input`.",
     );
     expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain(
-      "`strengths` and `weaknesses` must each contain at least one material candidate-specific prose item",
+      `\`strengths\` and \`weaknesses\` must each contain 1-${PHASE_TWO_REVIEW_LIST_MAX_ITEMS} concrete candidate-specific prose items.`,
     );
     expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain(
-      "Use empty arrays only for `critical_errors`, `missing_evidence`, and `major_disagreements`",
+      `\`critical_errors\` and \`missing_evidence\` must each contain 0-${PHASE_TWO_REVIEW_LIST_MAX_ITEMS} concrete candidate-specific prose items.`,
     );
     expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain(
-      "`best_final_answer_inputs` must contain material prose",
+      `\`best_final_answer_inputs\` must contain 1-${PHASE_TWO_SUMMARY_LIST_MAX_ITEMS} concrete prose items`,
     );
-    expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain("at least two distinct words");
+    expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain(
+      `\`major_disagreements\` must contain 0-${PHASE_TWO_SUMMARY_LIST_MAX_ITEMS} concrete prose items.`,
+    );
+    expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain(
+      `Every string in review lists, \`best_final_answer_inputs\`, and \`major_disagreements\` must be ${PHASE_TWO_TEXT_MIN_CHARS}-${PHASE_TWO_TEXT_MAX_CHARS} characters`,
+    );
+    expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain(
+      `Every \`verdict_input\` string must be ${PHASE_TWO_TEXT_MIN_CHARS}-${PHASE_TWO_VERDICT_INPUT_MAX_CHARS} characters`,
+    );
     expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain("The app derives the ranking from the scores.");
-    expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain('"candidate_id": "A"');
+    for (const candidateId of PHASE_TWO_CANDIDATE_IDS) {
+      expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain(`"candidate_id": "${candidateId}"`);
+    }
     expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain(
-      "Do not use placeholder values such as `...`, `A`, `1`, `n/a`, `same same same`, or field labels as content.",
+      "Do not use placeholder values such as `...`, `A`, `1`, `n/a`, or `same same same`.",
+    );
+    expect(DEFAULT_OUTPUT_FORMATS.phase2).toContain(
+      "Use the strongest concrete evidence, reasoning, or caveat from the highest-scoring candidates.",
+    );
+    expect(DEFAULT_OUTPUT_FORMATS.phase2).not.toContain(
+      "Use the strongest concrete implementation path from Candidate A.",
     );
     expect(DEFAULT_OUTPUT_FORMATS.phase2).not.toContain('["..."]');
     expect(DEFAULT_OUTPUT_FORMATS.phase2).not.toContain('": "..."');
@@ -38,6 +65,28 @@ describe("default prompt corpus", () => {
     for (const value of Object.values(DEFAULT_OUTPUT_FORMATS)) {
       expect(value).toBe(value.trimStart());
     }
+  });
+
+  test("default output formats round-trip through public contract schemas", () => {
+    expect(outputFormatsSchema.parse(DEFAULT_OUTPUT_FORMATS)).toEqual(DEFAULT_OUTPUT_FORMATS);
+    expect(
+      outputFormatsPayloadSchema.parse({ outputFormats: DEFAULT_OUTPUT_FORMATS }).outputFormats,
+    ).toEqual(DEFAULT_OUTPUT_FORMATS);
+    expect(
+      sessionSnapshotSchema.parse({
+        version: 1,
+        createdAt: "2026-05-16T12:00:00.000Z",
+        query: "Which course should the council recommend?",
+        userMessage: "Which course should the council recommend?",
+        attachments: [],
+        outputFormats: DEFAULT_OUTPUT_FORMATS,
+        council: {
+          nameAtRun: BUILT_IN_COUNCILS.commons.name,
+          phasePrompts: DEFAULT_PHASE_PROMPTS,
+          members: BUILT_IN_COUNCILS.commons.members,
+        },
+      }).outputFormats,
+    ).toEqual(DEFAULT_OUTPUT_FORMATS);
   });
 
   test("phase 3 prompt instructs the synthesizer to cite candidates and reviewers", () => {
@@ -48,10 +97,10 @@ describe("default prompt corpus", () => {
 
   test("phase 2 prompt does not permit empty required review categories", () => {
     expect(DEFAULT_PHASE_PROMPTS.phase2).toContain(
-      "Every candidate review must include at least one material `strengths` item and at least one material `weaknesses` item",
+      "Every candidate review must include bounded material `strengths` and `weaknesses` items",
     );
     expect(DEFAULT_PHASE_PROMPTS.phase2).toContain(
-      "`strengths`, `weaknesses`, and `verdict_input` require material candidate-specific prose",
+      "`strengths`, `weaknesses`, and `verdict_input` require concrete candidate-specific prose",
     );
     expect(DEFAULT_PHASE_PROMPTS.phase2).toContain(
       "Use empty arrays only for `critical_errors`, `missing_evidence`, and `major_disagreements`",

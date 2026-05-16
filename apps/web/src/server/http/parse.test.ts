@@ -30,6 +30,26 @@ describe("parseJsonBody", () => {
     });
   });
 
+  test("maps whitespace-only JSON bodies to invalid_json", async () => {
+    await expect(
+      parseJsonBody(
+        new Request("https://example.com", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "   ",
+        }),
+        payloadSchema,
+      ),
+    ).rejects.toMatchObject({
+      kind: "invalid_input",
+      status: 400,
+      details: {
+        reason: "invalid_json",
+        issues: [{ path: "", message: "Request body must be valid JSON" }],
+      },
+    });
+  });
+
   test("maps empty bodies through schema validation", async () => {
     await expect(
       parseJsonBody(
@@ -150,7 +170,7 @@ describe("parseJsonBody", () => {
     });
   });
 
-  test("no-body routes accept empty JSON objects", async () => {
+  test("no-body routes reject explicit empty JSON objects", async () => {
     await expect(
       parseNoBody(
         new Request("https://example.com", {
@@ -159,6 +179,31 @@ describe("parseJsonBody", () => {
           body: "{}",
         }),
       ),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({
+      kind: "invalid_input",
+      status: 400,
+      details: {
+        reason: "invalid_request",
+        issues: [{ path: "", message: "Request body must be empty" }],
+      },
+    });
+  });
+
+  test("no-body routes reject whitespace-only bodies", async () => {
+    await expect(
+      parseNoBody(
+        new Request("https://example.com", {
+          method: "POST",
+          body: "   ",
+        }),
+      ),
+    ).rejects.toMatchObject({
+      kind: "invalid_input",
+      status: 400,
+      details: {
+        reason: "invalid_request",
+        issues: [{ path: "", message: "Request body must be empty" }],
+      },
+    });
   });
 });

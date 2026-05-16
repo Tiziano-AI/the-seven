@@ -32,13 +32,37 @@ const LANTERN_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
 };
 
 const COMMONS_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
-  1: "qwen/qwen3.6-flash",
+  1: "qwen/qwen3.6-35b-a3b",
   2: "google/gemini-3.1-flash-lite",
   3: "openai/gpt-5-mini",
   4: "deepseek/deepseek-v4-flash",
   5: "openai/gpt-5-nano",
   6: "mistralai/mistral-small-2603",
   7: "minimax/minimax-m2.7",
+};
+
+const BUILT_IN_MODEL_NAMES: Readonly<Record<string, string>> = {
+  "openai/gpt-5.5": "GPT-5.5",
+  "anthropic/claude-opus-4.7": "Claude Opus 4.7",
+  "google/gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
+  "moonshotai/kimi-k2.6": "Kimi K2.6",
+  "xiaomi/mimo-v2.5-pro": "MiMo V2.5 Pro",
+  "x-ai/grok-4.3": "Grok 4.3",
+  "openai/gpt-5.5-pro": "GPT-5.5 Pro",
+  "anthropic/claude-sonnet-4.6": "Claude Sonnet 4.6",
+  "deepseek/deepseek-v4-pro": "DeepSeek V4 Pro",
+  "z-ai/glm-5.1": "GLM 5.1",
+  "qwen/qwen3.6-plus": "Qwen3.6 Plus",
+  "google/gemini-3-flash-preview": "Gemini 3 Flash Preview",
+  "mistralai/mistral-medium-3-5": "Mistral Medium 3.5",
+  "qwen/qwen3.6-max-preview": "Qwen3.6 Max Preview",
+  "qwen/qwen3.6-35b-a3b": "Qwen3.6 35B A3B",
+  "google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite",
+  "openai/gpt-5-mini": "GPT-5 Mini",
+  "deepseek/deepseek-v4-flash": "DeepSeek V4 Flash",
+  "openai/gpt-5-nano": "GPT-5 Nano",
+  "mistralai/mistral-small-2603": "Mistral Small 2603",
+  "minimax/minimax-m2.7": "MiniMax M2.7",
 };
 
 export type BuiltInCouncilTemplate = Readonly<{
@@ -143,6 +167,6 @@ export const BUILT_IN_MODEL_SEEDS: ReadonlyArray<ProviderModelSeed> = Object.val
 ).flatMap((council) =>
   council.members.map((member) => ({
     modelId: member.model.modelId,
-    modelName: member.model.modelId,
+    modelName: BUILT_IN_MODEL_NAMES[member.model.modelId] ?? member.model.modelId,
   })),
 );

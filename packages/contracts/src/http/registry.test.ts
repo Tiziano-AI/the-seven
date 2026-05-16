@@ -3,19 +3,37 @@ import { ROUTE_CONTRACTS, routeContract, routeDeclaresDenial } from "./registry"
 
 const commonDenialRows = [
   { kind: "invalid_input", status: 400, reason: "invalid_request" },
-  { kind: "invalid_input", status: 400, reason: "invalid_json" },
   { kind: "invalid_input", status: 400, reason: "invalid_ingress" },
   { kind: "invalid_input", status: 413, reason: "body_too_large" },
-  { kind: "invalid_input", status: 415, reason: "invalid_content_type" },
   { kind: "rate_limited", status: 429, reason: "rate_limited" },
   { kind: "internal_error", status: 500, reason: "internal_error" },
 ] as const;
+const jsonBodyDenialRows = [
+  { kind: "invalid_input", status: 400, reason: "invalid_json" },
+  { kind: "invalid_input", status: 415, reason: "invalid_content_type" },
+] as const;
+
+function usesJsonBody(route: (typeof ROUTE_CONTRACTS)[number]) {
+  return !route.bodySchema.safeParse({}).success;
+}
 
 describe("route registry denials", () => {
   test("every route declares adapter-level parse and ingress denials", () => {
     for (const route of ROUTE_CONTRACTS) {
       for (const row of commonDenialRows) {
         expect(route.denials, route.id).toContainEqual(row);
+      }
+    }
+  });
+
+  test("JSON body denials are declared only for routes that require JSON parsing", () => {
+    for (const route of ROUTE_CONTRACTS) {
+      for (const row of jsonBodyDenialRows) {
+        if (usesJsonBody(route)) {
+          expect(route.denials, route.id).toContainEqual(row);
+        } else {
+          expect(route.denials, route.id).not.toContainEqual(row);
+        }
       }
     }
   });

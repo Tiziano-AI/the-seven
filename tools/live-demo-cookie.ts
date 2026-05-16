@@ -344,7 +344,7 @@ async function runPlaywrightSmoke(input: {
   sessionId: number;
   sessionQuery: string;
 }) {
-  await runCommandOrThrow("pnpm", ["test:e2e"], {
+  await runCommandOrThrow("pnpm", ["exec", "playwright", "test", "apps/web/e2e/smoke.spec.ts"], {
     env: {
       ...process.env,
       SEVEN_PLAYWRIGHT_EXTERNAL_SERVER: "1",

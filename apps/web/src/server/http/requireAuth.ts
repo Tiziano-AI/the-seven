@@ -6,6 +6,7 @@ import { EdgeError } from "./errors";
 
 export type AuthenticatedContext = Extract<AuthContext, { kind: "byok" | "demo" }>;
 export type ByokAuthenticatedContext = Extract<AuthContext, { kind: "byok" }>;
+export type DemoAuthenticatedContext = Extract<AuthContext, { kind: "demo" }>;
 
 export function requireAuth(auth: AuthContext): AuthenticatedContext {
   if (auth.kind === "byok" || auth.kind === "demo") {
@@ -30,6 +31,18 @@ export function requireByokAuth(auth: AuthContext): ByokAuthenticatedContext {
       details: forbiddenDetails("demo_not_allowed"),
       status: 403,
     });
+  }
+  throw new EdgeError({
+    kind: "unauthorized",
+    message: "Missing or invalid authentication",
+    details: unauthorizedDetails(auth.kind === "invalid" ? auth.reason : "missing_auth"),
+    status: 401,
+  });
+}
+
+export function requireDemoAuth(auth: AuthContext): DemoAuthenticatedContext {
+  if (auth.kind === "demo") {
+    return auth;
   }
   throw new EdgeError({
     kind: "unauthorized",

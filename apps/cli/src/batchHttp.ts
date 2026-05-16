@@ -3,13 +3,16 @@ import {
   buildRoutePath,
   type CouncilRef,
   errorEnvelopeSchema,
+  hasJsonApiNoStore,
   INGRESS_SOURCE_CLI,
+  jsonApiCacheControl,
   type RouteContract,
   type RoutePathParams,
   type RouteSuccessPayload,
   routeContract,
   routeDeclaresDenial,
   successPayloadSchema,
+  traceHeaderMismatchMessage,
 } from "@the-seven/contracts";
 import { z } from "zod";
 
@@ -73,10 +76,21 @@ function invalidResponseError(status: number | null, message: string): BatchErro
   };
 }
 
+function validateNoStoreHeader(route: RouteContract, response: Response): BatchError | null {
+  if (hasJsonApiNoStore(response.headers.get("cache-control"))) {
+    return null;
+  }
+  return invalidResponseError(
+    response.status,
+    `${route.resource} response did not return Cache-Control: ${jsonApiCacheControl}`,
+  );
+}
+
 function extractBatchError(
   route: RouteContract,
   payload: unknown,
   status: number | null,
+  traceHeader: string | null,
 ): BatchError {
   const parsed = errorEnvelopeSchema.safeParse(payload);
   if (
@@ -85,6 +99,14 @@ function extractBatchError(
     !routeDeclaresDenial({ route, status, envelope: parsed.data })
   ) {
     return invalidResponseError(status, "Request failed");
+  }
+  const traceMessage = traceHeaderMismatchMessage({
+    traceHeader,
+    envelopeTraceId: parsed.data.trace_id,
+    context: route.resource,
+  });
+  if (traceMessage !== null) {
+    return invalidResponseError(status, traceMessage);
   }
   return {
     kind: parsed.data.kind,
@@ -120,9 +142,21 @@ async function requestRoute<Contract extends RouteContract>(input: {
     },
   );
 
+  const cacheError = validateNoStoreHeader(input.route, response);
   const data = await readJson(response);
+  if (cacheError) {
+    return { ok: false, error: cacheError };
+  }
   if (!response.ok) {
-    return { ok: false, error: extractBatchError(input.route, data, response.status) };
+    return {
+      ok: false,
+      error: extractBatchError(
+        input.route,
+        data,
+        response.status,
+        response.headers.get("x-trace-id"),
+      ),
+    };
   }
   if (response.status !== input.route.status) {
     return {
@@ -136,6 +170,17 @@ async function requestRoute<Contract extends RouteContract>(input: {
     return {
       ok: false,
       error: invalidResponseError(response.status, `Invalid ${input.route.resource} response`),
+    };
+  }
+  const traceMessage = traceHeaderMismatchMessage({
+    traceHeader: response.headers.get("x-trace-id"),
+    envelopeTraceId: parsed.data.trace_id,
+    context: input.route.resource,
+  });
+  if (traceMessage !== null) {
+    return {
+      ok: false,
+      error: invalidResponseError(response.status, traceMessage),
     };
   }
 

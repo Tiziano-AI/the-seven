@@ -11,20 +11,27 @@ export function SessionDetailScreen(props: { sessionId: number }) {
 
   if (!auth.isAuthenticated) {
     return (
-      <Card className="p-6">
-        <p className="text-sm text-[var(--muted-foreground)]">
-          Unlock BYOK or start a demo session to inspect this run.
-        </p>
-      </Card>
+      <div>
+        <h1 className="sr-only">Manuscript</h1>
+        <Card className="p-6">
+          <p className="text-sm text-[var(--text-muted)]">
+            Unlock BYOK or start a demo session to inspect this run.
+          </p>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <SessionInspector
-      authenticated={auth.isAuthenticated}
-      authHeader={auth.authHeader}
-      sessionId={props.sessionId}
-      onSpawnedSession={(sessionId) => router.push(`/sessions/${sessionId}`)}
-    />
+    <div>
+      <h1 className="sr-only">Manuscript</h1>
+      <SessionInspector
+        authenticated={auth.isAuthenticated}
+        authHeader={auth.authHeader}
+        sessionId={props.sessionId}
+        onAuthorityDenial={auth.handleAuthorityDenial}
+        onSpawnedSession={(sessionId) => router.push(`/sessions/${sessionId}`)}
+      />
+    </div>
   );
 }

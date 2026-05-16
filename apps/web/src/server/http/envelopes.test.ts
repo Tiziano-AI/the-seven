@@ -3,7 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { jsonError } from "./envelopes";
+import { jsonError, jsonSuccess } from "./envelopes";
 
 describe("HTTP envelopes", () => {
   test("redacts public error details before writing JSON", async () => {
@@ -34,5 +34,20 @@ describe("HTTP envelopes", () => {
         message: "Invalid file [redacted]",
       },
     ]);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  test("marks success envelopes as uncacheable browser authority state", async () => {
+    const response = jsonSuccess({
+      traceId: "trace-2",
+      resource: "demo.session",
+      payload: { email: "reader@example.com", expiresAt: 1 },
+      now: new Date("2026-05-12T08:00:00.000Z"),
+    });
+
+    const envelope = await response.json();
+
+    expect(envelope.result.resource).toBe("demo.session");
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 });

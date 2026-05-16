@@ -2,39 +2,54 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "./auth-provider";
+import { DemoEndConfirmation } from "./demo-end-confirmation";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Ask" },
-  { href: "/councils", label: "Councils" },
-  { href: "/sessions", label: "Sessions" },
+  { href: "/", label: "Petition Desk" },
+  { href: "/councils", label: "Council Library" },
+  { href: "/sessions", label: "Archive" },
 ] as const;
+
+function formatDemoExpiry(expiresAt: number): string {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(expiresAt));
+}
 
 export function AppShell(props: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
   const auth = useAuth();
+  const [pendingAction, setPendingAction] = useState<"lock" | "demo" | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [endingDemo, setEndingDemo] = useState(false);
 
   return (
     <div className="min-h-screen">
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
       <div className="mx-auto flex min-h-screen w-full max-w-[1320px] flex-col px-5 pb-10 pt-6 md:px-8">
-        <header className="mb-6 border-b border-[var(--border)]/70 pb-5">
-          <div className="flex flex-wrap items-center justify-between gap-6">
+        <header className="mb-7 border-b border-[var(--border)] pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <div className="font-display text-5xl font-bold leading-tight text-[var(--gold)] md:text-6xl">
+              <div className="font-display text-3xl leading-none text-[var(--brass)] md:text-4xl">
                 The Seven
               </div>
-              <div className="font-display mt-2 text-base text-[var(--muted-foreground)] md:text-lg">
-                A council of seven voices — answers, critique, verdict
+              <div className="mt-2 text-sm text-[var(--text-dim)]">
+                Petition desk · proceedings · verdict · archive
               </div>
             </div>
-            <div className="flex flex-col items-start gap-3 md:items-end">
+            <div className="flex flex-col items-start gap-2 md:items-end">
               <nav className="flex flex-wrap items-center gap-2">
-                {NAV_ITEMS.filter(
-                  (item) => !(auth.mode === "demo" && item.href === "/councils"),
-                ).map((item) => {
+                {NAV_ITEMS.map((item) => {
                   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                   return (
                     <Link
@@ -49,22 +64,32 @@ export function AppShell(props: Readonly<{ children: React.ReactNode }>) {
               </nav>
               <div className="action-rail">
                 <Badge
+                  role="status"
+                  aria-live="polite"
                   className={cn(
+                    "seal auth-seal",
                     auth.mode === "byok"
-                      ? "badge-accent"
+                      ? "seal-active"
                       : auth.mode === "demo"
-                        ? "badge-secondary"
-                        : "badge-muted",
+                        ? "seal-demo"
+                        : "seal-locked",
                   )}
                 >
-                  {auth.mode === "byok" ? "BYOK" : auth.mode === "demo" ? "DEMO" : "LOCKED"}
+                  {auth.mode === "byok"
+                    ? "BYOK key admitted"
+                    : auth.mode === "demo"
+                      ? auth.demoSession
+                        ? `Demo seal · expires ${formatDemoExpiry(auth.demoSession.expiresAt)}`
+                        : "Demo seal"
+                      : "Workbench locked"}
                 </Badge>
                 {auth.mode === "byok" ? (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      if (window.confirm("Lock session and clear your key?")) auth.clearByokKey();
+                      setActionError(null);
+                      setPendingAction("lock");
                     }}
                   >
                     Lock
@@ -75,12 +100,8 @@ export function AppShell(props: Readonly<{ children: React.ReactNode }>) {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      if (!window.confirm("End demo session?")) {
-                        return;
-                      }
-                      void auth.clearDemoSession().catch(() => {
-                        window.alert("Demo logout failed. Please try again.");
-                      });
+                      setActionError(null);
+                      setPendingAction("demo");
                     }}
                   >
                     End Demo
@@ -90,7 +111,73 @@ export function AppShell(props: Readonly<{ children: React.ReactNode }>) {
             </div>
           </div>
         </header>
-        {props.children}
+        {pendingAction === "demo" ? (
+          <div className="mb-6">
+            <DemoEndConfirmation
+              pending={endingDemo}
+              error={actionError}
+              onCancel={() => {
+                setActionError(null);
+                setPendingAction(null);
+              }}
+              onConfirm={() => {
+                setEndingDemo(true);
+                setActionError(null);
+                void auth
+                  .clearDemoSession()
+                  .then(() => {
+                    setPendingAction(null);
+                  })
+                  .catch(() => {
+                    setActionError(
+                      "Demo seal was not ended. Check the connection and retry; the session remains active until the server closes it.",
+                    );
+                  })
+                  .finally(() => setEndingDemo(false));
+              }}
+            />
+          </div>
+        ) : pendingAction === "lock" ? (
+          <div className="mb-6 panel confirm-panel">
+            <div>
+              <p className="m-0 font-semibold">Lock BYOK key?</p>
+              <p className="m-0 mt-1 text-sm text-[var(--text-dim)]">
+                The encrypted key remains local; this only clears the active unlock.
+              </p>
+              {actionError ? (
+                <p role="alert" className="alert-danger m-0 mt-2 text-sm">
+                  {actionError}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setActionError(null);
+                  setPendingAction(null);
+                }}
+              >
+                Keep open
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setActionError(null);
+                  setPendingAction(null);
+                  auth.clearByokKey();
+                }}
+              >
+                Lock key
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        <main id="main-content" tabIndex={-1}>
+          {props.children}
+        </main>
       </div>
     </div>
   );

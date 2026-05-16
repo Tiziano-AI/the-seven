@@ -319,7 +319,7 @@ describe("handleRoute admission", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  test("redirect route parses API demo consume missing-token denial through the registry", async () => {
+  test("redirect route lets demo consume handler own browser/API token requiredness", async () => {
     const handler = vi.fn(async () => NextResponse.redirect("https://theseven.ai/", 303));
 
     const response = await handleRedirectRoute(
@@ -332,10 +332,7 @@ describe("handleRoute admission", () => {
         handler,
       },
     );
-    const body = await readJson(response);
-
-    expect(response.status).toBe(400);
-    expect(body.kind).toBe("invalid_input");
-    expect(handler).not.toHaveBeenCalled();
+    expect(response.status).toBe(303);
+    expect(handler).toHaveBeenCalledOnce();
   });
 });

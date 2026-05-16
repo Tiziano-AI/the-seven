@@ -50,7 +50,7 @@ import { GET } from "./route";
 
 function consumeRequest(input: { token?: string; headers?: Record<string, string> }) {
   const url = new URL("https://theseven.ai/api/v1/demo/consume");
-  if (input.token) {
+  if (input.token !== undefined) {
     url.searchParams.set("token", input.token);
   }
   return new NextRequest(
@@ -112,14 +112,32 @@ describe("demo consume route integration", () => {
     }
   });
 
-  test("canonical API ingress missing-token requests stay on typed denial path", async () => {
-    const response = await GET(consumeRequest({ headers: { "x-seven-ingress": " API " } }));
+  test.each([
+    ["missing", undefined],
+    ["blank", ""],
+    ["whitespace-only", "  "],
+  ] as const)("canonical API ingress %s token requests stay on typed denial path", async (_label, token) => {
+    const response = await GET(consumeRequest({ token, headers: { "x-seven-ingress": " API " } }));
     const body = await readJson(response);
 
     expect(response.status).toBe(400);
     expect(body.kind).toBe("invalid_input");
     expect(body.details.issues?.[0]?.path).toBe("query.token");
     expect(response.headers.get("x-trace-id")).toBe(body.trace_id);
+    expect(demoAuthMocks.consumeDemoAuthLink).not.toHaveBeenCalled();
+    expect(cookieMocks.setDemoSessionCookie).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["missing", undefined],
+    ["blank", ""],
+    ["whitespace-only", "  "],
+  ] as const)("browser %s token recovery is owned by the route query schema before mutation", async (_label, token) => {
+    const response = await GET(consumeRequest({ token, headers: { host: "theseven.ai" } }));
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://theseven.ai/?demo_link=invalid");
+    expect(demoLimitMocks.admitDemoConsume).not.toHaveBeenCalled();
     expect(demoAuthMocks.consumeDemoAuthLink).not.toHaveBeenCalled();
     expect(cookieMocks.setDemoSessionCookie).not.toHaveBeenCalled();
   });

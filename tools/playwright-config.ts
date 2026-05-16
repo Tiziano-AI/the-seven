@@ -50,9 +50,13 @@ export function buildPlaywrightConfig(env: NodeJS.ProcessEnv): PlaywrightTestCon
         };
       })();
 
+  const forbidOnly = env.CI === "1" ? true : env.SEVEN_PLAYWRIGHT_ALLOW_ONLY !== "1";
+
   return {
     testDir: "./apps/web/e2e",
     timeout: 60_000,
+    workers: 1,
+    forbidOnly,
     use: {
       baseURL,
       trace: "on-first-retry",

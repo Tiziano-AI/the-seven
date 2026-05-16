@@ -1,0 +1,87 @@
+@layer components {
+  .diagnostic-ledger {
+    display: grid;
+    gap: 0.85rem;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  .diagnostic-summary {
+    margin: -0.35rem 0 1rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+
+  .diagnostic-card {
+    display: grid;
+    gap: 0.8rem;
+    padding: 0.95rem;
+    background: var(--ledger-veil);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .diagnostic-card-error {
+    background: var(--danger-wash);
+    border-color: var(--danger-border-strong);
+  }
+
+  .diagnostic-card-settlement {
+    background: var(--brass-wash);
+    border-color: var(--brass-dim);
+  }
+
+  .diagnostic-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding-bottom: 0.65rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .diagnostic-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+    gap: 0.85rem;
+    margin: 0;
+  }
+
+  .diagnostic-grid div {
+    display: grid;
+    gap: 0.28rem;
+    min-width: 0;
+  }
+
+  .diagnostic-grid dt {
+    color: var(--brass-soft);
+    font-family: var(--font-body);
+    font-size: 0.76rem;
+    font-weight: 700;
+  }
+
+  .diagnostic-grid dd {
+    display: grid;
+    gap: 0.18rem;
+    min-width: 0;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.86rem;
+    line-height: 1.45;
+  }
+
+  .diagnostic-primary {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .diagnostic-mono {
+    overflow-wrap: anywhere;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+  }
+}

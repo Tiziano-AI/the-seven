@@ -1,4 +1,8 @@
-import { errorEnvelopeSchema } from "@the-seven/contracts";
+import {
+  errorEnvelopeSchema,
+  requireJsonApiNoStore,
+  requireTraceHeaderMatchesEnvelope,
+} from "@the-seven/contracts";
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -11,6 +15,7 @@ export type PublicSmokeReceipt = Readonly<{
   }>;
   demoSession: Readonly<{
     status: number;
+    cacheControl: string;
     traceId: string;
     kind: string;
     reason: string;
@@ -61,6 +66,11 @@ export async function runPublicSmoke(
   const demoResponse = await fetchImpl(routeUrl(origin, "/api/v1/demo/session"), {
     redirect: "manual",
   });
+  const demoCacheControl = demoResponse.headers.get("cache-control") ?? "";
+  requireJsonApiNoStore({
+    cacheControl: demoCacheControl,
+    context: "Unauthenticated demo-session smoke",
+  });
   const demoTraceHeader = demoResponse.headers.get("x-trace-id");
   const demoEnvelope = errorEnvelopeSchema.parse(await demoResponse.json());
   assert(
@@ -75,10 +85,11 @@ export async function runPublicSmoke(
     demoEnvelope.details.reason === "missing_auth",
     `Unauthenticated demo-session smoke expected missing_auth, received ${demoEnvelope.details.reason}.`,
   );
-  assert(
-    demoTraceHeader === demoEnvelope.trace_id,
-    "Unauthenticated demo-session smoke trace header does not match the error envelope.",
-  );
+  requireTraceHeaderMatchesEnvelope({
+    traceHeader: demoTraceHeader,
+    envelopeTraceId: demoEnvelope.trace_id,
+    context: "Unauthenticated demo-session smoke",
+  });
 
   return {
     origin: origin.origin,
@@ -89,6 +100,7 @@ export async function runPublicSmoke(
     },
     demoSession: {
       status: demoResponse.status,
+      cacheControl: demoCacheControl,
       traceId: demoEnvelope.trace_id,
       kind: demoEnvelope.kind,
       reason: demoEnvelope.details.reason,

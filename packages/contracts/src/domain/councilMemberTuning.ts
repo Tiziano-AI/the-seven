@@ -1,12 +1,17 @@
 import { z } from "zod";
-import { isSingleLine } from "./strings";
+
+export const reasoningEffortValues = ["none", "minimal", "low", "medium", "high", "xhigh"] as const;
+export const verbosityValues = ["low", "medium", "high", "xhigh", "max"] as const;
+
+export type ReasoningEffort = (typeof reasoningEffortValues)[number];
+export type Verbosity = (typeof verbosityValues)[number];
 
 export type CouncilMemberTuning = Readonly<{
   temperature: number | null;
   topP: number | null;
   seed: number | null;
-  verbosity: string | null;
-  reasoningEffort: string | null;
+  verbosity: Verbosity | null;
+  reasoningEffort: ReasoningEffort | null;
   includeReasoning: boolean | null;
 }>;
 
@@ -14,18 +19,8 @@ const baseSchema = z.object({
   temperature: z.number().finite().nullable(),
   topP: z.number().min(0).max(1).nullable(),
   seed: z.number().int().nullable(),
-  verbosity: z
-    .string()
-    .trim()
-    .min(1)
-    .refine(isSingleLine, "verbosity must be single-line")
-    .nullable(),
-  reasoningEffort: z
-    .string()
-    .trim()
-    .min(1)
-    .refine(isSingleLine, "reasoningEffort must be single-line")
-    .nullable(),
+  verbosity: z.enum(verbosityValues).nullable(),
+  reasoningEffort: z.enum(reasoningEffortValues).nullable(),
   includeReasoning: z.boolean().nullable(),
 });
 

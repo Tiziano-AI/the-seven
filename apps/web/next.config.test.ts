@@ -3,6 +3,10 @@ import { describe, expect, test } from "vitest";
 import { buildNextConfig } from "./next.config";
 
 describe("Next config", () => {
+  test("keeps framework dev chrome out of rendered proof", () => {
+    expect(buildNextConfig(PHASE_DEVELOPMENT_SERVER, {}).devIndicators).toBe(false);
+  });
+
   test("applies launch-owned distDir only to the development server phase", () => {
     expect(
       buildNextConfig(PHASE_DEVELOPMENT_SERVER, {

@@ -11,6 +11,7 @@ import {
 } from "@the-seven/contracts";
 import {
   getSessionById,
+  getSessionTerminalError,
   listCatalogModelsByIds,
   listProviderCalls,
   listSessionArtifacts,
@@ -71,7 +72,7 @@ async function requireOwnedSession(userId: number, sessionId: number) {
   if (!session || session.userId !== userId) {
     throw new EdgeError({
       kind: "not_found",
-      message: "Session not found",
+      message: "Manuscript not found",
       details: notFoundDetails("session"),
       status: 404,
     });
@@ -172,9 +173,10 @@ export async function listSessionSummaries(userId: number) {
 export async function getSessionDetail(userId: number, sessionId: number) {
   const session = await requireOwnedSession(userId, sessionId);
   const snapshot = sessionSnapshotSchema.parse(session.snapshotJson);
-  const [artifacts, providerCalls] = await Promise.all([
+  const [artifacts, providerCalls, terminalError] = await Promise.all([
     listSessionArtifacts(sessionId),
     listProviderCalls(sessionId),
+    session.status === "failed" ? getSessionTerminalError(sessionId) : Promise.resolve(null),
   ]);
   const modelNames = await buildModelNameLookupForSession({ snapshot, artifacts, providerCalls });
 
@@ -205,13 +207,17 @@ export async function getSessionDetail(userId: number, sessionId: number) {
       };
     }),
     providerCalls: providerCalls.map((call) => mapProviderCall(call, modelNames)),
+    terminalError,
   };
 }
 
 export async function getSessionDiagnostics(userId: number, sessionId: number) {
   const session = await requireOwnedSession(userId, sessionId);
   const snapshot = sessionSnapshotSchema.parse(session.snapshotJson);
-  const providerCalls = await listProviderCalls(sessionId);
+  const [providerCalls, terminalError] = await Promise.all([
+    listProviderCalls(sessionId),
+    session.status === "failed" ? getSessionTerminalError(sessionId) : Promise.resolve(null),
+  ]);
   const modelNames = await buildDiagnosticsModelNameLookup({ snapshot, providerCalls });
   return {
     session: {
@@ -219,12 +225,13 @@ export async function getSessionDiagnostics(userId: number, sessionId: number) {
       snapshot,
     },
     providerCalls: providerCalls.map((call) => mapProviderCall(call, modelNames)),
+    terminalError,
   };
 }
 
 function buildMarkdownExport(detail: Awaited<ReturnType<typeof getSessionDetail>>) {
   const lines: string[] = [
-    `# Session ${detail.session.id}`,
+    `# Manuscript ${detail.session.id}`,
     ``,
     `- Status: ${detail.session.status}`,
     `- Council: ${detail.session.councilNameAtRun}`,

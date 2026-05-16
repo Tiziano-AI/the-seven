@@ -1,5 +1,5 @@
 import { routeContract } from "@the-seven/contracts";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AuthContext } from "./auth";
 
@@ -24,7 +24,7 @@ vi.mock("@the-seven/config", () => ({
 }));
 
 import { requireByokAuth } from "./requireAuth";
-import { handleRedirectRoute, handleRoute } from "./route";
+import { handleRoute } from "./route";
 
 function request(input: {
   method?: string;
@@ -89,14 +89,13 @@ describe("route denial envelopes", () => {
     );
 
     await expectTraceDenial(
-      await handleRedirectRoute(
+      await handleRoute(
         request({
-          url: "https://theseven.ai/api/v1/demo/consume",
-          headers: { host: "theseven.ai", "x-seven-ingress": "api" },
+          url: "http://localhost/api/v1/sessions?unexpected=true",
         }),
         {
-          route: routeContract("demo.consume"),
-          handler: async () => NextResponse.redirect("https://theseven.ai/", 303),
+          route: routeContract("sessions.list"),
+          handler,
         },
       ),
       { status: 400, kind: "invalid_input" },
@@ -130,8 +129,7 @@ describe("route denial envelopes", () => {
       await handleRoute(
         request({
           method: "POST",
-          headers: { "content-type": "application/json", "x-seven-ingress": "web" },
-          body: "{}",
+          headers: { "x-seven-ingress": "web" },
         }),
         {
           route: routeContract("auth.validate"),
@@ -173,10 +171,8 @@ describe("route denial envelopes", () => {
           method: "POST",
           headers: {
             authorization: "Bearer sk-or-invalid",
-            "content-type": "application/json",
             "x-seven-ingress": "web",
           },
-          body: "{}",
         }),
         {
           route: routeContract("auth.validate"),

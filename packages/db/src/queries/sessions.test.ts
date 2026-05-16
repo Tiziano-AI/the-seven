@@ -10,6 +10,8 @@ import {
   createProviderCall,
   createSessionArtifact,
   createSessionWithJob,
+  getSessionById,
+  getSessionTerminalError,
   listProviderCalls,
   listSessionArtifacts,
   listSessionsWithPendingBilling,
@@ -18,7 +20,10 @@ import {
 } from "./sessions";
 import { getOrCreateUser } from "./users";
 
-function buildSnapshot(label: string): SessionSnapshot {
+function buildSnapshot(
+  label: string,
+  attachments: SessionSnapshot["attachments"] = [],
+): SessionSnapshot {
   const members = parseCouncilMembers(
     MEMBER_POSITIONS.map((memberPosition) => ({
       memberPosition,
@@ -32,7 +37,7 @@ function buildSnapshot(label: string): SessionSnapshot {
     createdAt: "2026-05-13T00:00:00.000Z",
     query: "How should billing diagnostics recover?",
     userMessage: "How should billing diagnostics recover?",
-    attachments: [],
+    attachments,
     outputFormats: {
       phase1: "Return a concise answer.",
       phase2: "Return strict JSON.",
@@ -230,6 +235,104 @@ describe("session provider diagnostics queries", () => {
     expect(await listSessionsWithPendingBilling()).toEqual([]);
   });
 
+  test("creates queued session rows with persisted attachments and session-bound credentials", async () => {
+    const user = await getOrCreateUser({ kind: "byok", principal: "principal:attachments" });
+    const attachments = [{ name: "evidence.txt", text: "alpha\nbeta" }];
+
+    const sessionId = await createSessionWithJob({
+      userId: user.id,
+      query: "Use this evidence.",
+      attachments,
+      snapshot: buildSnapshot("attachments", attachments),
+      councilNameAtRun: "Attachment Council",
+      questionHash: "question-hash:attachments",
+      ingressSource: "web",
+      ingressVersion: "web@proof",
+      traceId: "trace:attachments",
+      buildCredentialCiphertext: ({ sessionId, jobId }) => `cipher:${sessionId}:${jobId}`,
+    });
+
+    const session = await getSessionById(sessionId);
+    const db = await getDb();
+    const jobRows = await db.select().from(jobs).where(eq(jobs.sessionId, sessionId));
+
+    expect(session?.attachmentsJson).toEqual(attachments);
+    expect(session?.snapshotJson.attachments).toEqual(attachments);
+    expect(session?.ingressSource).toBe("web");
+    expect(session?.ingressVersion).toBe("web@proof");
+    expect(session?.traceId).toBe("trace:attachments");
+    expect(jobRows).toHaveLength(1);
+    expect(jobRows[0]?.credentialCiphertext).toBe(`cipher:${sessionId}:${jobRows[0]?.id}`);
+  });
+
+  test("creates distinct rerun-like session and job rows without mutating the source session", async () => {
+    const originalSessionId = await createQueuedSession("source");
+    const originalBefore = await getSessionById(originalSessionId);
+    const user = await getOrCreateUser({ kind: "byok", principal: "principal:source" });
+
+    const rerunSessionId = await createSessionWithJob({
+      userId: user.id,
+      query: "Rerun with a sharper matter.",
+      attachments: [],
+      snapshot: buildSnapshot("rerun"),
+      councilNameAtRun: "Billing Council",
+      questionHash: "question-hash:rerun",
+      ingressSource: "cli",
+      ingressVersion: "cli@rerun",
+      traceId: "trace:rerun",
+      buildCredentialCiphertext: ({ sessionId, jobId }) => `cipher:${sessionId}:${jobId}`,
+    });
+
+    const db = await getDb();
+    const originalAfter = await getSessionById(originalSessionId);
+    const rerunSession = await getSessionById(rerunSessionId);
+    const originalJobs = await db.select().from(jobs).where(eq(jobs.sessionId, originalSessionId));
+    const rerunJobs = await db.select().from(jobs).where(eq(jobs.sessionId, rerunSessionId));
+
+    expect(rerunSessionId).not.toBe(originalSessionId);
+    expect(originalJobs).toHaveLength(1);
+    expect(rerunJobs).toHaveLength(1);
+    expect(rerunJobs[0]?.id).not.toBe(originalJobs[0]?.id);
+    expect(originalAfter?.ingressSource).toBe(originalBefore?.ingressSource);
+    expect(originalAfter?.ingressVersion).toBe(originalBefore?.ingressVersion);
+    expect(originalAfter?.traceId).toBe(originalBefore?.traceId);
+    expect(originalAfter?.questionHash).toBe(originalBefore?.questionHash);
+    expect(rerunSession?.ingressSource).toBe("cli");
+    expect(rerunSession?.ingressVersion).toBe("cli@rerun");
+    expect(rerunSession?.traceId).toBe("trace:rerun");
+  });
+
+  test("rolls back session and job creation when credential encryption fails", async () => {
+    const user = await getOrCreateUser({ kind: "byok", principal: "principal:rollback" });
+
+    await expect(
+      createSessionWithJob({
+        userId: user.id,
+        query: "Rollback this matter.",
+        attachments: [],
+        snapshot: buildSnapshot("rollback"),
+        councilNameAtRun: "Rollback Council",
+        questionHash: "question-hash:rollback",
+        ingressSource: "api",
+        ingressVersion: "rollback",
+        traceId: "trace:rollback",
+        buildCredentialCiphertext: () => {
+          throw new Error("credential encryption failed");
+        },
+      }),
+    ).rejects.toThrow("credential encryption failed");
+
+    const db = await getDb();
+    const sessionRows = await db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.traceId, "trace:rollback"));
+    const jobRows = await db.select().from(jobs);
+
+    expect(sessionRows).toEqual([]);
+    expect(jobRows).toEqual([]);
+  });
+
   test("side-effect writes require the active claimed lease", async () => {
     const sessionId = await createQueuedSession("lease");
     const claimedLease = await claimSession(sessionId);
@@ -285,6 +388,21 @@ describe("session provider diagnostics queries", () => {
     const artifacts = await listSessionArtifacts(sessionId);
     expect(artifacts.map((artifact) => artifact.memberPosition)).toEqual([1]);
     expect((await listProviderCalls(sessionId)).map((call) => call.memberPosition)).toEqual([1]);
+  });
+
+  test("reads the redacted terminal job error for diagnostics", async () => {
+    const sessionId = await createQueuedSession("terminal-error");
+    expect(await getSessionTerminalError(sessionId)).toBeNull();
+
+    const db = await getDb();
+    await db
+      .update(jobs)
+      .set({ lastError: "Phase 2 evaluation is invalid: review text was not material" })
+      .where(eq(jobs.sessionId, sessionId));
+
+    expect(await getSessionTerminalError(sessionId)).toBe(
+      "Phase 2 evaluation is invalid: review text was not material",
+    );
   });
 
   test("processing transition requires the active claimed lease", async () => {

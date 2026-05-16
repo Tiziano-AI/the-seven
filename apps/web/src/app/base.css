@@ -1,9 +1,7 @@
-/* ── Base ─────────────────────────────────────────────────────────── */
-
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: var(--wood-soft) transparent;
+  scrollbar-color: var(--brass-dim) transparent;
 }
 
 html {
@@ -11,17 +9,49 @@ html {
 }
 
 body {
-  background: var(--gradient-field);
-  color: var(--foreground);
   min-height: 100vh;
+  margin: 0;
+  color: var(--foreground);
   font-family: var(--font-body);
+  background: var(--body-depth-wash), var(--background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background-image: var(--body-ruling);
+  background-size: 100% 42px;
+  mask-image: var(--body-ruling-mask);
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 50;
+  transform: translateY(-180%);
+  border: 1px solid var(--brass);
+  background: var(--ink-2);
+  color: var(--text);
+  padding: 0.55rem 0.8rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: transform 120ms ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 button,
@@ -31,23 +61,32 @@ textarea {
   font: inherit;
 }
 
-input[type="checkbox"] {
-  accent-color: var(--gold);
-}
-
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
-select:focus-visible {
+select:focus-visible,
+summary:focus-visible {
   outline: 2px solid var(--ring);
-  outline-offset: 2px;
-  box-shadow: var(--glow-subtle);
+  outline-offset: 3px;
+  box-shadow: var(--focus-ring);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -55,12 +94,8 @@ select:focus-visible {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--wood-soft);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--gold-soft);
+  background: var(--brass-dim);
+  border-radius: 0;
 }
 
 h1,
@@ -69,24 +104,9 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-display);
-  color: var(--gold);
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-body);
   font-weight: 600;
-  line-height: 1.25;
-}
-
-/* ── Animations ──────────────────────────────────────────────────── */
-
-@keyframes pulse-glow {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
+  line-height: 1.2;
 }

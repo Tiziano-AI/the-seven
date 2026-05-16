@@ -96,6 +96,16 @@ export async function getSessionById(sessionId: number) {
   return rows[0] ?? null;
 }
 
+export async function getSessionTerminalError(sessionId: number) {
+  const db = await getDb();
+  const rows = await db
+    .select({ terminalError: jobs.lastError })
+    .from(jobs)
+    .where(eq(jobs.sessionId, sessionId))
+    .limit(1);
+  return rows[0]?.terminalError ?? null;
+}
+
 export async function listSessionsByUserId(userId: number) {
   const db = await getDb();
   return db

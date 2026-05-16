@@ -8,11 +8,13 @@ type RedirectRouteHandler = (
     ingress: Readonly<{ source: "web" | "cli" | "api"; version: string | null }>;
   }>,
   request: NextRequest,
-  parsed: Readonly<{ query: Readonly<{ token: string }> }>,
+  parsed: Readonly<{ query: Readonly<{ token?: string }> }>,
 ) => Promise<NextResponse>;
 
 type RedirectRouteInput = Readonly<{
-  preAdmission?: (request: NextRequest) => void | Promise<void>;
+  preAdmission?: (
+    request: NextRequest,
+  ) => NextResponse | undefined | Promise<NextResponse | undefined>;
   handler: RedirectRouteHandler;
 }>;
 
@@ -78,6 +80,7 @@ describe("demo consume route", () => {
         if (preAdmissionResponse) {
           return preAdmissionResponse;
         }
+        const token = request.nextUrl.searchParams.get("token")?.trim() || undefined;
         return input.handler(
           {
             ip: "198.51.100.7",
@@ -88,7 +91,7 @@ describe("demo consume route", () => {
             },
           },
           request,
-          { query: { token: "magic-token" } },
+          { query: { token } },
         );
       },
     );
@@ -252,6 +255,7 @@ describe("demo consume route", () => {
   test("redirects browser requests with missing tokens to the home recovery state before mutation", async () => {
     for (const url of [
       "https://theseven.ai/api/v1/demo/consume",
+      "https://theseven.ai/api/v1/demo/consume?token=",
       "https://theseven.ai/api/v1/demo/consume?token=%20%20",
     ]) {
       const response = await GET(

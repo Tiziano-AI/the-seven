@@ -10,10 +10,7 @@ export function Label(props: FormLabelProps) {
     <label
       {...rest}
       htmlFor={htmlFor}
-      className={cn(
-        "font-display text-xs font-semibold uppercase tracking-[0.18em] text-[var(--gold)]",
-        className,
-      )}
+      className={cn("font-body text-sm font-semibold text-[var(--brass-soft)]", className)}
     >
       {children}
     </label>

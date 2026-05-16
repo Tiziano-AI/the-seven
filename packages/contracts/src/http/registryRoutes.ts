@@ -51,16 +51,29 @@ const locatorParamsSchema = z
       }),
   })
   .strict();
-const demoConsumeQuerySchema = z.object({ token: z.string().trim().min(1) }).strict();
+const demoConsumeQuerySchema = z
+  .object({
+    token: z
+      .string()
+      .transform((value) => {
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+      })
+      .optional(),
+  })
+  .strict();
 
-const commonDenials = [
+const noBodyCommonDenials = [
   { kind: "invalid_input", status: 400, reason: "invalid_request" },
-  { kind: "invalid_input", status: 400, reason: "invalid_json" },
   { kind: "invalid_input", status: 400, reason: "invalid_ingress" },
   { kind: "invalid_input", status: 413, reason: "body_too_large" },
-  { kind: "invalid_input", status: 415, reason: "invalid_content_type" },
   { kind: "rate_limited", status: 429, reason: "rate_limited" },
   { kind: "internal_error", status: 500, reason: "internal_error" },
+] as const satisfies ReadonlyArray<DenialRow>;
+const jsonBodyCommonDenials = [
+  ...noBodyCommonDenials,
+  { kind: "invalid_input", status: 400, reason: "invalid_json" },
+  { kind: "invalid_input", status: 415, reason: "invalid_content_type" },
 ] as const satisfies ReadonlyArray<DenialRow>;
 
 const authDenials = [
@@ -82,11 +95,6 @@ const publicOriginDenial = {
   kind: "forbidden",
   status: 403,
   reason: "public_origin_required",
-} as const satisfies DenialRow;
-const demoRequiredDenial = {
-  kind: "forbidden",
-  status: 403,
-  reason: "demo_required",
 } as const satisfies DenialRow;
 const demoDisabledDenial = {
   kind: "forbidden",
@@ -142,7 +150,7 @@ export const ROUTE_CONTRACTS = [
     querySchema: noQuerySchema,
     bodySchema: noBodySchema,
     successPayloadSchema: validateKeyPayloadSchema,
-    denials: [...commonDenials, ...authDenials, ...byokDenials, openRouterUpstreamDenial],
+    denials: [...noBodyCommonDenials, ...authDenials, ...byokDenials, openRouterUpstreamDenial],
   }),
   route({
     id: "demo.request",
@@ -156,7 +164,7 @@ export const ROUTE_CONTRACTS = [
     querySchema: noQuerySchema,
     bodySchema: demoRequestBodySchema,
     successPayloadSchema: demoRequestPayloadSchema,
-    denials: [...commonDenials, demoDisabledDenial, resendUpstreamDenial],
+    denials: [...jsonBodyCommonDenials, demoDisabledDenial, resendUpstreamDenial],
   }),
   route({
     id: "demo.consume",
@@ -171,7 +179,7 @@ export const ROUTE_CONTRACTS = [
     bodySchema: noBodySchema,
     successPayloadSchema: redirectPayloadSchema,
     denials: [
-      ...commonDenials,
+      ...noBodyCommonDenials,
       { kind: "unauthorized", status: 401, reason: "invalid_token" },
       { kind: "unauthorized", status: 401, reason: "expired_token" },
       publicOriginDenial,
@@ -190,7 +198,7 @@ export const ROUTE_CONTRACTS = [
     querySchema: noQuerySchema,
     bodySchema: noBodySchema,
     successPayloadSchema: demoSessionPayloadSchema,
-    denials: [...commonDenials, ...authDenials, demoRequiredDenial],
+    denials: [...noBodyCommonDenials, ...authDenials],
   }),
   route({
     id: "demo.logout",
@@ -204,7 +212,7 @@ export const ROUTE_CONTRACTS = [
     querySchema: noQuerySchema,
     bodySchema: noBodySchema,
     successPayloadSchema: successFlagPayloadSchema,
-    denials: [...commonDenials, ...authDenials, demoRequiredDenial, sameOriginDenial],
+    denials: [...noBodyCommonDenials, ...authDenials, sameOriginDenial],
   }),
   route({
     id: "councils.list",
@@ -218,7 +226,7 @@ export const ROUTE_CONTRACTS = [
     querySchema: noQuerySchema,
     bodySchema: noBodySchema,
     successPayloadSchema: councilsListPayloadSchema,
-    denials: [...commonDenials, ...authDenials, openRouterUpstreamDenial],
+    denials: [...noBodyCommonDenials, ...authDenials, openRouterUpstreamDenial],
   }),
   route({
     id: "councils.get",
@@ -233,7 +241,7 @@ export const ROUTE_CONTRACTS = [
     bodySchema: noBodySchema,
     successPayloadSchema: councilDetailPayloadSchema,
     denials: [
-      ...commonDenials,
+      ...noBodyCommonDenials,
       ...authDenials,
       demoCouncilOnlyDenial,
       councilNotFoundDenial,
@@ -253,7 +261,7 @@ export const ROUTE_CONTRACTS = [
     bodySchema: duplicateCouncilBodySchema,
     successPayloadSchema: duplicateCouncilPayloadSchema,
     denials: [
-      ...commonDenials,
+      ...jsonBodyCommonDenials,
       ...authDenials,
       ...byokDenials,
       councilNotFoundDenial,
@@ -273,7 +281,7 @@ export const ROUTE_CONTRACTS = [
     bodySchema: updateCouncilBodySchema,
     successPayloadSchema: successFlagPayloadSchema,
     denials: [
-      ...commonDenials,
+      ...jsonBodyCommonDenials,
       ...authDenials,
       ...byokDenials,
       builtInReadOnlyDenial,
@@ -294,7 +302,7 @@ export const ROUTE_CONTRACTS = [
     bodySchema: noBodySchema,
     successPayloadSchema: successFlagPayloadSchema,
     denials: [
-      ...commonDenials,
+      ...noBodyCommonDenials,
       ...authDenials,
       ...byokDenials,
       builtInReadOnlyDenial,
@@ -314,7 +322,7 @@ export const ROUTE_CONTRACTS = [
     querySchema: noQuerySchema,
     bodySchema: noBodySchema,
     successPayloadSchema: outputFormatsPayloadSchema,
-    denials: [...commonDenials, ...authDenials, openRouterUpstreamDenial],
+    denials: [...noBodyCommonDenials, ...authDenials, openRouterUpstreamDenial],
   }),
   route({
     id: "models.validate",
@@ -328,7 +336,7 @@ export const ROUTE_CONTRACTS = [
     querySchema: noQuerySchema,
     bodySchema: modelValidateBodySchema,
     successPayloadSchema: modelValidatePayloadSchema,
-    denials: [...commonDenials, ...authDenials, ...byokDenials, openRouterUpstreamDenial],
+    denials: [...jsonBodyCommonDenials, ...authDenials, ...byokDenials, openRouterUpstreamDenial],
   }),
   route({
     id: "models.autocomplete",
@@ -342,7 +350,7 @@ export const ROUTE_CONTRACTS = [
     querySchema: noQuerySchema,
     bodySchema: modelAutocompleteBodySchema,
     successPayloadSchema: modelAutocompletePayloadSchema,
-    denials: [...commonDenials, ...authDenials, ...byokDenials, openRouterUpstreamDenial],
+    denials: [...jsonBodyCommonDenials, ...authDenials, ...byokDenials, openRouterUpstreamDenial],
   }),
   route({
     id: "sessions.create",
@@ -357,7 +365,7 @@ export const ROUTE_CONTRACTS = [
     bodySchema: querySubmitBodySchema,
     successPayloadSchema: submitPayloadSchema,
     denials: [
-      ...commonDenials,
+      ...jsonBodyCommonDenials,
       ...authDenials,
       sameOriginDenial,
       demoCouncilOnlyDenial,
@@ -377,7 +385,7 @@ export const ROUTE_CONTRACTS = [
     querySchema: noQuerySchema,
     bodySchema: noBodySchema,
     successPayloadSchema: sessionListPayloadSchema,
-    denials: [...commonDenials, ...authDenials, openRouterUpstreamDenial],
+    denials: [...noBodyCommonDenials, ...authDenials, openRouterUpstreamDenial],
   }),
   route({
     id: "sessions.get",
@@ -391,7 +399,12 @@ export const ROUTE_CONTRACTS = [
     querySchema: noQuerySchema,
     bodySchema: noBodySchema,
     successPayloadSchema: sessionDetailPayloadSchema,
-    denials: [...commonDenials, ...authDenials, sessionNotFoundDenial, openRouterUpstreamDenial],
+    denials: [
+      ...noBodyCommonDenials,
+      ...authDenials,
+      sessionNotFoundDenial,
+      openRouterUpstreamDenial,
+    ],
   }),
   route({
     id: "sessions.continue",
@@ -406,7 +419,7 @@ export const ROUTE_CONTRACTS = [
     bodySchema: queryContinueBodySchema,
     successPayloadSchema: submitPayloadSchema,
     denials: [
-      ...commonDenials,
+      ...noBodyCommonDenials,
       ...authDenials,
       sameOriginDenial,
       sessionNotFoundDenial,
@@ -427,7 +440,7 @@ export const ROUTE_CONTRACTS = [
     bodySchema: queryRerunBodySchema,
     successPayloadSchema: submitPayloadSchema,
     denials: [
-      ...commonDenials,
+      ...jsonBodyCommonDenials,
       ...authDenials,
       sameOriginDenial,
       sessionNotFoundDenial,
@@ -448,7 +461,12 @@ export const ROUTE_CONTRACTS = [
     querySchema: noQuerySchema,
     bodySchema: noBodySchema,
     successPayloadSchema: sessionDiagnosticsPayloadSchema,
-    denials: [...commonDenials, ...authDenials, sessionNotFoundDenial, openRouterUpstreamDenial],
+    denials: [
+      ...noBodyCommonDenials,
+      ...authDenials,
+      sessionNotFoundDenial,
+      openRouterUpstreamDenial,
+    ],
   }),
   route({
     id: "sessions.export",
@@ -463,7 +481,7 @@ export const ROUTE_CONTRACTS = [
     bodySchema: exportSessionsBodySchema,
     successPayloadSchema: exportSessionsPayloadSchema,
     denials: [
-      ...commonDenials,
+      ...jsonBodyCommonDenials,
       ...authDenials,
       sameOriginDenial,
       sessionNotFoundDenial,

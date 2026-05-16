@@ -3,5 +3,7 @@
 @import "./base.css";
 @import "./components.css";
 @import "./inspector.css";
+@import "./archive.css";
+@import "./diagnostics.css";
 @import "./surface.css";
 @import "./prose.css";

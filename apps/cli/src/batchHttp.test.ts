@@ -1,4 +1,4 @@
-import { decodeCouncilRef } from "@the-seven/contracts";
+import { decodeCouncilRef, jsonApiCacheControl } from "@the-seven/contracts";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { submitSession, waitForSession } from "./batchHttp";
 
@@ -108,6 +108,7 @@ function sessionPayload(status: "pending" | "completed" | "failed") {
     },
     artifacts: [],
     providerCalls: [],
+    terminalError: status === "failed" ? "provider failed" : null,
   };
 }
 
@@ -136,8 +137,27 @@ function installFetch(responses: ReadonlyArray<Response>) {
   return calls;
 }
 
-function jsonResponse(payload: unknown, status: number) {
-  return new Response(JSON.stringify(payload), { status });
+function jsonResponse(
+  payload: unknown,
+  status: number,
+  cacheControl: string | null = jsonApiCacheControl,
+  traceHeader?: string,
+) {
+  const headers = new Headers();
+  if (cacheControl !== null) {
+    headers.set("Cache-Control", cacheControl);
+  }
+  if (traceHeader !== undefined) {
+    headers.set("X-Trace-Id", traceHeader);
+  } else if (
+    payload &&
+    typeof payload === "object" &&
+    "trace_id" in payload &&
+    typeof payload.trace_id === "string"
+  ) {
+    headers.set("X-Trace-Id", payload.trace_id);
+  }
+  return new Response(JSON.stringify(payload), { headers, status });
 }
 
 describe("batch HTTP client", () => {
@@ -241,6 +261,52 @@ describe("batch HTTP client", () => {
     expect(calls).toHaveLength(1);
   });
 
+  test("rejects JSON API responses without the no-store cache contract", async () => {
+    installFetch([jsonResponse(successEnvelope("sessions.create", { sessionId: 33 }), 201, null)]);
+
+    const missing = await submitSession({
+      baseUrl: "http://127.0.0.1:43217",
+      apiKey: "sk-or-test-key",
+      ingressVersion: null,
+      task: {
+        query: "Question?",
+        councilRef: commonsRef(),
+      },
+    });
+
+    expect(missing).toEqual({
+      ok: false,
+      error: {
+        kind: "invalid_response",
+        message: "sessions.create response did not return Cache-Control: no-store",
+        status: 201,
+        traceId: null,
+      },
+    });
+    vi.unstubAllGlobals();
+
+    installFetch([jsonResponse(errorEnvelope(), 401, "public, max-age=60")]);
+    const wrong = await submitSession({
+      baseUrl: "http://127.0.0.1:43217",
+      apiKey: "sk-or-test-key",
+      ingressVersion: null,
+      task: {
+        query: "Question?",
+        councilRef: commonsRef(),
+      },
+    });
+
+    expect(wrong).toEqual({
+      ok: false,
+      error: {
+        kind: "invalid_response",
+        message: "sessions.create response did not return Cache-Control: no-store",
+        status: 401,
+        traceId: null,
+      },
+    });
+  });
+
   test("rejects success envelopes with the wrong HTTP status", async () => {
     installFetch([jsonResponse(successEnvelope("sessions.create", { sessionId: 33 }), 200)]);
 
@@ -284,6 +350,59 @@ describe("batch HTTP client", () => {
         kind: "invalid_response",
         message: "Request failed",
         status: 502,
+        traceId: null,
+      },
+    });
+  });
+
+  test("rejects success and error envelopes whose trace header differs", async () => {
+    installFetch([
+      jsonResponse(
+        successEnvelope("sessions.create", { sessionId: 33 }),
+        201,
+        jsonApiCacheControl,
+        "wrong-trace",
+      ),
+    ]);
+
+    const success = await submitSession({
+      baseUrl: "http://127.0.0.1:43217",
+      apiKey: "sk-or-test-key",
+      ingressVersion: null,
+      task: {
+        query: "Question?",
+        councilRef: commonsRef(),
+      },
+    });
+
+    expect(success).toEqual({
+      ok: false,
+      error: {
+        kind: "invalid_response",
+        message: "sessions.create trace header does not match envelope trace_id (X-Trace-Id).",
+        status: 201,
+        traceId: null,
+      },
+    });
+    vi.unstubAllGlobals();
+
+    installFetch([jsonResponse(errorEnvelope(), 401, jsonApiCacheControl, "wrong-trace")]);
+    const error = await submitSession({
+      baseUrl: "http://127.0.0.1:43217",
+      apiKey: "sk-or-test-key",
+      ingressVersion: null,
+      task: {
+        query: "Question?",
+        councilRef: commonsRef(),
+      },
+    });
+
+    expect(error).toEqual({
+      ok: false,
+      error: {
+        kind: "invalid_response",
+        message: "sessions.create trace header does not match envelope trace_id (X-Trace-Id).",
+        status: 401,
         traceId: null,
       },
     });

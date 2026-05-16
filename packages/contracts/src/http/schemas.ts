@@ -224,20 +224,43 @@ export const providerCallSchema = z.object({
   createdAt: timestampSchema,
 });
 
-export const sessionDetailPayloadSchema = z.object({
+const sessionTerminalErrorShape = {
   session: sessionSummarySchema.extend({
     snapshot: sessionSnapshotSchema,
   }),
-  artifacts: z.array(sessionArtifactSchema),
-  providerCalls: z.array(providerCallSchema),
-});
+  terminalError: z.string().nullable(),
+};
 
-export const sessionDiagnosticsPayloadSchema = z.object({
-  session: sessionSummarySchema.extend({
-    snapshot: sessionSnapshotSchema,
-  }),
-  providerCalls: z.array(providerCallSchema),
-});
+export const sessionDetailPayloadSchema = z
+  .object({
+    ...sessionTerminalErrorShape,
+    artifacts: z.array(sessionArtifactSchema),
+    providerCalls: z.array(providerCallSchema),
+  })
+  .superRefine((payload, context) => {
+    if (payload.session.status !== "failed" && payload.terminalError !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["terminalError"],
+        message: "terminalError is only exposed for failed sessions",
+      });
+    }
+  });
+
+export const sessionDiagnosticsPayloadSchema = z
+  .object({
+    ...sessionTerminalErrorShape,
+    providerCalls: z.array(providerCallSchema),
+  })
+  .superRefine((payload, context) => {
+    if (payload.session.status !== "failed" && payload.terminalError !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["terminalError"],
+        message: "terminalError is only exposed for failed sessions",
+      });
+    }
+  });
 
 export type DemoSessionPayload = z.infer<typeof demoSessionPayloadSchema>;
 

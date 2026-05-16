@@ -45,14 +45,18 @@ const SUPPORTS_OPENAI_PRO = supportedParameters(["seed", "tool_choice", "tools"]
 const SUPPORTS_ANTHROPIC_OPUS = supportedParameters(["stop", "tool_choice", "tools", "verbosity"]);
 const SUPPORTS_ANTHROPIC_SONNET = supportedParameters([
   "max_completion_tokens",
-  ...COMMON_EXTRAS,
+  "stop",
+  "temperature",
+  "tool_choice",
+  "tools",
   "top_k",
+  "top_p",
   "verbosity",
 ]);
 const SUPPORTS_FULL = supportedParameters([...COMMON_EXTRAS, ...FULL_EXTRAS]);
-const SUPPORTS_FULL_NO_TOP_LOGPROBS = supportedParameters([
+const SUPPORTS_FULL_NO_LOGPROBS = supportedParameters([
   ...COMMON_EXTRAS,
-  ...FULL_EXTRAS.filter((parameter) => parameter !== "top_logprobs"),
+  ...FULL_EXTRAS.filter((parameter) => parameter !== "logprobs" && parameter !== "top_logprobs"),
 ]);
 const SUPPORTS_GOOGLE = supportedParameters(COMMON_EXTRAS);
 const SUPPORTS_GROK = supportedParameters([
@@ -73,6 +77,12 @@ const SUPPORTS_MISTRAL = supportedParameters([
   "presence_penalty",
   ...COMMON_EXTRAS,
 ]);
+const SUPPORTS_MISTRAL_SMALL = supportedParameters([
+  "frequency_penalty",
+  "presence_penalty",
+  ...COMMON_EXTRAS,
+  "top_k",
+]);
 const SUPPORTS_QWEN = supportedParameters([
   "presence_penalty",
   "seed",
@@ -92,7 +102,7 @@ const SUPPORTS_QWEN_MAX = supportedParameters([
   "top_p",
 ]);
 
-const OPENROUTER_CATALOG_2026_05_14: Readonly<Record<string, CatalogFixture>> = {
+const OPENROUTER_CATALOG_2026_05_16: Readonly<Record<string, CatalogFixture>> = {
   "anthropic/claude-opus-4.7": {
     promptUsdPerMillion: 5,
     completionUsdPerMillion: 25,
@@ -110,11 +120,11 @@ const OPENROUTER_CATALOG_2026_05_14: Readonly<Record<string, CatalogFixture>> = 
     supportedParameters: SUPPORTS_ANTHROPIC_SONNET,
   },
   "deepseek/deepseek-v4-flash": {
-    promptUsdPerMillion: 0.126,
-    completionUsdPerMillion: 0.252,
+    promptUsdPerMillion: 0.112,
+    completionUsdPerMillion: 0.224,
     expirationDate: null,
     contextLength: 1_048_576,
-    maxCompletionTokens: 131_072,
+    maxCompletionTokens: null,
     supportedParameters: SUPPORTS_FULL,
   },
   "deepseek/deepseek-v4-pro": {
@@ -150,11 +160,11 @@ const OPENROUTER_CATALOG_2026_05_14: Readonly<Record<string, CatalogFixture>> = 
     supportedParameters: SUPPORTS_GOOGLE,
   },
   "minimax/minimax-m2.7": {
-    promptUsdPerMillion: 0.28,
+    promptUsdPerMillion: 0.279,
     completionUsdPerMillion: 1.2,
     expirationDate: null,
-    contextLength: 196_608,
-    maxCompletionTokens: null,
+    contextLength: 204_800,
+    maxCompletionTokens: 131_072,
     supportedParameters: SUPPORTS_FULL,
   },
   "mistralai/mistral-medium-3-5": {
@@ -171,11 +181,11 @@ const OPENROUTER_CATALOG_2026_05_14: Readonly<Record<string, CatalogFixture>> = 
     expirationDate: null,
     contextLength: 262_144,
     maxCompletionTokens: null,
-    supportedParameters: SUPPORTS_MISTRAL,
+    supportedParameters: SUPPORTS_MISTRAL_SMALL,
   },
   "moonshotai/kimi-k2.6": {
-    promptUsdPerMillion: 0.74,
-    completionUsdPerMillion: 3.5,
+    promptUsdPerMillion: 0.73,
+    completionUsdPerMillion: 3.49,
     expirationDate: null,
     contextLength: 262_142,
     maxCompletionTokens: 262_142,
@@ -213,13 +223,13 @@ const OPENROUTER_CATALOG_2026_05_14: Readonly<Record<string, CatalogFixture>> = 
     maxCompletionTokens: null,
     supportedParameters: SUPPORTS_OPENAI,
   },
-  "qwen/qwen3.6-flash": {
-    promptUsdPerMillion: 0.25,
-    completionUsdPerMillion: 1.5,
+  "qwen/qwen3.6-35b-a3b": {
+    promptUsdPerMillion: 0.15,
+    completionUsdPerMillion: 1,
     expirationDate: null,
-    contextLength: 1_000_000,
-    maxCompletionTokens: 65_536,
-    supportedParameters: SUPPORTS_QWEN,
+    contextLength: 262_144,
+    maxCompletionTokens: 262_144,
+    supportedParameters: SUPPORTS_FULL_NO_LOGPROBS,
   },
   "qwen/qwen3.6-max-preview": {
     promptUsdPerMillion: 1.04,
@@ -251,21 +261,21 @@ const OPENROUTER_CATALOG_2026_05_14: Readonly<Record<string, CatalogFixture>> = 
     expirationDate: null,
     contextLength: 1_048_576,
     maxCompletionTokens: 16_384,
-    supportedParameters: SUPPORTS_FULL_NO_TOP_LOGPROBS,
+    supportedParameters: SUPPORTS_FULL_NO_LOGPROBS,
   },
   "z-ai/glm-5.1": {
-    promptUsdPerMillion: 1.05,
-    completionUsdPerMillion: 3.5,
+    promptUsdPerMillion: 0.98,
+    completionUsdPerMillion: 3.08,
     expirationDate: null,
     contextLength: 202_752,
-    maxCompletionTokens: 65_535,
+    maxCompletionTokens: null,
     supportedParameters: SUPPORTS_KIMI,
   },
 };
 
 const EXPECTED_ROSTERS = {
   commons: [
-    "qwen/qwen3.6-flash",
+    "qwen/qwen3.6-35b-a3b",
     "google/gemini-3.1-flash-lite",
     "openai/gpt-5-mini",
     "deepseek/deepseek-v4-flash",
@@ -318,7 +328,7 @@ const RETIRED_ACTIVE_MODEL_IDS = [
   "arcee-ai/trinity-mini",
   "google/gemma-4-31b-it",
   "qwen/qwen3.6-27b",
-  "qwen/qwen3.6-35b-a3b",
+  "qwen/qwen3.6-flash",
   "bytedance-seed/seed-2.0-lite",
 ] as const;
 
@@ -353,7 +363,7 @@ describe("built-in council rosters", () => {
       council.members.map((member) => member.model.modelId),
     );
 
-    expect(Object.keys(OPENROUTER_CATALOG_2026_05_14).sort()).toEqual([...activeIds].sort());
+    expect(Object.keys(OPENROUTER_CATALOG_2026_05_16).sort()).toEqual([...activeIds].sort());
     expect(new Set(activeIds).size).toBe(21);
     expect(activeIds).toHaveLength(21);
   });
@@ -369,10 +379,10 @@ describe("built-in council rosters", () => {
   });
 
   test("Commons is the paid low-cost demo roster", () => {
-    const ceiling = blendedUsdPerMillion(OPENROUTER_CATALOG_2026_05_14["openai/gpt-5-mini"]);
+    const ceiling = blendedUsdPerMillion(OPENROUTER_CATALOG_2026_05_16["openai/gpt-5-mini"]);
 
     for (const modelId of modelIds("commons")) {
-      const catalogRow = OPENROUTER_CATALOG_2026_05_14[modelId];
+      const catalogRow = OPENROUTER_CATALOG_2026_05_16[modelId];
 
       expect(catalogRow.promptUsdPerMillion).toBeGreaterThan(0);
       expect(catalogRow.completionUsdPerMillion).toBeGreaterThan(0);
@@ -387,7 +397,7 @@ describe("built-in council rosters", () => {
   test("catalog rows expose context and phase output metadata", () => {
     for (const council of Object.values(BUILT_IN_COUNCILS)) {
       for (const member of council.members) {
-        const catalogRow = OPENROUTER_CATALOG_2026_05_14[member.model.modelId];
+        const catalogRow = OPENROUTER_CATALOG_2026_05_16[member.model.modelId];
 
         expect(catalogRow.contextLength).toBeGreaterThanOrEqual(131_072);
         expect(catalogRow.expirationDate).toBeNull();
@@ -401,7 +411,7 @@ describe("built-in council rosters", () => {
   test("built-in tuning defaults only send catalog-supported parameters", () => {
     for (const council of Object.values(BUILT_IN_COUNCILS)) {
       for (const member of council.members) {
-        const catalogRow = OPENROUTER_CATALOG_2026_05_14[member.model.modelId];
+        const catalogRow = OPENROUTER_CATALOG_2026_05_16[member.model.modelId];
         const supported = new Set(catalogRow.supportedParameters);
 
         expect(member.tuning).not.toBeNull();
@@ -434,7 +444,7 @@ describe("built-in council rosters", () => {
     }
   });
 
-  test("position 7 is the tier synthesizer and strongest model policy seat", () => {
+  test("position 7 is the tier synthesizer and final-answer policy seat", () => {
     for (const council of Object.values(BUILT_IN_COUNCILS)) {
       const expectedSynthesizer = SYNTHESIZERS[council.slug];
 
@@ -447,7 +457,7 @@ describe("built-in council rosters", () => {
   test("phase rows expose required OpenRouter capability parameters", () => {
     for (const council of Object.values(BUILT_IN_COUNCILS)) {
       for (const member of council.members) {
-        const catalogRow = OPENROUTER_CATALOG_2026_05_14[member.model.modelId];
+        const catalogRow = OPENROUTER_CATALOG_2026_05_16[member.model.modelId];
 
         expect(catalogRow.supportedParameters).toContain("reasoning");
         expect(catalogRow.supportedParameters).toContain("max_tokens");

@@ -193,7 +193,7 @@ export async function continueSession(input: {
   if (!session || session.userId !== input.auth.userId) {
     throw new EdgeError({
       kind: "not_found",
-      message: "Session not found",
+      message: "Manuscript not found",
       details: notFoundDetails("session"),
       status: 404,
     });
@@ -202,10 +202,10 @@ export async function continueSession(input: {
   if (session.status !== "failed") {
     throw new EdgeError({
       kind: "invalid_input",
-      message: `Only failed sessions can be continued (status is "${session.status}")`,
+      message: `Only failed manuscripts can be continued (status is "${session.status}")`,
       details: invalidInputDetails({
         reason: "invalid_request",
-        issues: [{ path: "status", message: "Session not in failed state" }],
+        issues: [{ path: "status", message: "Manuscript not in failed state" }],
       }),
       status: 400,
     });
@@ -242,7 +242,7 @@ export async function rerunSession(input: {
   if (!session || session.userId !== input.auth.userId) {
     throw new EdgeError({
       kind: "not_found",
-      message: "Session not found",
+      message: "Manuscript not found",
       details: notFoundDetails("session"),
       status: 404,
     });
@@ -251,10 +251,10 @@ export async function rerunSession(input: {
   if (session.status !== "failed" && session.status !== "completed") {
     throw new EdgeError({
       kind: "invalid_input",
-      message: `Only terminal sessions can be rerun (status is "${session.status}")`,
+      message: `Only terminal manuscripts can be rerun (status is "${session.status}")`,
       details: invalidInputDetails({
         reason: "invalid_request",
-        issues: [{ path: "status", message: "Session not in terminal state" }],
+        issues: [{ path: "status", message: "Manuscript not in terminal state" }],
       }),
       status: 400,
     });

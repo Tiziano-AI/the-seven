@@ -22,6 +22,7 @@ function resolveLaunchOwnedDistDir(input: {
 export function buildNextConfig(phase: string, env: NodeJS.ProcessEnv = process.env): NextConfig {
   return {
     allowedDevOrigins: ["127.0.0.1"],
+    devIndicators: false,
     distDir: resolveLaunchOwnedDistDir({ env, phase }),
     reactStrictMode: true,
     typedRoutes: true,

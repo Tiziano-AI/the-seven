@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
   type CandidateId,
+  PHASE_TWO_REVIEW_LIST_MAX_ITEMS,
+  PHASE_TWO_SUMMARY_LIST_MAX_ITEMS,
   PHASE_TWO_TEXT_MAX_CHARS,
   PHASE_TWO_VERDICT_INPUT_MAX_CHARS,
   phaseTwoEvaluationResponseFormat,
@@ -128,6 +130,26 @@ describe("phase-two evaluation contract", () => {
     });
   });
 
+  test("keeps semantic bounds out of the portable provider schema", () => {
+    const schema = phaseTwoEvaluationResponseFormat.json_schema.schema;
+    expect(schema.properties.reviews).not.toHaveProperty("minItems");
+    expect(schema.properties.reviews).not.toHaveProperty("maxItems");
+    const reviewSchema = schema.properties.reviews.items;
+    expect(reviewSchema.properties.candidate_id).not.toHaveProperty("enum");
+    expect(reviewSchema.properties.score).not.toHaveProperty("minimum");
+    expect(reviewSchema.properties.score).not.toHaveProperty("maximum");
+    expect(reviewSchema.properties.strengths).not.toHaveProperty("minItems");
+    expect(reviewSchema.properties.strengths).not.toHaveProperty("maxItems");
+    expect(reviewSchema.properties.verdict_input).not.toHaveProperty("maxLength");
+    expect(schema.properties.best_final_answer_inputs).not.toHaveProperty("maxItems");
+  });
+
+  test("does not export a second material-prose regex contract", async () => {
+    const phaseEvaluation = await import("./phaseEvaluation");
+
+    expect(phaseEvaluation).not.toHaveProperty("PHASE_TWO_MATERIAL_TEXT_PATTERN");
+  });
+
   test("keeps compact provider responses under strict app-owned material parsing", () => {
     const payload = {
       reviews: [
@@ -199,6 +221,20 @@ describe("phase-two evaluation contract", () => {
         ...payload,
         reviews: payload.reviews.map((row) =>
           row.candidate_id === "A"
+            ? {
+                ...row,
+                strengths: Array.from(
+                  { length: PHASE_TWO_REVIEW_LIST_MAX_ITEMS + 1 },
+                  (_, index) => `Candidate A strength item ${index} has concrete evidence.`,
+                ),
+              }
+            : row,
+        ),
+      },
+      {
+        ...payload,
+        reviews: payload.reviews.map((row) =>
+          row.candidate_id === "A"
             ? { ...row, verdict_input: "x".repeat(PHASE_TWO_VERDICT_INPUT_MAX_CHARS + 1) }
             : row,
         ),
@@ -212,7 +248,21 @@ describe("phase-two evaluation contract", () => {
       },
       { ...payload, best_final_answer_inputs: ["   "] },
       { ...payload, best_final_answer_inputs: ["x".repeat(PHASE_TWO_TEXT_MAX_CHARS + 1)] },
+      {
+        ...payload,
+        best_final_answer_inputs: Array.from(
+          { length: PHASE_TWO_SUMMARY_LIST_MAX_ITEMS + 1 },
+          (_, index) => `Final answer input item ${index} keeps concrete launch evidence.`,
+        ),
+      },
       { ...payload, major_disagreements: ["\n"] },
+      {
+        ...payload,
+        major_disagreements: Array.from(
+          { length: PHASE_TWO_SUMMARY_LIST_MAX_ITEMS + 1 },
+          (_, index) => `Major disagreement item ${index} names a concrete tradeoff.`,
+        ),
+      },
     ]) {
       expect(() => phaseTwoEvaluationResponseSchema.parse(invalidPayload)).toThrow();
     }

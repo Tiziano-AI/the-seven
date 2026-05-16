@@ -7,10 +7,6 @@ export type CandidateId = z.infer<typeof candidateIdSchema>;
 /** Minimum characters for material phase-2 review strings. */
 export const PHASE_TWO_TEXT_MIN_CHARS = 12;
 
-/** Provider-visible positive prose pattern for material phase-2 review strings. */
-export const PHASE_TWO_MATERIAL_TEXT_PATTERN =
-  "[A-Za-z][A-Za-z0-9'-]*(?:[^A-Za-z0-9'-]+[A-Za-z][A-Za-z0-9'-]*)+";
-
 /** Maximum characters for regular phase-2 review list entries and summaries. */
 export const PHASE_TWO_TEXT_MAX_CHARS = 1200;
 
@@ -240,6 +236,7 @@ const phaseCandidateEvaluationJsonSchema = {
   },
 } as const;
 
+/** Portable provider-facing JSON schema for one phase-2 candidate review row. */
 export const phaseTwoEvaluationResponseFormat = {
   type: "json_schema",
   json_schema: {

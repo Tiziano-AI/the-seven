@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/app/auth-provider";
+import { DemoEndConfirmation } from "@/components/app/demo-end-confirmation";
 import {
   type EditableCouncilMember,
   ModelSlotEditor,
@@ -21,6 +22,7 @@ import {
   fetchOutputFormats,
   updateCouncil,
 } from "@/lib/api";
+import { FOUNDING_COUNCIL_CHOICE, writeLastCouncilRef } from "@/lib/storage";
 
 function encodeRef(ref: { kind: "built_in"; slug: string } | { kind: "user"; councilId: number }) {
   return ref.kind === "built_in" ? `built_in:${ref.slug}` : `user:${ref.councilId}`;
@@ -38,8 +40,14 @@ export function CouncilsScreen() {
   const [phasePrompts, setPhasePrompts] = useState({ phase1: "", phase2: "", phase3: "" });
   const [outputFormats, setOutputFormats] = useState({ phase1: "", phase2: "", phase3: "" });
   const [members, setMembers] = useState<EditableCouncilMember[]>([]);
+  const [seatValidity, setSeatValidity] = useState<Record<number, boolean>>({});
   const [editable, setEditable] = useState(false);
   const [deletable, setDeletable] = useState(false);
+  const [duplicateNameEdited, setDuplicateNameEdited] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const [demoByokConfirmOpen, setDemoByokConfirmOpen] = useState(false);
+  const [demoByokEnding, setDemoByokEnding] = useState(false);
+  const [demoByokError, setDemoByokError] = useState<string | null>(null);
 
   useEffect(() => {
     if (auth.mode !== "byok" || !auth.authHeader) {
@@ -55,9 +63,12 @@ export function CouncilsScreen() {
         }
       })
       .catch((error) => {
+        if (auth.handleAuthorityDenial(error)) {
+          return;
+        }
         toast.error(error instanceof Error ? error.message : "Failed to load councils");
       });
-  }, [auth.authHeader, auth.mode]);
+  }, [auth]);
 
   useEffect(() => {
     if (!auth.authHeader || !selectedRef) {
@@ -74,19 +85,38 @@ export function CouncilsScreen() {
         setName(detail.name);
         setPhasePrompts(detail.phasePrompts);
         setMembers(detail.members);
+        setSeatValidity({});
         setEditable(detail.editable);
         setDeletable(detail.deletable);
-        setDuplicateName(`${detail.name} Copy`);
+        if (!duplicateNameEdited) {
+          setDuplicateName(`${detail.name} Copy`);
+        }
+        setDeletePending(false);
       })
       .catch((error) => {
+        if (auth.handleAuthorityDenial(error)) {
+          return;
+        }
         toast.error(error instanceof Error ? error.message : "Failed to load council");
       });
-  }, [auth.authHeader, councils, selectedRef]);
+  }, [auth, councils, duplicateNameEdited, selectedRef]);
 
   const selectedCouncil = useMemo(
     () => councils.find((council) => encodeRef(council.ref) === selectedRef) ?? null,
     [councils, selectedRef],
   );
+  const invalidSeats = members.filter((member) => seatValidity[member.memberPosition] === false);
+  const hasInvalidSeats = invalidSeats.length > 0;
+
+  const handleMemberChange = useCallback((next: EditableCouncilMember) => {
+    setMembers((current) =>
+      current.map((item) => (item.memberPosition === next.memberPosition ? next : item)),
+    );
+  }, []);
+
+  const handleSeatValidityChange = useCallback((memberPosition: number, valid: boolean) => {
+    setSeatValidity((current) => ({ ...current, [memberPosition]: valid }));
+  }, []);
 
   async function refreshCouncils(nextSelected?: string) {
     if (!auth.authHeader) {
@@ -109,15 +139,23 @@ export function CouncilsScreen() {
         selectedCouncil.ref,
         duplicateName.trim(),
       );
+      setDuplicateNameEdited(false);
       await refreshCouncils(`user:${result.councilId}`);
       toast.success("Council duplicated");
     } catch (error) {
+      if (auth.handleAuthorityDenial(error)) {
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "Duplicate failed");
     }
   }
 
   async function handleSave() {
     if (!auth.authHeader || !selectedCouncil || selectedCouncil.ref.kind !== "user") {
+      return;
+    }
+    if (hasInvalidSeats) {
+      toast.error("Resolve the invalid model seats before saving.");
       return;
     }
     try {
@@ -131,6 +169,9 @@ export function CouncilsScreen() {
       await refreshCouncils(selectedRef);
       toast.success("Council saved");
     } catch (error) {
+      if (auth.handleAuthorityDenial(error)) {
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "Save failed");
     }
   }
@@ -139,99 +180,245 @@ export function CouncilsScreen() {
     if (!auth.authHeader || !selectedCouncil || selectedCouncil.ref.kind !== "user") {
       return;
     }
-    if (!window.confirm("Delete this council? This cannot be undone.")) {
-      return;
-    }
     try {
       await deleteCouncil(auth.authHeader, selectedCouncil.ref);
       await refreshCouncils();
       setSelectedRef("");
+      setDeletePending(false);
       toast.success("Council deleted");
     } catch (error) {
+      if (auth.handleAuthorityDenial(error)) {
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "Delete failed");
+    }
+  }
+
+  async function handleEndDemoAndOpenByok() {
+    setDemoByokEnding(true);
+    setDemoByokError(null);
+    try {
+      await auth.clearDemoSession();
+      writeLastCouncilRef(FOUNDING_COUNCIL_CHOICE);
+      window.location.assign("/?unlock=byok");
+    } catch (error) {
+      setDemoByokError(error instanceof Error ? error.message : "Demo logout failed");
+    } finally {
+      setDemoByokEnding(false);
     }
   }
 
   if (!auth.isAuthenticated) {
     return (
-      <Card className="p-6">
-        <p className="text-sm text-[var(--muted-foreground)]">Unlock BYOK to manage councils.</p>
-      </Card>
+      <div>
+        <h1 className="sr-only">Council Library</h1>
+        <Card className="p-6">
+          <p className="text-sm text-[var(--text-muted)]">
+            Unlock BYOK to manage the council library.
+          </p>
+        </Card>
+      </div>
     );
   }
 
   if (auth.mode === "demo") {
     return (
-      <Card className="p-6">
-        <p className="text-sm text-[var(--muted-foreground)]">
-          Demo mode is locked to the Commons Council. Council authoring is available only in BYOK
-          mode.
-        </p>
-      </Card>
+      <div>
+        <h1 className="sr-only">Council Library</h1>
+        <Card className="p-6 space-y-4">
+          <p className="text-sm text-[var(--text-muted)]">
+            Demo mode is locked to the Commons Council. Council authoring is available only in BYOK
+            mode.
+          </p>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setDemoByokError(null);
+              setDemoByokConfirmOpen(true);
+            }}
+          >
+            End demo and unlock BYOK
+          </Button>
+          {demoByokConfirmOpen ? (
+            <DemoEndConfirmation
+              title="End demo seal and unlock BYOK?"
+              body="The server ends the demo seal before the browser cookie is cleared. Bring Your Own Key opens after the demo seal closes."
+              confirmLabel="End demo and unlock BYOK"
+              pendingLabel="Ending demo…"
+              pending={demoByokEnding}
+              error={demoByokError}
+              onCancel={() => {
+                setDemoByokError(null);
+                setDemoByokConfirmOpen(false);
+              }}
+              onConfirm={handleEndDemoAndOpenByok}
+            />
+          ) : null}
+        </Card>
+      </div>
     );
   }
 
   const authHeader = auth.authHeader;
   if (!authHeader) {
     return (
-      <Card className="p-6">
-        <p className="text-sm text-[var(--muted-foreground)]">
-          BYOK authentication is required before council data can load.
-        </p>
-      </Card>
+      <div>
+        <h1 className="sr-only">Council Library</h1>
+        <Card className="p-6">
+          <p className="text-sm text-[var(--text-muted)]">
+            BYOK authentication is required before council data can load.
+          </p>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-      <Card className="p-6">
-        <Badge>Council Library</Badge>
-        <h1 className="mt-4 text-3xl font-semibold tracking-[-0.05em]">Councils</h1>
+    <div className="council-screen-grid grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
+      <Card className="council-library-panel p-6">
+        <Badge className="seal">Council Library</Badge>
+        <h1 className="surface-title mt-4">Council Library</h1>
         <div className="mt-5 space-y-3">
-          {councils.map((council) => (
-            <button
-              key={council.name}
-              type="button"
-              className="panel panel-interactive w-full text-left"
-              onClick={() => setSelectedRef(encodeRef(council.ref))}
-            >
-              <div className="text-sm font-semibold">{council.name}</div>
-              <div className="mt-1 text-xs text-[var(--muted-foreground)]">
-                {council.description ?? "Custom council"}
-              </div>
-            </button>
-          ))}
+          {councils.map((council) => {
+            const ref = encodeRef(council.ref);
+            const selected = selectedRef === ref;
+            return (
+              <button
+                key={ref}
+                type="button"
+                aria-pressed={selected}
+                className={
+                  selected
+                    ? "panel panel-interactive council-library-row council-library-row-active w-full text-left"
+                    : "panel panel-interactive council-library-row w-full text-left"
+                }
+                onClick={() => setSelectedRef(ref)}
+              >
+                <div className="text-sm font-semibold">{council.name}</div>
+                <div className="mt-1 text-xs text-[var(--text-muted)]">
+                  {council.description ?? "Custom council"}
+                </div>
+              </button>
+            );
+          })}
         </div>
-        <div className="mt-6 space-y-3">
+        <form
+          className="mt-6 space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleDuplicate();
+          }}
+        >
           <Label htmlFor={`${fieldPrefix}-duplicate-name`}>Duplicate Selected Council</Label>
           <Input
             id={`${fieldPrefix}-duplicate-name`}
             value={duplicateName}
-            onChange={(event) => setDuplicateName(event.target.value)}
+            onChange={(event) => {
+              setDuplicateNameEdited(true);
+              setDuplicateName(event.target.value);
+            }}
           />
-          <Button variant="secondary" onClick={handleDuplicate} disabled={!selectedCouncil}>
+          <Button type="submit" variant="secondary" disabled={!selectedCouncil}>
             Duplicate
           </Button>
-        </div>
+        </form>
       </Card>
 
-      <div className="space-y-6">
+      <div className="council-editor-panel space-y-6">
         <Card className="p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <Badge>{editable ? "Editable" : "Template"}</Badge>
-              <div className="mt-4 text-3xl font-semibold tracking-[-0.05em]">
+              <Badge className="seal">{editable ? "Editable" : "Template"}</Badge>
+              <div className="mt-4 font-display text-3xl leading-none text-[var(--brass)]">
                 {name || "Select a council"}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              {editable ? <Button onClick={handleSave}>Save</Button> : null}
+              {editable ? (
+                <Button onClick={handleSave} disabled={hasInvalidSeats}>
+                  Save
+                </Button>
+              ) : null}
               {deletable ? (
-                <Button variant="danger" onClick={handleDelete}>
+                <Button variant="danger" onClick={() => setDeletePending(true)}>
                   Delete
                 </Button>
               ) : null}
             </div>
+          </div>
+          {deletePending ? (
+            <div className="panel confirm-panel mt-5">
+              <div>
+                <p className="m-0 font-semibold">Delete this council?</p>
+                <p className="m-0 mt-1 text-sm text-[var(--text-dim)]">
+                  The custom council is removed from your library. Built-in councils remain
+                  available.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setDeletePending(false)}>
+                  Keep council
+                </Button>
+                <Button variant="danger" size="sm" onClick={handleDelete}>
+                  Delete council
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="surface-title">The seven seats</h2>
+            <p className="text-xs italic text-[var(--text-dim)]">
+              Six reviewers draft and critique; a seventh synthesizes the verdict.
+            </p>
+          </div>
+          {hasInvalidSeats ? (
+            <div className="alert-danger mt-5" role="alert">
+              <p className="m-0 font-semibold">Resolve invalid model seats before saving.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {invalidSeats.map((member) => {
+                  const alias = String.fromCharCode(64 + member.memberPosition);
+                  return (
+                    <button
+                      key={member.memberPosition}
+                      type="button"
+                      className="text-link"
+                      onClick={() => {
+                        window.document
+                          .querySelector<HTMLButtonElement>(`[data-seat-model-control="${alias}"]`)
+                          ?.focus();
+                      }}
+                    >
+                      Seat {alias}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {members.map((member) => (
+              <ModelSlotEditor
+                key={member.memberPosition}
+                authHeader={authHeader}
+                member={member}
+                editable={editable}
+                onAuthorityDenial={auth.handleAuthorityDenial}
+                onValidityChange={handleSeatValidityChange}
+                onChange={handleMemberChange}
+              />
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="surface-title">Phase contracts</h2>
+            <p className="text-xs italic text-[var(--text-dim)]">
+              Shared instructions and output protocols for the selected council.
+            </p>
           </div>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
@@ -244,16 +431,15 @@ export function CouncilsScreen() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-phase1-output`}>Answer Output Contract</Label>
-              <Textarea
-                id={`${fieldPrefix}-phase1-output`}
-                className="min-h-[110px]"
-                value={outputFormats.phase1}
-                disabled
-              />
+              <p id={`${fieldPrefix}-phase1-output-label`} className="docket-question-label">
+                Answer protocol
+              </p>
+              <pre id={`${fieldPrefix}-phase1-output`} className="protocol-block">
+                {outputFormats.phase1}
+              </pre>
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-phase1-prompt`}>Answer Instructions</Label>
+              <Label htmlFor={`${fieldPrefix}-phase1-prompt`}>Answer instructions</Label>
               <Textarea
                 id={`${fieldPrefix}-phase1-prompt`}
                 value={phasePrompts.phase1}
@@ -264,16 +450,15 @@ export function CouncilsScreen() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-phase2-output`}>Evaluation JSON Contract</Label>
-              <Textarea
-                id={`${fieldPrefix}-phase2-output`}
-                className="min-h-[110px]"
-                value={outputFormats.phase2}
-                disabled
-              />
+              <p id={`${fieldPrefix}-phase2-output-label`} className="docket-question-label">
+                Evaluation protocol
+              </p>
+              <pre id={`${fieldPrefix}-phase2-output`} className="protocol-block">
+                {outputFormats.phase2}
+              </pre>
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-phase2-prompt`}>Evaluation Instructions</Label>
+              <Label htmlFor={`${fieldPrefix}-phase2-prompt`}>Evaluation instructions</Label>
               <Textarea
                 id={`${fieldPrefix}-phase2-prompt`}
                 value={phasePrompts.phase2}
@@ -284,16 +469,15 @@ export function CouncilsScreen() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-phase3-output`}>Final Answer Output Contract</Label>
-              <Textarea
-                id={`${fieldPrefix}-phase3-output`}
-                className="min-h-[110px]"
-                value={outputFormats.phase3}
-                disabled
-              />
+              <p id={`${fieldPrefix}-phase3-output-label`} className="docket-question-label">
+                Verdict protocol
+              </p>
+              <pre id={`${fieldPrefix}-phase3-output`} className="protocol-block">
+                {outputFormats.phase3}
+              </pre>
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor={`${fieldPrefix}-phase3-prompt`}>Final Answer Instructions</Label>
+              <Label htmlFor={`${fieldPrefix}-phase3-prompt`}>Verdict instructions</Label>
               <Textarea
                 id={`${fieldPrefix}-phase3-prompt`}
                 value={phasePrompts.phase3}
@@ -303,30 +487,6 @@ export function CouncilsScreen() {
                 disabled={!editable}
               />
             </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="surface-title text-sm uppercase tracking-[0.22em]">The seven</h2>
-            <p className="text-xs italic text-[var(--text-dim)]">
-              Six reviewers draft and critique; a seventh synthesizes the verdict.
-            </p>
-          </div>
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {members.map((member, index) => (
-              <ModelSlotEditor
-                key={member.memberPosition}
-                authHeader={authHeader}
-                member={member}
-                editable={editable}
-                onChange={(next) =>
-                  setMembers((current) =>
-                    current.map((item, currentIndex) => (currentIndex === index ? next : item)),
-                  )
-                }
-              />
-            ))}
           </div>
         </Card>
       </div>
