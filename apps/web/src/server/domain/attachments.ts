@@ -222,26 +222,25 @@ export async function decodeAttachmentToText(
     }
   })();
 
-  if (detected && DOCUMENT_MIMES.has(detected.mime)) {
-    return convertDocumentToText({
-      name,
-      mime: detected.mime,
-      buffer: base64Decoded.buffer,
-    });
+  if (detected) {
+    if (DOCUMENT_MIMES.has(detected.mime)) {
+      return convertDocumentToText({
+        name,
+        mime: detected.mime,
+        buffer: base64Decoded.buffer,
+      });
+    }
+    return {
+      ok: false,
+      error: {
+        kind: "unsupported_type",
+        message: `Attachment ${name} is ${detected.mime} (${detected.ext}), which is not a supported format.`,
+      },
+    };
   }
 
   const textDecoded = decodeUtf8Strict(base64Decoded.buffer);
   if (!textDecoded.ok) {
-    if (detected) {
-      return {
-        ok: false,
-        error: {
-          kind: "unsupported_type",
-          message: `Attachment ${name} is ${detected.mime} (${detected.ext}), which is not a supported format.`,
-        },
-      };
-    }
-
     return {
       ok: false,
       error: { kind: "invalid_utf8", message: `Attachment ${name} is not valid UTF-8 text` },

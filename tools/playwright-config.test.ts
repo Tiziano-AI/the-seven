@@ -10,6 +10,8 @@ describe("Playwright config projection", () => {
     });
 
     expect(config.use?.baseURL).toBe("http://127.0.0.1:43217");
+    expect(config.workers).toBe(1);
+    expect(config.forbidOnly).toBe(true);
     expect(config.webServer).toMatchObject({
       command: "node --import tsx tools/next-dev-server.ts",
       env: {
@@ -40,10 +42,32 @@ describe("Playwright config projection", () => {
       SEVEN_BASE_URL: "http://127.0.0.1:43217",
     });
 
+    expect(config.forbidOnly).toBe(true);
     expect(config.webServer).toMatchObject({
       reuseExistingServer: false,
       url: "http://127.0.0.1:43217",
     });
+  });
+
+  test("focused test.only requires an explicit local override", () => {
+    const config = buildPlaywrightConfig({
+      NODE_ENV: "test",
+      SEVEN_BASE_URL: "http://127.0.0.1:43217",
+      SEVEN_PLAYWRIGHT_ALLOW_ONLY: "1",
+    });
+
+    expect(config.forbidOnly).toBe(false);
+  });
+
+  test("CI gate ignores the local test.only override", () => {
+    const config = buildPlaywrightConfig({
+      NODE_ENV: "test",
+      CI: "1",
+      SEVEN_BASE_URL: "http://127.0.0.1:43217",
+      SEVEN_PLAYWRIGHT_ALLOW_ONLY: "1",
+    });
+
+    expect(config.forbidOnly).toBe(true);
   });
 
   test("fails closed when the base URL is missing", () => {

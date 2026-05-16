@@ -156,7 +156,10 @@ async function admitRequest(request: NextRequest, route: RouteContract): Promise
         : await resolveAuthContext(request, metadata.now, route.auth),
   };
 
-  if (ctx.auth.kind === "demo" && route.auth !== "byok" && request.method !== "GET") {
+  if (
+    request.method !== "GET" &&
+    (route.auth === "demo-cookie" || (ctx.auth.kind === "demo" && route.auth !== "byok"))
+  ) {
     assertSameOrigin(request);
   }
 

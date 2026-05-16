@@ -1,7 +1,13 @@
 import http from "node:http";
-import { buildSuccessEnvelope, routeContract } from "@the-seven/contracts";
-import { describe, expect, it } from "vitest";
-import { parseDemoApiSuccess } from "./live-demo-api";
+import {
+  buildErrorEnvelope,
+  buildSuccessEnvelope,
+  jsonApiCacheControl,
+  routeContract,
+  unauthorizedDetails,
+} from "@the-seven/contracts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { demoApiRequest, parseDemoApiSuccess } from "./live-demo-api";
 import {
   assertDemoConsumeRedirect,
   assertDemoConsumeUrlOrigin,
@@ -12,6 +18,10 @@ import {
 import { resolveProofOrigin } from "./live-demo-origin";
 
 describe("live demo cookie proof", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("extracts the absolute consume URL from the received text email", () => {
     const consumeUrl = extractDemoConsumeUrlFromEmail({
       text: "Open the demo: https://theseven.ai/api/v1/demo/consume?token=abc_123-Z",
@@ -201,7 +211,89 @@ describe("live demo cookie proof", () => {
         route,
         status: 200,
         data: envelope,
+        traceHeader: "trace",
       }),
     ).toThrow("Demo API POST /api/v1/sessions returned status 200; expected 201");
+  });
+
+  it("rejects live demo API success envelopes whose trace header differs", () => {
+    const route = routeContract("sessions.create");
+    const envelope = buildSuccessEnvelope({
+      traceId: "trace",
+      now: new Date("2026-05-12T10:00:00.000Z"),
+      resource: "sessions.create",
+      payload: { sessionId: 33 },
+    });
+
+    expect(() =>
+      parseDemoApiSuccess({
+        route,
+        status: 201,
+        data: envelope,
+        traceHeader: "wrong-trace",
+      }),
+    ).toThrow("trace header does not match envelope trace_id");
+  });
+
+  it("rejects explicit bodies for no-body live demo API routes before fetch", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      demoApiRequest({
+        baseUrl: "https://local.example",
+        publicOrigin: "https://theseven.ai",
+        cookieHeader: "seven_demo_session=token",
+        route: routeContract("demo.logout"),
+        body: {},
+      }),
+    ).rejects.toThrow("Demo API POST /api/v1/demo/logout does not accept a request body");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("validates falsy explicit live demo API bodies before fetch", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      demoApiRequest({
+        baseUrl: "https://local.example",
+        publicOrigin: "https://theseven.ai",
+        cookieHeader: "seven_demo_session=token",
+        route: routeContract("sessions.create"),
+        body: false,
+      }),
+    ).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects live demo API denial envelopes whose trace header differs", async () => {
+    const route = routeContract("demo.session");
+    const envelope = buildErrorEnvelope({
+      traceId: "trace",
+      now: new Date("2026-05-12T10:00:00.000Z"),
+      kind: "unauthorized",
+      message: "Missing or invalid authentication",
+      details: unauthorizedDetails("missing_auth"),
+    });
+
+    vi.stubGlobal("fetch", async () =>
+      Response.json(envelope, {
+        status: 401,
+        headers: {
+          "cache-control": jsonApiCacheControl,
+          "x-trace-id": "wrong-trace",
+        },
+      }),
+    );
+
+    await expect(
+      demoApiRequest({
+        baseUrl: "https://local.example",
+        publicOrigin: "https://theseven.ai",
+        cookieHeader: "seven_demo_session=stale",
+        route,
+      }),
+    ).rejects.toThrow("trace header does not match envelope trace_id");
   });
 });

@@ -3,7 +3,6 @@
 
 [build]
 builder = "RAILPACK"
-buildEnvironment = "V3"
 buildCommand = "pnpm build"
 
 [deploy]

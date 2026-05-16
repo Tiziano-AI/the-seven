@@ -1,7 +1,7 @@
 import { RUNTIME_ENV_KEYS } from "@the-seven/config";
 
 export const GATE_COMMAND_ARGS = ["run", "--python", "3.12", "devtools/gate.py"] as const;
-export const GATE_UNSET_ENV_KEYS = RUNTIME_ENV_KEYS;
+export const GATE_UNSET_ENV_KEYS = [...RUNTIME_ENV_KEYS, "SEVEN_PLAYWRIGHT_ALLOW_ONLY"] as const;
 
 function buildUnsetArgs() {
   return GATE_UNSET_ENV_KEYS.flatMap((key) => ["-u", key]);

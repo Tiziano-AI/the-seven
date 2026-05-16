@@ -130,31 +130,8 @@ export async function parseJsonBody<T>(request: Request, schema: ZodType<T>): Pr
 
 export async function parseNoBody(request: Request): Promise<void> {
   const text = await readBoundedBodyText(request);
-  if (text.trim().length === 0) {
+  if (text.length === 0) {
     return;
-  }
-
-  requireJsonContentType(request);
-  try {
-    const parsed = JSON.parse(text) as unknown;
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      !Array.isArray(parsed) &&
-      Object.keys(parsed).length === 0
-    ) {
-      return;
-    }
-  } catch {
-    throw new EdgeError({
-      kind: "invalid_input",
-      message: "Invalid JSON body",
-      details: invalidInputDetails({
-        reason: "invalid_json",
-        issues: [{ path: "", message: "Request body must be valid JSON" }],
-      }),
-      status: 400,
-    });
   }
 
   throw new EdgeError({

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -62,7 +63,98 @@ def _materialize_local_http_projection(repo_root: Path) -> dict[str, str]:
 def _build_e2e_env(repo_root: Path) -> dict[str, str]:
     env = os.environ.copy()
     env.update(_materialize_local_http_projection(repo_root))
+    env["SEVEN_RENDER_PROOF_DIR"] = str(repo_root / "tmp" / "render-proof")
+    env["SEVEN_PLAYWRIGHT_ALLOW_ONLY"] = "0"
     return env
+
+
+def _expected_render_proof_files() -> list[str]:
+    proof_states = [
+        "locked",
+        "demo-receipt",
+        "demo-composer",
+        "byok-composer",
+        "submitted-workbench",
+        "archive",
+        "processing-run",
+        "completed-verdict",
+        "provider-record",
+        "failed-recovery",
+        "council-editor",
+    ]
+    expected = [
+        f"{viewport}-{state}.png"
+        for viewport in ("desktop", "tablet", "mobile")
+        for state in proof_states
+    ]
+    expected.extend(
+        f"mobile-{state}-viewport.png"
+        for state in (
+            "demo-receipt",
+            "submitted-workbench",
+            "processing-run",
+            "completed-verdict",
+            "provider-record",
+            "failed-recovery",
+        )
+    )
+    expected.append("contact-sheet.jpg")
+    expected.append("render-proof-manifest.json")
+    return expected
+
+
+def _check_render_proof_artifacts(*, proof_dir: Path) -> None:
+    missing: list[str] = []
+    empty: list[str] = []
+    for name in _expected_render_proof_files():
+        path = proof_dir / name
+        if not path.is_file():
+            missing.append(name)
+            continue
+        if path.stat().st_size <= 0:
+            empty.append(name)
+
+    if missing or empty:
+        details = []
+        if missing:
+            details.append("missing:\n" + "\n".join(f"- {name}" for name in missing))
+        if empty:
+            details.append("empty:\n" + "\n".join(f"- {name}" for name in empty))
+        raise SystemExit("Rendered proof artifact set is incomplete.\n" + "\n".join(details))
+
+    contact_sheet = proof_dir / "contact-sheet.jpg"
+    contact_mtime = contact_sheet.stat().st_mtime_ns
+    stale = [
+        path.name
+        for path in proof_dir.glob("*.png")
+        if path.is_file() and path.stat().st_mtime_ns > contact_mtime
+    ]
+    if stale:
+        joined = "\n".join(f"- {name}" for name in sorted(stale))
+        raise SystemExit("Rendered proof contact sheet is stale relative to PNG captures:\n" + joined)
+
+    manifest_path = proof_dir / "render-proof-manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Rendered proof manifest is invalid JSON: {exc}") from exc
+    manifest_files = manifest.get("files")
+    if not isinstance(manifest_files, list):
+        raise SystemExit("Rendered proof manifest must include a files list")
+    manifest_names = sorted(
+        item.get("name") for item in manifest_files if isinstance(item, dict)
+    )
+    expected_names = sorted(
+        name for name in _expected_render_proof_files() if name != "render-proof-manifest.json"
+    )
+    if manifest_names != expected_names:
+        raise SystemExit("Rendered proof manifest file list does not match expected captures")
+
+
+def _reset_render_proof_dir(*, proof_dir: Path) -> None:
+    if proof_dir.exists():
+        shutil.rmtree(proof_dir)
+    proof_dir.mkdir(parents=True, exist_ok=True)
 
 
 def _git_ls_files(*, repo_root: Path) -> list[Path]:
@@ -178,6 +270,10 @@ def _check_next_env_canonical(*, repo_root: Path) -> None:
             "Tracked apps/web/next-env.d.ts is missing the canonical .next type reference.\n"
             "Fix: restore the file to import './.next/types/routes.d.ts'."
         )
+
+
+def _materialize_next_typegen(*, repo_root: Path) -> None:
+    _run(["pnpm", "--filter", "@the-seven/web", "exec", "next", "typegen"], cwd=repo_root)
 
 
 def _check_canonical_surfaces(*, repo_root: Path) -> None:
@@ -314,6 +410,8 @@ def main(argv: list[str]) -> int:
     if config.lint:
         _run(["pnpm", "run", "lint"], cwd=config.repo_root)
     if config.check:
+        _materialize_next_typegen(repo_root=config.repo_root)
+        _check_next_env_canonical(repo_root=config.repo_root)
         _run(["pnpm", "run", "check"], cwd=config.repo_root)
     if config.tests:
         _run(["pnpm", "test"], cwd=config.repo_root)
@@ -322,7 +420,10 @@ def main(argv: list[str]) -> int:
     if config.bootstrap:
         _run(["pnpm", "run", "db:bootstrap:check"], cwd=config.repo_root)
     if config.e2e:
-        _run(["pnpm", "run", "test:e2e"], cwd=config.repo_root, env=_build_e2e_env(config.repo_root))
+        e2e_env = _build_e2e_env(config.repo_root)
+        _reset_render_proof_dir(proof_dir=Path(e2e_env["SEVEN_RENDER_PROOF_DIR"]))
+        _run(["pnpm", "run", "test:e2e"], cwd=config.repo_root, env=e2e_env)
+        _check_render_proof_artifacts(proof_dir=Path(e2e_env["SEVEN_RENDER_PROOF_DIR"]))
 
     return 0
 

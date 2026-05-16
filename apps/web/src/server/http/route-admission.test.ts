@@ -1,4 +1,4 @@
-import { routeContract } from "@the-seven/contracts";
+import { HttpContractError, routeContract } from "@the-seven/contracts";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -130,6 +130,59 @@ describe("handleRoute admission", () => {
 
     expect(response.status).toBe(403);
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  test("demo logout denies cross-origin missing auth before handler execution", async () => {
+    authMocks.resolveAuthContext.mockResolvedValue({ kind: "none" });
+    const handler = vi.fn(async () => ({ success: true }));
+
+    const response = await handleRoute(
+      request({
+        method: "POST",
+        headers: {
+          origin: "https://evil.example",
+          "x-seven-ingress": "web",
+        },
+      }),
+      {
+        route: routeContract("demo.logout"),
+        handler,
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  test("demo logout allows same-origin stale-cookie recovery to reach handler", async () => {
+    authMocks.resolveAuthContext.mockResolvedValue({ kind: "none" });
+    const handler = vi.fn(async () => {
+      throw new HttpContractError({
+        kind: "unauthorized",
+        message: "Missing demo session",
+        details: { reason: "missing_auth" },
+        status: 401,
+      });
+    });
+
+    const response = await handleRoute(
+      request({
+        method: "POST",
+        headers: {
+          "sec-fetch-site": "same-origin",
+          "x-seven-ingress": "web",
+        },
+      }),
+      {
+        route: routeContract("demo.logout"),
+        handler,
+      },
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(401);
+    expect(body.kind).toBe("unauthorized");
+    expect(handler).toHaveBeenCalledOnce();
   });
 
   test("demo logout accepts browser-owned same-origin fetch metadata", async () => {

@@ -80,6 +80,19 @@ async function waitForBillingDiagnostics(authHeader: string, sessionId: number, 
   return diagnostics;
 }
 
+async function waitForFailureBillingDiagnostics(authHeader: string, sessionId: number) {
+  const deadline = Date.now() + LIVE_BILLING_TIMEOUT_MS;
+  let diagnostics = await fetchSessionDiagnostics(authHeader, sessionId);
+  while (
+    diagnostics.providerCalls.some((call) => call.billingLookupStatus === "pending") &&
+    Date.now() < deadline
+  ) {
+    await sleep(5_000);
+    diagnostics = await fetchSessionDiagnostics(authHeader, sessionId);
+  }
+  return diagnostics;
+}
+
 async function describeTerminalSessionFailure(
   authHeader: string,
   sessionId: number,
@@ -87,7 +100,7 @@ async function describeTerminalSessionFailure(
   reason: string,
 ): Promise<never> {
   const detail = await fetchSession(authHeader, sessionId);
-  const diagnostics = await fetchSessionDiagnostics(authHeader, sessionId);
+  const diagnostics = await waitForFailureBillingDiagnostics(authHeader, sessionId);
 
   throw new Error(formatTerminalSessionFailure({ label, reason, detail, diagnostics }));
 }

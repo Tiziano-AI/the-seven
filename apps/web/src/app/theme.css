@@ -1,11 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════════
-   THE SEVEN — DESIGN SYSTEM
-   Theme: Dark Violet · Evergreen · Wood · Gold
-   Aesthetic: Organic, cohesive, subtle glow, radial gradients
-   Three fonts: MedievalSharp (display/UI), Raleway (body), Victor Mono (mono)
-   ═══════════════════════════════════════════════════════════════════ */
-
-/* ── Tailwind v4 theme bridge ─────────────────────────────────────── */
+/* The Seven scholarly council workbench tokens. */
 
 @theme {
   --color-background: var(--background);
@@ -24,127 +17,88 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-bg: var(--bg);
-  --color-bg-soft: var(--bg-soft);
-  --color-surface: var(--surface);
-  --color-surface-raised: var(--surface-raised);
-  --color-violet: var(--violet);
-  --color-violet-soft: var(--violet-soft);
-  --color-evergreen: var(--evergreen);
-  --color-evergreen-soft: var(--evergreen-soft);
-  --color-evergreen-bright: var(--evergreen-bright);
-  --color-wood: var(--wood);
-  --color-wood-soft: var(--wood-soft);
-  --color-gold: var(--gold);
-  --color-gold-soft: var(--gold-soft);
-  --color-gold-bright: var(--gold-bright);
-  --font-display: var(--font-medieval), var(--font-raleway), ui-serif, Georgia, serif;
-  --font-body: var(--font-raleway), system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-medieval), var(--font-serif), Georgia, serif;
+  --font-body: var(--font-serif), ui-serif, Georgia, serif;
   --font-mono: var(--font-victor), ui-monospace, SFMono-Regular, monospace;
 }
-
-/* ── Core palette ─────────────────────────────────────────────────── */
 
 :root {
   color-scheme: dark;
 
-  /* Backgrounds */
-  --bg: oklch(0.12 0.01 240);
-  --bg-soft: oklch(0.14 0.01 240);
-  --surface: oklch(0.16 0.01 240);
-  --surface-raised: oklch(0.2 0.015 280);
+  --ink: oklch(0.115 0.018 172);
+  --ink-2: oklch(0.145 0.022 170);
+  --ink-3: oklch(0.18 0.026 170);
+  --folio: oklch(0.22 0.023 84);
+  --folio-raised: oklch(0.255 0.026 82);
+  --archive: oklch(0.13 0.018 170);
+  --parchment: oklch(0.84 0.055 86);
+  --parchment-muted: oklch(0.72 0.043 82);
+  --brass: oklch(0.68 0.105 78);
+  --brass-soft: oklch(0.58 0.08 78);
+  --brass-dim: oklch(0.46 0.058 76);
+  --brass-wash: oklch(0.68 0.105 78 / 0.18);
+  --verdigris: oklch(0.56 0.07 176);
+  --burgundy: oklch(0.43 0.12 28);
+  --umber: oklch(0.32 0.055 48);
+  --ash: oklch(0.64 0.014 80);
 
-  /* Violet lane */
-  --violet: oklch(0.28 0.15 290);
-  --violet-soft: oklch(0.65 0.2 285);
-  --violet-dim: oklch(0.22 0.12 290);
+  --text: oklch(0.94 0.018 84);
+  --text-muted: oklch(0.78 0.018 82);
+  --text-dim: oklch(0.61 0.014 82);
+  --text-faint: oklch(0.48 0.012 82);
 
-  /* Evergreen lane */
-  --evergreen: oklch(0.58 0.1 180);
-  --evergreen-soft: oklch(0.2 0.04 180);
-  --evergreen-bright: oklch(0.62 0.12 175);
-
-  /* Wood lane */
-  --wood: oklch(0.22 0.04 40);
-  --wood-soft: oklch(0.35 0.06 40);
-  --wood-dim: oklch(0.18 0.03 40);
-
-  /* Gold lane */
-  --gold: oklch(0.7 0.12 75);
-  --gold-soft: oklch(0.52 0.1 70);
-  --gold-bright: oklch(0.75 0.14 75);
-
-  /* Text */
-  --text: oklch(0.98 0.01 0);
-  --text-muted: oklch(0.89 0.01 0);
-  --text-dim: oklch(0.72 0.01 0);
-
-  /* Borders */
-  --border-base: oklch(0.7 0.12 75 / 0.55);
-  --border-input: oklch(0.78 0.14 75 / 0.98);
-
-  /* Semantic mappings */
-  --background: var(--bg);
+  --background: var(--ink);
   --foreground: var(--text);
-  --card: var(--surface);
+  --card: var(--ink-2);
   --card-foreground: var(--text);
-  --primary: var(--violet);
-  --primary-foreground: var(--text);
-  --secondary: var(--evergreen);
+  --primary: var(--brass);
+  --primary-foreground: var(--ink);
+  --secondary: var(--folio-raised);
   --secondary-foreground: var(--text);
-  --accent: var(--gold);
-  --accent-foreground: var(--bg);
-  --muted: var(--wood-soft);
+  --muted: var(--folio);
   --muted-foreground: var(--text-muted);
-  --destructive: oklch(0.55 0.18 35);
+  --accent: var(--brass);
+  --accent-foreground: var(--ink);
+  --destructive: var(--burgundy);
   --destructive-foreground: var(--text);
-  --border: var(--border-base);
-  --input: var(--surface-raised);
-  --input-border: var(--border-input);
-  --ring: var(--violet-soft);
+  --border: oklch(0.66 0.08 78 / 0.34);
+  --border-strong: oklch(0.72 0.1 78 / 0.58);
+  --input: oklch(0.16 0.018 172);
+  --input-border: oklch(0.66 0.08 78 / 0.55);
+  --ring: var(--brass);
 
-  /* Fonts */
-  --font-display: var(--font-medieval), var(--font-raleway), ui-serif, Georgia, serif;
-  --font-body: var(--font-raleway), system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-medieval), var(--font-serif), Georgia, serif;
+  --font-body: var(--font-serif), ui-serif, Georgia, serif;
   --font-mono: var(--font-victor), ui-monospace, SFMono-Regular, monospace;
 
-  /* Radius */
-  --radius: 1rem;
-  --radius-sm: 0.75rem;
-  --radius-lg: 1.25rem;
-  --radius-xl: 1.5rem;
-  --radius-2xl: 1.75rem;
-  --radius-full: 9999px;
+  --radius-xs: 0.1875rem;
+  --radius-sm: 0.3125rem;
+  --radius: 0.5rem;
+  --radius-lg: 0.75rem;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 0.05);
-  --shadow-base: 0 1px 3px 0 oklch(0 0 0 / 0.1), 0 1px 2px -1px oklch(0 0 0 / 0.1);
-  --shadow-md: 0 4px 6px -1px oklch(0 0 0 / 0.1), 0 2px 4px -2px oklch(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px oklch(0 0 0 / 0.1), 0 4px 6px -4px oklch(0 0 0 / 0.1);
-  --shadow-deep: 0 0 34px oklch(0 0 0 / 1);
+  --shadow-sm: 0 1px 0 oklch(1 0 0 / 0.04) inset;
+  --shadow-base: 0 1px 0 oklch(1 0 0 / 0.035) inset, 0 10px 28px oklch(0 0 0 / 0.14);
+  --shadow-deep: 0 28px 80px oklch(0 0 0 / 0.36);
+  --focus-ring: 0 0 0 3px oklch(0.68 0.105 78 / 0.22);
 
-  /* Glows */
-  --glow-violet: 0 0 20px var(--violet-soft), 0 0 40px var(--violet);
-  --glow-evergreen: 0 0 20px var(--evergreen-bright), 0 0 40px var(--evergreen);
-  --glow-gold: 0 0 20px var(--gold-bright), 0 0 40px var(--gold);
-  --glow-subtle: 0 0 10px oklch(0 0 0 / 0.3);
+  --surface-rule: linear-gradient(90deg, transparent, oklch(0.68 0.105 78 / 0.5), transparent);
 
-  /* Gradients */
-  --gradient-field:
-    radial-gradient(circle at top, oklch(0.58 0.1 180 / 0.18), transparent 55%),
-    radial-gradient(circle at bottom, oklch(0.22 0.04 40 / 0.45), transparent 70%), var(--bg);
-  --gradient-panel:
-    radial-gradient(circle at top right, oklch(0.65 0.2 285 / 0.24), transparent 55%),
-    radial-gradient(circle at bottom left, oklch(0.7 0.12 75 / 0.25), transparent 55%),
-    var(--bg-soft);
-  --gradient-card:
-    radial-gradient(circle at top left, oklch(0.65 0.2 285 / 0.16), transparent 55%),
-    radial-gradient(circle at bottom right, oklch(0.58 0.1 180 / 0.16), transparent 55%),
-    radial-gradient(circle at bottom, oklch(0.35 0.06 40 / 0.22), transparent 65%);
-  --gradient-primary: linear-gradient(135deg, var(--violet), var(--gold));
-  --gradient-secondary: linear-gradient(135deg, var(--evergreen-soft), var(--evergreen));
-
-  /* Transitions */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --body-depth-wash: linear-gradient(180deg, oklch(0.16 0.024 170 / 0.78), transparent 18rem);
+  --body-ruling: linear-gradient(oklch(1 0 0 / 0.018) 1px, transparent 1px);
+  --body-ruling-mask: linear-gradient(180deg, black, transparent 70%);
+  --card-wash: linear-gradient(180deg, oklch(1 0 0 / 0.025), transparent);
+  --card-inset-rule: oklch(0.68 0.105 78 / 0.12);
+  --danger-border: oklch(0.58 0.12 28 / 0.8);
+  --danger-border-strong: oklch(0.58 0.12 28 / 0.82);
+  --danger-border-muted: oklch(0.58 0.12 28 / 0.66);
+  --danger-wash: oklch(0.43 0.12 28 / 0.16);
+  --chip-sunken: oklch(0.135 0.012 172);
+  --control-sunken: oklch(0.18 0.022 172);
+  --dissent-border: oklch(0.52 0.12 28 / 0.72);
+  --synthesizer-wash: linear-gradient(180deg, oklch(0.68 0.105 78 / 0.08), transparent 62%);
+  --petition-wash: linear-gradient(180deg, oklch(0.68 0.105 78 / 0.08), transparent);
+  --ledger-veil: oklch(0.12 0.012 172 / 0.8);
+  --ledger-veil-strong: oklch(0.12 0.012 172 / 0.85);
+  --transition-fast: 120ms ease;
+  --transition-base: 180ms ease;
 }

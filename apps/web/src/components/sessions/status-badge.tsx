@@ -1,25 +1,33 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { formatFailureKind } from "./session-inspector-formatters";
 
 export function SessionStatusBadge(props: {
   status: "pending" | "processing" | "completed" | "failed";
   failureKind: string | null;
 }) {
   const label =
-    props.status === "failed" && props.failureKind
-      ? `failed · ${props.failureKind.replaceAll("_", " ")}`
-      : props.status;
+    props.status === "pending"
+      ? "Filed"
+      : props.status === "processing"
+        ? "Deliberating"
+        : props.status === "completed"
+          ? "Verdict entered"
+          : props.failureKind
+            ? `Needs recovery · ${formatFailureKind(props.failureKind)}`
+            : "Needs recovery";
 
   const isActive = props.status === "pending" || props.status === "processing";
 
   return (
     <Badge
       className={cn(
-        props.status === "completed" && "bg-[var(--evergreen)] text-[var(--bg)]",
-        props.status === "processing" && "bg-[var(--gold)] text-[var(--bg)]",
-        props.status === "pending" && "bg-[var(--wood-soft)] text-[var(--foreground)]",
-        props.status === "failed" && "bg-[var(--destructive)] text-[var(--foreground)]",
-        isActive && "animate-pulse-glow",
+        "seal",
+        props.status === "completed" && "seal-success",
+        props.status === "processing" && "seal-active",
+        props.status === "failed" && "seal-danger",
+        props.status === "pending" && "seal-filed",
+        isActive && "border-[var(--brass)]",
       )}
     >
       {label}

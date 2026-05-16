@@ -1,16 +1,8 @@
 "use client";
 
-import { memberForPosition } from "@the-seven/contracts";
-import { useEffect, useId, useRef, useState } from "react";
+import type { MemberPosition } from "@the-seven/contracts";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
-import { CouncilTrack, type InspectorArtifact } from "@/components/inspector/council-track";
-import { VerdictCard } from "@/components/inspector/verdict-card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import {
   continueSession,
   exportSessions,
@@ -19,137 +11,213 @@ import {
   fetchSessionDiagnostics,
   rerunSession,
 } from "@/lib/api";
-import { SessionDiagnosticsTable } from "./session-diagnostics-table";
-import { SessionTrail } from "./session-trail";
-import { SessionStatusBadge } from "./status-badge";
+import type { SessionAction } from "./session-inspector-chrome";
+import { downloadText, manuscriptLoadIssue } from "./session-inspector-formatters";
+import { SessionInspectorLoaded } from "./session-inspector-loaded";
+import { scrollEvidenceTarget, scrollMemberEvidence } from "./session-inspector-scroll";
+import { SessionInspectorStateMessage } from "./session-inspector-states";
 
-function downloadText(filename: string, text: string, type: string) {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-function formatCost(micros: number | null) {
-  if (micros === null) return "n/a";
-  return `$${(micros / 1_000_000).toFixed(6)}`;
-}
-
-function formatLatencySeconds(detail: {
-  providerCalls: ReadonlyArray<{ latencyMs: number | null }>;
-}) {
-  const total = detail.providerCalls.reduce((sum, call) => sum + (call.latencyMs ?? 0), 0);
-  if (!total) return null;
-  return `${(total / 1000).toFixed(1)} s deliberation`;
-}
+type SessionDiagnostics = Awaited<ReturnType<typeof fetchSessionDiagnostics>>;
+type SessionDiagnosticsRecord = Readonly<{
+  sessionId: number;
+  diagnostics: SessionDiagnostics;
+}>;
 
 export function SessionInspector(props: {
   authenticated: boolean;
   authHeader: string | null;
   sessionId: number | null;
+  emptyState?: "workbench" | "archive";
+  initialAction?: "recovery" | "rerun" | null;
+  onAuthorityDenial?: (error: unknown) => boolean;
   onSpawnedSession?: (sessionId: number) => void;
 }) {
   const [detail, setDetail] = useState<Awaited<ReturnType<typeof fetchSession>> | null>(null);
-  const [diagnostics, setDiagnostics] = useState<Awaited<
-    ReturnType<typeof fetchSessionDiagnostics>
-  > | null>(null);
+  const [diagnosticsRecord, setDiagnosticsRecord] = useState<SessionDiagnosticsRecord | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
-  const [trailOpen, setTrailOpen] = useState(false);
+  const [proceedingsOpen, setProceedingsOpen] = useState(false);
   const [rerunQuery, setRerunQuery] = useState("");
   const [rerunCouncil, setRerunCouncil] = useState("");
   const [rerunOpen, setRerunOpen] = useState(false);
+  const [refreshIssue, setRefreshIssue] = useState<string | null>(null);
+  const [initialLoadIssue, setInitialLoadIssue] = useState<string | null>(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
+  const [pendingAction, setPendingAction] = useState<SessionAction>(null);
+  const [rerunActionMessage, setRerunActionMessage] = useState<string | null>(null);
+  const [councilLoadIssue, setCouncilLoadIssue] = useState<string | null>(null);
+  const [councilLoadPending, setCouncilLoadPending] = useState(false);
   const fieldPrefix = useId();
-  const trailRef = useRef<HTMLDivElement | null>(null);
+  const proceedingsRef = useRef<HTMLDivElement | null>(null);
+  const recoveryRef = useRef<HTMLDivElement | null>(null);
+  const rerunRef = useRef<HTMLDivElement | null>(null);
   const [availableCouncils, setAvailableCouncils] = useState<
     Awaited<ReturnType<typeof fetchCouncils>>["councils"]
   >([]);
 
+  const loadAvailableCouncils = useCallback(async () => {
+    if (!props.authenticated) {
+      setAvailableCouncils([]);
+      setCouncilLoadIssue(null);
+      return [];
+    }
+    setCouncilLoadPending(true);
+    try {
+      const result = await fetchCouncils(props.authHeader);
+      setAvailableCouncils(result.councils);
+      setCouncilLoadIssue(null);
+      return result.councils;
+    } catch (error) {
+      if (props.onAuthorityDenial?.(error)) {
+        setDetail(null);
+        setDiagnosticsRecord(null);
+        return [];
+      }
+      const message = error instanceof Error ? error.message : "Council Library could not load.";
+      setCouncilLoadIssue(message);
+      return [];
+    } finally {
+      setCouncilLoadPending(false);
+    }
+  }, [props.authHeader, props.authenticated, props.onAuthorityDenial]);
+
+  const loadSelectedSession = useCallback(
+    async (sessionId: number, isCancelled: () => boolean = () => false) => {
+      setDetail(null);
+      setDiagnosticsRecord(null);
+      setRerunActionMessage(null);
+      setRefreshIssue(null);
+      setInitialLoadIssue(null);
+      setPendingAction(null);
+      setLoading(true);
+      try {
+        const nextDetail = await fetchSession(props.authHeader, sessionId);
+        if (!isCancelled()) {
+          setDetail(nextDetail);
+          setRerunQuery(nextDetail.session.snapshot.query);
+          setRerunCouncil("");
+          setRerunActionMessage(null);
+          setLastRefreshedAt(Date.now());
+          setRefreshIssue(null);
+          setInitialLoadIssue(null);
+        }
+      } catch (error) {
+        if (!isCancelled()) {
+          setDetail(null);
+          setDiagnosticsRecord(null);
+          if (props.onAuthorityDenial?.(error)) {
+            return;
+          }
+          setInitialLoadIssue(manuscriptLoadIssue(error));
+        }
+      } finally {
+        if (!isCancelled()) setLoading(false);
+      }
+    },
+    [props.authHeader, props.onAuthorityDenial],
+  );
+
   useEffect(() => {
     if (!props.authenticated || !props.sessionId) {
       setDetail(null);
-      setDiagnostics(null);
+      setDiagnosticsRecord(null);
+      setInitialLoadIssue(null);
       return;
     }
-
-    const authHeader = props.authHeader;
     const sessionId = props.sessionId;
     let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      try {
-        const nextDetail = await fetchSession(authHeader, sessionId);
-        if (!cancelled) {
-          setDetail(nextDetail);
-          setRerunQuery(nextDetail.session.snapshot.query);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          toast.error(error instanceof Error ? error.message : "Failed to load session");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void load();
+    void loadSelectedSession(sessionId, () => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [props.authHeader, props.authenticated, props.sessionId]);
+  }, [loadSelectedSession, props.authenticated, props.sessionId]);
+
+  const pollingSessionId = detail?.session.id ?? null;
+  const pollingStatus = detail?.session.status ?? null;
 
   useEffect(() => {
     const authHeader = props.authHeader;
-    if (!props.authenticated || !detail) return;
-    if (detail.session.status !== "pending" && detail.session.status !== "processing") return;
+    if (!props.authenticated || !pollingSessionId) return;
+    if (pollingStatus !== "pending" && pollingStatus !== "processing") return;
     const interval = setInterval(() => {
-      void fetchSession(authHeader, detail.session.id)
-        .then(setDetail)
-        .catch(() => undefined);
+      if (document.hidden) {
+        return;
+      }
+      void fetchSession(authHeader, pollingSessionId)
+        .then((nextDetail) => {
+          setDetail(nextDetail);
+          setLastRefreshedAt(Date.now());
+          setRefreshIssue(null);
+        })
+        .catch((error) => {
+          if (props.onAuthorityDenial?.(error)) {
+            setDetail(null);
+            setDiagnosticsRecord(null);
+            return;
+          }
+          setRefreshIssue(
+            "Latest status could not be refreshed. The displayed proceedings may be stale.",
+          );
+        });
     }, 1500);
     return () => clearInterval(interval);
-  }, [detail, props.authHeader, props.authenticated]);
+  }, [
+    pollingSessionId,
+    pollingStatus,
+    props.authHeader,
+    props.authenticated,
+    props.onAuthorityDenial,
+  ]);
+
+  useEffect(() => {
+    if (!detail || !props.initialAction) return;
+    if (props.initialAction === "rerun") {
+      setRerunOpen(true);
+    }
+    requestAnimationFrame(() => {
+      const target = props.initialAction === "rerun" ? rerunRef.current : recoveryRef.current;
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [detail, props.initialAction]);
 
   useEffect(() => {
     if (!props.authenticated) return;
-    void fetchCouncils(props.authHeader)
-      .then((result) => {
-        setAvailableCouncils(result.councils);
-        const first = result.councils[0];
-        if (!rerunCouncil && first) {
-          setRerunCouncil(
-            first.ref.kind === "built_in"
-              ? `built_in:${first.ref.slug}`
-              : `user:${first.ref.councilId}`,
-          );
-        }
-      })
-      .catch(() => undefined);
-  }, [props.authHeader, props.authenticated, rerunCouncil]);
+    void loadAvailableCouncils();
+  }, [loadAvailableCouncils, props.authenticated]);
 
   async function handleContinue() {
-    if (!props.authenticated || !detail) return;
+    if (!props.authenticated || !detail || pendingAction) return;
+    setPendingAction("continue");
     try {
       await continueSession(props.authHeader, detail.session.id);
       toast.success("Run continued");
-      setDiagnostics(null);
+      setDiagnosticsRecord(null);
       setDetail(await fetchSession(props.authHeader, detail.session.id));
     } catch (error) {
+      if (props.onAuthorityDenial?.(error)) {
+        setDetail(null);
+        setDiagnosticsRecord(null);
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "Continue failed");
+    } finally {
+      setPendingAction(null);
     }
   }
 
   async function handleRerun() {
-    if (!props.authenticated || !detail) return;
+    if (!props.authenticated || !detail || pendingAction) return;
+    setPendingAction("rerun");
+    setRerunActionMessage("Creating a new archived run with the selected council.");
     try {
-      const councils = availableCouncils.length
-        ? availableCouncils
-        : (await fetchCouncils(props.authHeader)).councils;
+      const councils = availableCouncils.length ? availableCouncils : await loadAvailableCouncils();
       setAvailableCouncils(councils);
+      if (councils.length === 0) {
+        setRerunActionMessage(
+          councilLoadIssue ?? "Council Library could not load. Retry before starting the rerun.",
+        );
+        return;
+      }
       const chosen =
         councils.find(
           (council) =>
@@ -160,247 +228,200 @@ export function SessionInspector(props: {
             council.ref.kind === "built_in" && `built_in:${council.ref.slug}` === rerunCouncil,
         );
       if (!chosen) {
-        toast.error("Choose a council for rerun");
+        setRerunActionMessage("Choose a council before starting the rerun.");
         return;
+      }
+      const originalQuery = detail.session.snapshot.query.trim();
+      const trimmedRerunQuery = rerunQuery.trim();
+      const queryOverride =
+        trimmedRerunQuery.length === 0 || trimmedRerunQuery === originalQuery
+          ? undefined
+          : trimmedRerunQuery;
+      if (trimmedRerunQuery.length === 0) {
+        setRerunQuery(detail.session.snapshot.query);
+        setRerunActionMessage("Blank rerun matter reuses the original docket matter.");
       }
       const result = await rerunSession({
         authHeader: props.authHeader,
         sessionId: detail.session.id,
         councilRef: chosen.ref,
-        queryOverride:
-          rerunQuery.trim() === detail.session.snapshot.query.trim() ? undefined : rerunQuery,
+        queryOverride,
       });
       toast.success("New run created");
+      setRerunActionMessage("New run created. Opening the new manuscript.");
       props.onSpawnedSession?.(result.sessionId);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Rerun failed");
+      if (props.onAuthorityDenial?.(error)) {
+        setDetail(null);
+        setDiagnosticsRecord(null);
+        return;
+      }
+      setRerunActionMessage(error instanceof Error ? error.message : "Rerun failed");
+    } finally {
+      setPendingAction(null);
     }
   }
 
   async function handleLoadDiagnostics() {
     if (!props.authenticated || !detail) return;
+    const sessionId = detail.session.id;
     setLoadingDiagnostics(true);
     try {
-      setDiagnostics(await fetchSessionDiagnostics(props.authHeader, detail.session.id));
+      const diagnostics = await fetchSessionDiagnostics(props.authHeader, sessionId);
+      setDiagnosticsRecord({
+        sessionId,
+        diagnostics,
+      });
     } catch (error) {
+      if (props.onAuthorityDenial?.(error)) {
+        setDetail(null);
+        setDiagnosticsRecord(null);
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "Diagnostics failed");
     } finally {
       setLoadingDiagnostics(false);
     }
   }
 
+  useEffect(() => {
+    if (!diagnosticsRecord || diagnosticsRecord.sessionId !== detail?.session.id) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      const panel = window.document.getElementById("provider-record-panel");
+      panel?.scrollIntoView({ behavior: "auto", block: "start", inline: "nearest" });
+      panel?.focus({ preventScroll: true });
+    });
+  }, [detail?.session.id, diagnosticsRecord]);
+
   async function handleExport() {
     if (!props.authenticated || !detail) return;
     try {
       const exported = await exportSessions(props.authHeader, [detail.session.id]);
-      downloadText(`session-${detail.session.id}.md`, exported.markdown, "text/markdown");
-      downloadText(`session-${detail.session.id}.json`, exported.json, "application/json");
-      toast.success("Session exported");
+      downloadText(`manuscript-${detail.session.id}.md`, exported.markdown, "text/markdown");
+      downloadText(`manuscript-${detail.session.id}.json`, exported.json, "application/json");
+      toast.success("Manuscript exported");
     } catch (error) {
+      if (props.onAuthorityDenial?.(error)) {
+        setDetail(null);
+        setDiagnosticsRecord(null);
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "Export failed");
     }
   }
 
-  function openTrail() {
-    setTrailOpen(true);
+  function openProceedings() {
+    setProceedingsOpen(true);
     requestAnimationFrame(() => {
-      trailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      proceedingsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
-  if (!props.authenticated) {
-    return (
-      <Card className="p-8 text-center">
-        <p className="text-sm text-[var(--text-muted)]">
-          Unlock BYOK or start a demo session to inspect runs.
-        </p>
-      </Card>
-    );
+  function openEvidenceTarget(targetId: string, fallbackId?: string) {
+    scrollEvidenceTarget({ targetId, fallbackId, openProceedings: () => setProceedingsOpen(true) });
   }
 
-  if (!props.sessionId) {
-    return (
-      <Card className="p-8 text-center">
-        <p className="text-sm text-[var(--text-muted)]">
-          Send a question above and the council will assemble here.
-        </p>
-      </Card>
-    );
+  async function refreshActiveSession() {
+    if (!props.authenticated || !detail) return;
+    try {
+      const nextDetail = await fetchSession(props.authHeader, detail.session.id);
+      setDetail(nextDetail);
+      setLastRefreshedAt(Date.now());
+      setRefreshIssue(null);
+    } catch (error) {
+      if (props.onAuthorityDenial?.(error)) {
+        setDetail(null);
+        setDiagnosticsRecord(null);
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Latest status could not be refreshed";
+      setRefreshIssue(message);
+    }
   }
 
-  if (loading && !detail) {
-    return (
-      <Card className="p-8 text-center text-sm text-[var(--text-muted)]">Loading session…</Card>
-    );
+  function scrollToMemberEvidence(position: MemberPosition) {
+    scrollMemberEvidence({ position, openProceedings: () => setProceedingsOpen(true) });
   }
 
-  if (!detail) {
+  function renderStateMessage(input: {
+    authenticated?: boolean;
+    hasSessionId?: boolean;
+    loading?: boolean;
+    initialLoadIssue?: string | null;
+  }) {
     return (
-      <Card className="p-8 text-center text-sm text-[var(--text-muted)]">Session unavailable.</Card>
-    );
-  }
-
-  const phase3Artifact = detail.artifacts.find((a) => a.phase === 3);
-  const synthesizerLabel = detail.session.snapshot.council.members.find(
-    (m) => m.memberPosition === 7,
-  )?.model.modelId;
-  const latencyLabel = formatLatencySeconds({ providerCalls: detail.providerCalls });
-
-  const inspectorArtifacts: InspectorArtifact[] = detail.artifacts.map((a) => ({
-    id: a.id,
-    phase: a.phase,
-    memberPosition: a.memberPosition,
-    member: { label: a.member.label },
-    modelId: a.modelId,
-    modelName: a.modelName,
-    content: a.content,
-  }));
-
-  return (
-    <div className="space-y-6">
-      <section className="ask-band">
-        <p className="ask-meta">
-          <span>Asked of the</span>{" "}
-          <span className="ask-meta-council">{detail.session.councilNameAtRun}</span>
-          {latencyLabel ? (
-            <>
-              <span className="ask-meta-dot">·</span>
-              <span>{latencyLabel}</span>
-            </>
-          ) : null}
-          <span className="ask-meta-dot">·</span>
-          <span>{detail.session.ingressSource}</span>
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <SessionStatusBadge
-            status={detail.session.status}
-            failureKind={detail.session.failureKind}
-          />
-          <Badge>{detail.session.snapshot.attachments.length} attachment(s)</Badge>
-          <Badge>{detail.session.totalTokens} tokens</Badge>
-          <Badge>
-            {detail.session.totalCostIsPartial && detail.session.totalCostUsdMicros === 0
-              ? "cost pending"
-              : formatCost(detail.session.totalCostUsdMicros)}
-          </Badge>
-        </div>
-        <p className="ask-question mt-4">&ldquo;{detail.session.query}&rdquo;</p>
-      </section>
-
-      <CouncilTrack
-        members={detail.session.snapshot.council.members}
-        artifacts={inspectorArtifacts}
-        onCellSelect={(position) => {
-          const target = window.document.getElementById(
-            `cand-${memberForPosition(position).alias}`,
-          );
-          target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      <SessionInspectorStateMessage
+        authenticated={input.authenticated ?? true}
+        hasSessionId={input.hasSessionId ?? true}
+        loading={input.loading ?? loading}
+        emptyState={props.emptyState}
+        initialLoadIssue={input.initialLoadIssue ?? null}
+        onRetryInitialLoad={() => {
+          const retrySessionId = props.sessionId;
+          if (retrySessionId) void loadSelectedSession(retrySessionId);
         }}
       />
+    );
+  }
 
-      {phase3Artifact ? (
-        <>
-          <VerdictCard content={phase3Artifact.content} onOpenTrail={openTrail} />
-          <p className="composer">
-            <span>composed by</span> <span className="composer-strong">Synthesizer&nbsp;G</span>
-            {synthesizerLabel ? (
-              <>
-                <span className="composer-dot">·</span>
-                <span className="composer-strong">{synthesizerLabel}</span>
-              </>
-            ) : null}
-            {latencyLabel ? (
-              <>
-                <span className="composer-dot">·</span>
-                <span>{latencyLabel}</span>
-              </>
-            ) : null}
-          </p>
-        </>
-      ) : detail.session.status === "failed" ? (
-        <Card className="p-6">
-          <p className="text-sm text-[var(--text-muted)]">
-            The council did not converge. Review the trail below and either continue or rerun.
-          </p>
-        </Card>
-      ) : (
-        <Card className="p-6">
-          <p className="text-sm text-[var(--text-muted)]">
-            The synthesizer is still composing the verdict.
-          </p>
-        </Card>
-      )}
+  if (!props.authenticated) {
+    return renderStateMessage({ authenticated: false, hasSessionId: false });
+  }
+  if (!props.sessionId) {
+    return renderStateMessage({ hasSessionId: false });
+  }
+  if (loading && !detail) {
+    return renderStateMessage({ loading: true });
+  }
+  if (!detail && initialLoadIssue) {
+    return renderStateMessage({ initialLoadIssue });
+  }
+  if (!detail) {
+    return renderStateMessage({});
+  }
+  if (detail.session.id !== props.sessionId) {
+    return renderStateMessage({});
+  }
 
-      <div className="flex flex-wrap items-center gap-2">
-        {detail.session.status === "failed" ? (
-          <Button variant="secondary" size="sm" onClick={handleContinue}>
-            Continue
-          </Button>
-        ) : null}
-        {detail.session.status === "failed" || detail.session.status === "completed" ? (
-          <Button variant="secondary" size="sm" onClick={() => setRerunOpen((v) => !v)}>
-            {rerunOpen ? "Hide Rerun" : "Rerun"}
-          </Button>
-        ) : null}
-        <Button variant="ghost" size="sm" onClick={handleExport}>
-          Export
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handleLoadDiagnostics}>
-          {loadingDiagnostics ? "Loading…" : diagnostics ? "Refresh Diagnostics" : "Diagnostics"}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={openTrail}>
-          {trailOpen ? "Trail open" : "Open Trail"}
-        </Button>
-      </div>
-
-      {rerunOpen ? (
-        <Card className="p-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-rerun-query`}>Rerun Question</Label>
-              <Textarea
-                id={`${fieldPrefix}-rerun-query`}
-                value={rerunQuery}
-                onChange={(event) => setRerunQuery(event.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-rerun-council`}>Rerun Council</Label>
-              <Select
-                id={`${fieldPrefix}-rerun-council`}
-                value={rerunCouncil}
-                onChange={(event) => setRerunCouncil(event.target.value)}
-              >
-                {availableCouncils.map((council) => {
-                  const value =
-                    council.ref.kind === "built_in"
-                      ? `built_in:${council.ref.slug}`
-                      : `user:${council.ref.councilId}`;
-                  return (
-                    <option key={value} value={value}>
-                      {council.name}
-                    </option>
-                  );
-                })}
-              </Select>
-            </div>
-            <div className="md:col-span-2">
-              <Button onClick={handleRerun}>Run again</Button>
-            </div>
-          </div>
-        </Card>
-      ) : null}
-
-      {trailOpen ? (
-        <SessionTrail artifacts={detail.artifacts} trailRef={trailRef} formatCost={formatCost} />
-      ) : null}
-
-      {diagnostics ? (
-        <SessionDiagnosticsTable
-          providerCalls={diagnostics.providerCalls}
-          formatCost={formatCost}
-        />
-      ) : null}
-    </div>
+  const diagnostics =
+    diagnosticsRecord?.sessionId === detail.session.id ? diagnosticsRecord.diagnostics : null;
+  return (
+    <SessionInspectorLoaded
+      detail={detail}
+      diagnostics={diagnostics}
+      lastRefreshedAt={lastRefreshedAt}
+      pendingAction={pendingAction}
+      loadingDiagnostics={loadingDiagnostics}
+      proceedingsOpen={proceedingsOpen}
+      rerunOpen={rerunOpen}
+      rerunQuery={rerunQuery}
+      rerunCouncil={rerunCouncil}
+      fieldPrefix={fieldPrefix}
+      availableCouncils={availableCouncils}
+      councilLoadIssue={councilLoadIssue}
+      councilLoadPending={councilLoadPending}
+      rerunActionMessage={rerunActionMessage}
+      refreshIssue={refreshIssue}
+      recoveryRef={recoveryRef}
+      rerunRef={rerunRef}
+      proceedingsRef={proceedingsRef}
+      onRefreshActiveSession={refreshActiveSession}
+      onScrollToMemberEvidence={scrollToMemberEvidence}
+      onOpenEvidenceTarget={openEvidenceTarget}
+      onOpenProceedings={openProceedings}
+      onContinue={handleContinue}
+      onToggleRerun={() => setRerunOpen((value) => !value)}
+      onExport={handleExport}
+      onLoadDiagnostics={handleLoadDiagnostics}
+      onRerunQueryChange={setRerunQuery}
+      onRerunCouncilChange={setRerunCouncil}
+      onRetryCouncils={() => {
+        void loadAvailableCouncils();
+      }}
+      onRerun={handleRerun}
+    />
   );
 }

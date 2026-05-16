@@ -3,8 +3,9 @@
 The Seven is a privacy-first multi-model council for hard questions. Six
 reviewer models answer the prompt, each reviewer evaluates all six candidate
 answers, and a seventh synthesizer produces one final verdict from the request,
-candidates, and compact reviewer summaries. The whole run is preserved as a
-durable record so the reasoning trail stays inspectable.
+candidates, and compact reviewer summaries. The whole run is preserved as
+Proceedings so drafts, critiques, rankings, provider records, and verdict stay
+inspectable.
 
 It is bring-your-own-key by default: the browser encrypts the reusable key
 locally, the server sees plaintext only transiently per request, and durable
@@ -12,9 +13,9 @@ server state stores a hashed BYOK principal plus envelope-encrypted short-lived
 worker credentials that are cleared when jobs reach terminal state. A paid
 low-cost demo flow is available behind an email magic link.
 
-- Three built-in councils: Founding (best-of-best with xhigh effective effort),
-  Lantern (mid-tier bridge with medium effective effort), Commons (low-cost demo
-  with low effective effort). All 21 built-in model ids are distinct across the
+- Three built-in councils: Founding (best-of-best with xhigh requested effort),
+  Lantern (mid-tier bridge with medium requested effort), Commons (low-cost demo
+  with low requested effort). All 21 built-in model ids are distinct across the
   three tiers.
 - User-defined councils persist as one aggregate definition with shared phase
   prompts and exactly seven member slots.
@@ -44,14 +45,23 @@ low-cost demo flow is available behind an email magic link.
 ## Runtime Contract
 
 - UI routes: `/`, `/councils`, `/sessions`, `/sessions/[sessionId]`
+- UI register: a scholarly council workbench. `/` is the Petition Desk and
+  active Run Workbench, `/councils` is the Council Library/editor, `/sessions`
+  is the Archive ledger, and `/sessions/[sessionId]` is a run Manuscript. The
+  Archive loads ledger-first and opens a manuscript only after row activation, a
+  deep link, or explicit restored selection. The interface uses
+  docket/proceedings/verdict/provider-record language, disciplined density,
+  ruled folio surfaces, small radii, readable typography, form-owned
+  submissions, radio-owned exclusive choices, and a product-owned evidence
+  exhibit picker with remove/clear recovery.
 - API routes: `/api/v1/**`
 - Built-ins:
-  - Founding: current best-of-best BYOK roster with xhigh effective effort;
-    the strongest tier model is the synthesizer, and provider diversity is a
-    tie-breaker, not a substitute for stronger models
-  - Lantern: deliberate mid-tier bridge roster with medium effective effort;
-    the strongest tier model is the synthesizer
-  - Commons: paid low-cost demo roster with low effective effort and no
+  - Founding: current best-of-best BYOK roster with xhigh requested effort;
+    the synthesizer is the final-answer policy seat, and provider diversity is
+    a tie-breaker, not a substitute for stronger models
+  - Lantern: deliberate mid-tier bridge roster with medium requested effort;
+    the synthesizer is the final-answer policy seat
+  - Commons: paid low-cost demo roster with low requested effort and no
     `:free`, `~latest`, or preview aliases; Commons also excludes OpenRouter rows with a catalog
     expiration date and stays at or below the current selected GPT-5 Mini
     blended row ceiling
@@ -62,7 +72,7 @@ low-cost demo flow is available behind an email magic link.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Founding | `openai/gpt-5.5` | `anthropic/claude-opus-4.7` | `google/gemini-3.1-pro-preview` | `moonshotai/kimi-k2.6` | `xiaomi/mimo-v2.5-pro` | `x-ai/grok-4.3` | `openai/gpt-5.5-pro` |
 | Lantern | `anthropic/claude-sonnet-4.6` | `deepseek/deepseek-v4-pro` | `z-ai/glm-5.1` | `qwen/qwen3.6-plus` | `google/gemini-3-flash-preview` | `mistralai/mistral-medium-3-5` | `qwen/qwen3.6-max-preview` |
-| Commons | `qwen/qwen3.6-flash` | `google/gemini-3.1-flash-lite` | `openai/gpt-5-mini` | `deepseek/deepseek-v4-flash` | `openai/gpt-5-nano` | `mistralai/mistral-small-2603` | `minimax/minimax-m2.7` |
+| Commons | `qwen/qwen3.6-35b-a3b` | `google/gemini-3.1-flash-lite` | `openai/gpt-5-mini` | `deepseek/deepseek-v4-flash` | `openai/gpt-5-nano` | `mistralai/mistral-small-2603` | `minimax/minimax-m2.7` |
 - Prompt payloads:
   - the app owns council orchestration; model prompts do not narrate membership
     or hidden workflow
@@ -78,9 +88,10 @@ low-cost demo flow is available behind an email magic link.
   - phase-2 review JSON is requested through a compact portable OpenRouter structured-output schema,
     validated, normalized, and only then persisted as phase-3 reference
     material; the provider-visible contract carries compact shape and prose
-    instructions, while the app parser owns candidate count, score range, list
-    bounds, material prose, and string-length enforcement after the complete
-    provider response
+    instructions, including the same count and length bounds the parser
+    enforces; the app parser owns candidate count, score range, list bounds,
+    material prose, and string-length enforcement after the complete provider
+    response
 - Provider requests:
   - every OpenRouter request sends a server-owned `max_tokens` output cap
   - provider-call diagnostics expose sent `provider.require_parameters` and the
@@ -162,7 +173,8 @@ Send-only restricted keys are not sufficient for `pnpm test:live` or
 a free loopback port and project `PORT` plus `SEVEN_BASE_URL` for the child
 process. They also project `SEVEN_NEXT_DIST_DIR=.next-local/<port>` to isolate
 Next's local dev `distDir` so a browser proof can run while a separate dev
-server already owns `.next/dev/lock`. Direct
+server already owns `.next/dev/lock`, and Next's development indicator is
+disabled so screenshot proof contains only product UI. Direct
 `@the-seven/web` dev starts require this projected environment and fail closed
 without it. `SEVEN_PUBLIC_ORIGIN` is the server-owned origin used in demo magic
 links, OpenRouter app headers, and same-origin checks for demo-cookie mutations.

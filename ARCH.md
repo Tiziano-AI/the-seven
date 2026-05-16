@@ -55,11 +55,19 @@ workflow normalizes it into the canonical fixed `A` through `F` review object
 with one score per candidate before the review artifact is accepted. The workflow derives the
 phase-2 ranking from those scores with candidate-order tie-breaking.
 `packages/contracts/src/domain/phaseEvaluation.ts` owns the phase-2 count,
-material-prose, and length limits, and `packages/config/src/prompts.ts` projects
+material-prose, and length limits. `packages/contracts/src/domain/phasePrompts.ts`
+owns prompt and output-format field bounds; the output-format bound admits the
+canonical examples in `packages/config/src/prompts.ts` so HTTP council payloads
+and session snapshots can round-trip through the public schemas. `packages/config/src/prompts.ts` projects
 the compact provider-visible output contract. Phase-2 review
 strings are accepted only when they contain material prose with at least two
-words; single letters, numbers, ellipses, repeated placeholders, and field
-labels are rejected before a review artifact is persisted. The OpenRouter
+distinct words and pass the app-owned count, score, and length bounds. Single
+letters, numbers, ellipses, and repeated placeholders fail before a review
+artifact is persisted. The phase-2 user message states the same candidate-count,
+item-count, score, and string-length bounds that the parser enforces, because
+current OpenRouter Anthropic routing accepts the portable schema but rejects
+richer JSON-schema grammar constraints.
+The OpenRouter
 adapter requests a bounded `max_tokens` output on every provider call: phase 1
 uses 8192 tokens, and phases 2 and 3 use 16384 tokens. Chat completions use
 OpenRouter's streaming transport internally so long-running structured-output
@@ -71,7 +79,8 @@ only portable structural JSON-schema keywords because current OpenRouter
 Anthropic and Mistral endpoints reject rich grammar constraints even when the
 model row advertises structured output; the app parser remains the semantic
 authority for candidate count, score range, list bounds, material prose, and
-length limits. Phase-2 models without `response_format` or `structured_outputs`
+length limits. The prompt mirrors those semantic bounds so the provider receives
+the contract even when the JSON schema must stay portable. Phase-2 models without `response_format` or `structured_outputs`
 support are denied before provider execution with the exact missing capability
 names recorded in diagnostics. Phase 3 consumes a
 compact synthesis-material projection from parsed evaluation objects plus
@@ -102,11 +111,11 @@ schema validation, not repo-wide negative string scans.
   - server-only orchestration, auth, adapter, and HTTP modules under
     `src/server/**`
   - client components and design-system code under `src/components/**`
-  - design tokens in `src/app/theme.css`; layered class vocabularies in
-    `components.css` (buttons, cards, panels, badges, nav), `inspector.css`
-    (ask-band, council track, verdict card, citation chips, composer,
-    deliberation ribbon), `surface.css` (role cards, gate card), all imported
-    from `globals.css`
+  - design tokens in `src/app/theme.css`; scholarly workbench primitives in
+    `components.css`, proceedings/verdict classes in `inspector.css`, archive
+    and recovery-ledger classes in `archive.css`, Provider Record diagnostic
+    ledger classes in `diagnostics.css`, and gate/editor folio classes in
+    `surface.css`, all imported from `globals.css`
   - inspector splits into `components/inspector/council-track.tsx`,
     `components/inspector/verdict-card.tsx`, and
     `components/sessions/session-inspector.tsx` (orchestrator)
@@ -126,6 +135,142 @@ schema validation, not repo-wide negative string scans.
     test database helpers
 
 No runtime code remains in `client/`, `server/`, or `shared/`.
+
+## Scholarly Council UI Contract
+
+The web product is a serious medieval/scholarly council workbench: a docket
+desk, seven-seat proceedings view, verdict article, provider call ledger, and
+session archive. The visual register is institutional and archival, not generic
+SaaS and not fantasy game ornament.
+
+`apps/web/src/app/theme.css` is the only raw token owner for rendered CSS
+colors, fonts, radii, shadows, and motion. Screens consume primitives and
+semantic classes; they do not introduce ad hoc colors, full-pill controls,
+glows, or novelty typography. Browser chrome metadata in `layout.tsx` uses a
+named theme constant that mirrors the ink background. The design system uses
+dark ink, archive green, muted brass, parchment-tinted surfaces, hairline rules,
+small radii, and quiet focus rings.
+
+Typography is hierarchical:
+
+- the medieval/display face is reserved for the wordmark, seat letters, selected
+  title plates, and verdict drop-caps;
+- body copy, controls, labels, nav, badges, forms, and tables use the readable
+  body face;
+- provider model IDs, route evidence, costs, tokens, and diagnostics use the
+  mono face.
+
+The type system is launch-owned. `layout.tsx` imports `next/font/local` and
+bundled OFL font files under `apps/web/src/app/fonts`; rendered proof and
+production builds do not depend on Google Fonts network fetches. The local font
+loader contract comes from Next's local-font API
+(`vendor:Next.js:16.2.1:https://nextjs.org/docs/app/getting-started/fonts` and
+`node_modules:node_modules/.pnpm/next@16.2.1_@playwright+test@1.59.1_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/@next/font/dist/local/index.d.ts:1`).
+Bundled source faces are Google Fonts OFL assets:
+MedievalSharp
+(`vendor:Google Fonts:2026-05-15:https://raw.githubusercontent.com/google/fonts/main/ofl/medievalsharp/MedievalSharp.ttf`),
+Source Serif 4 normal/italic
+(`vendor:Google Fonts:2026-05-15:https://raw.githubusercontent.com/google/fonts/main/ofl/sourceserif4/SourceSerif4%5Bopsz%2Cwght%5D.ttf`),
+(`vendor:Google Fonts:2026-05-15:https://raw.githubusercontent.com/google/fonts/main/ofl/sourceserif4/SourceSerif4-Italic%5Bopsz%2Cwght%5D.ttf`),
+and Victor Mono
+(`vendor:Google Fonts:2026-05-15:https://raw.githubusercontent.com/google/fonts/main/ofl/victormono/VictorMono%5Bwght%5D.ttf`).
+
+The route information architecture is:
+
+- `/` is the Petition Desk and active Run Workbench. The authenticated composer
+  files a `Matter`, chooses a `Council`, attaches `Evidence`, and submits for
+  `Deliberation` through real form submissions. Council, rerun-council, archive
+  filter, and tuning choices are native radio semantics where the user is making
+  one exclusive choice. Evidence uses a product-owned exhibit picker with
+  keyboard file selection, drag/drop, a selected-exhibit ledger, per-exhibit
+  removal, and clear-all recovery. After submit, the run status, proceedings,
+  verdict, and record are primary; the composer becomes an explicit `File another
+  matter` surface with the submitted draft cleared unless the user chooses to
+  reuse it. The locked gate presents a stored BYOK unlock as the primary path
+  when this browser already holds an encrypted key; otherwise the demo magic-link
+  request is primary and only syntactically valid email addresses can be
+  submitted. Demo seals expire in the client at their server-issued expiry time
+  and are rechecked when the tab becomes visible. BYOK admission selects
+  Founding before the paid-key session starts, so a user who brings their own
+  key starts on the flagship roster unless they deliberately choose a lower-cost
+  council.
+- `/councils` is the Council Library and editor. BYOK users duplicate templates,
+  inspect and edit seven member seats first, and then edit phase contracts.
+  Model selection uses a product-owned catalog suggestion ledger: readable model
+  names are primary, exact provider IDs stay muted evidence, and current catalog
+  validation gates editable seats. Tuning controls render only when the selected
+  model advertises the matching OpenRouter parameter; unsupported saved tuning is
+  pruned at edit time before the council can be saved. Demo users see a locked
+  Commons-only explanation.
+- `/sessions` is the Archive. It is a dense ledger for search, filters,
+  selection, export, recovery inspection, and detail inspection. Archive loading
+  starts ledger-first and does not auto-open an arbitrary manuscript; a row
+  click, deep link, or explicit restored selection opens the manuscript. Archive
+  row actions select the run; cost-bearing Continue and Rerun actions execute
+  from the detail panel after the original matter, council, preserved artifacts,
+  and reused work are visible. Desktop keeps the archive ledger beside the
+  selected manuscript. Mobile renders an opened manuscript before the archive
+  ledger so a requested verdict, recovery record, or Provider Record is the
+  first visible surface instead of being buried below the docket list.
+- `/sessions/[sessionId]` is the deep-linked Manuscript for one run.
+
+The council track renders seven typed seats from run snapshot and artifact
+state. Each seat shows seat letter, role, concise model label, exact full model
+ID as visible muted evidence, phase/ranking state, and split/synthesis state.
+Failed runs never claim missing work is still `deliberating`; absent artifacts
+render as `not reached`, and preserved draft-only work renders as preserved
+evidence.
+The track reports reviewer ranking signals, not consensus or a vote winner.
+Review-signal copy is grammatical for no rankings, one ranking, unanimous
+rankings, and split rankings, including singular split leaders. Verdict copy
+states that Synthesizer G resolves by correctness and cited evidence rather than
+majority ranking.
+
+The verdict renders as an analytical article with semantic headings for the
+docketed matter, verdict, and recovery record. The submitted query is a docket
+entry, not a pull quote. Proceedings, Provider Record, and Export Dossier are
+separate control surfaces with distinct visual registers for status seals,
+metadata, and diagnostics. Verdict chips use one canonical evidence map:
+candidate chips open Proceedings before scrolling to the matching phase-1
+draft with the council seat as fallback; reviewer chips open Proceedings before
+scrolling to the matching phase-2 critique with a phase-1 draft fallback.
+Proceedings render the full phase-2 critique payload: scores, strengths,
+weaknesses, critical errors, missing evidence, verdict input, major
+disagreements, and final-answer inputs.
+Each route owns one page-level heading even when the visual surface starts with a
+workbench card. Provider Record rows use the same seat vocabulary as
+Proceedings: seat sigil, seat alias, and role are primary; raw integer member
+positions are only evidence.
+The Provider Record control loads the receipt and moves focus of attention to
+that ledger instead of changing a button label offscreen. Provider Record begins
+with a run-level summary separating accepted provider outputs from failed,
+denied, or unsettled billing attempts, so a completed verdict can coexist with
+issue rows without implying that failed calls contributed evidence or that
+pending billing is final cost evidence.
+Failed-run recovery copy maps internal failure enums to product language, names
+the redacted terminal job error when one exists, names the original council for
+Continue, and names a freshly chosen council for Prepare Rerun, because only the
+final Run Again submit starts a new cost-bearing deliberation.
+Arbitrary markdown output is contained: ordinary prose, links, inline code, and
+table cells wrap inside the manuscript; tables and code blocks keep horizontal
+scroll when that preserves meaning.
+Rendered Provider Record fixtures use runtime-real rows: phase-1 success,
+phase-2 structured success, pre-egress capability denial, and upstream
+transport failure stay separate so proof never validates an impossible provider
+call state.
+
+UI proof requires rendered desktop, tablet, and mobile evidence for the locked
+gate, demo receipt, demo composer, BYOK composer, submitted workbench, archive,
+processing run, completed verdict, Provider Record, failed recovery, and
+seat-first council editor. Mobile detail states also require focused viewport
+captures for the demo receipt, submitted workbench, processing run, completed
+verdict, Provider Record, and failed recovery so long surfaces are proven both
+as complete pages and usable first viewports. The regenerated contact sheet is
+the review index for the current proof set. Screenshot capture hides only the
+unfocused fixed skip link so full-page images do not paint offscreen
+accessibility chrome over scrolled content; focused skip-link behavior remains
+covered by browser acceptance proof.
+Functional e2e proof alone is not sufficient for this surface.
 
 ## Runtime Stack
 
@@ -215,10 +360,14 @@ and body once through the registry schemas, then passes the transformed outputs
 to handlers. Handlers never re-parse transformed path params such as council
 `locator`.
 
-Adapter-emitted denials are explicit registry rows. JSON syntax failures,
-oversized bodies, non-JSON bodies, and invalid ingress headers all emit
-`kind=invalid_input`; their `details.reason` values are `invalid_json`,
-`body_too_large`, `invalid_content_type`, and `invalid_ingress` respectively.
+Adapter-emitted denials are explicit registry rows. Oversized bodies and invalid
+ingress headers are possible on every route and emit `kind=invalid_input` with
+`details.reason=body_too_large` and `details.reason=invalid_ingress`. Routes
+with a JSON request body also declare JSON syntax and non-JSON media denials as
+`kind=invalid_input` with `details.reason=invalid_json` and
+`details.reason=invalid_content_type`. No-body routes reject any request bytes as
+`details.reason=invalid_request`; they do not advertise impossible JSON-parser
+denials.
 Cookie-auth mutating requests emit `kind=forbidden` with
 `details.reason=same_origin_required`, and demo consume host admission emits
 `kind=forbidden` with `details.reason=public_origin_required`.
@@ -256,7 +405,9 @@ or normalized into another accepted shape.
 
 ### HTTP Envelope Contract
 
-Every JSON edge emits one success or one error envelope.
+Every JSON edge emits one success or one error envelope. JSON API responses set
+`Cache-Control: no-store` because auth, session, diagnostics, and workflow state
+are browser authority surfaces rather than cacheable documents.
 
 Success:
 
@@ -369,9 +520,10 @@ transport while sending the public `Host` header. Wrong-host or malformed-host
 requests return the typed `public_origin_required` denial before rate-limit
 mutation or token consumption. Admitted API requests validate the
 token, mark it used, create a demo session, set the demo cookie, and return a
-`303` redirect to `<SEVEN_PUBLIC_ORIGIN>/`. Missing, reused, expired, or invalid
-tokens for API ingress return the typed denial envelope. Browser ingress for
-missing, reused, expired, invalid, or disabled demo links returns a `303`
+`303` redirect to `<SEVEN_PUBLIC_ORIGIN>/`. Missing, blank, whitespace-only,
+reused, expired, or invalid tokens for API ingress return the typed denial
+envelope. Browser ingress for missing, blank, whitespace-only, reused, expired,
+invalid, or disabled demo links returns a `303`
 redirect to `<SEVEN_PUBLIC_ORIGIN>/?demo_link=<state>`, where the home screen
 renders the recovery state and lets the user request a fresh link. Browser
 localStorage never stores a demo token.
@@ -417,11 +569,14 @@ provider generation handle.
 - Source: `vendor:openrouter:2026-05-14:https://openrouter.ai/docs/guides/administration/usage-accounting`
 - Source: `vendor:openrouter:2026-05-13:https://openrouter.ai/docs/guides/routing/provider-selection`
 - Source: `vendor:openrouter:2026-05-13:https://openrouter.ai/docs/guides/features/structured-outputs`
-- Source: `vendor:openrouter:2026-05-13:https://openrouter.ai/api/v1/models`
+- Source: `vendor:openrouter:2026-05-16:https://openrouter.ai/docs/guides/best-practices/reasoning-tokens`
+- Source: `vendor:openrouter:2026-05-16:https://openrouter.ai/docs/api/reference/parameters`
+- Source: `vendor:openrouter:2026-05-16:https://openrouter.ai/api/v1/models?output_modalities=text`
 - Source: `vendor:MDN Fetch API:2025-09-17:https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#canceling_a_request`
 
-Fresh catalog probes on 2026-05-13 and 2026-05-14 returned status 200 and current text model
-rows from `/api/v1/models`. The OpenRouter models documentation defines
+Fresh catalog probes on 2026-05-13, 2026-05-14, and 2026-05-16 returned status
+200 and current text model rows from `/api/v1/models`; the 2026-05-16 probe is
+the active roster fixture source. The OpenRouter models documentation defines
 `supported_parameters`, pricing, context, maximum completion token, and
 expiration metadata as model-row fields, and the chat-completion documentation
 defines `max_tokens`, `response_format`, `provider.require_parameters`,
@@ -437,12 +592,19 @@ also pass the app's exact structured-output request with the current compact pro
 synthesis-material request. The 2026-05-12 through 2026-05-14 probes proved that
 several catalog rows advertising structured output still fail this app's strict
 schema, so probe-backed execution owns launch selection.
-Built-in tier effort is app-owned and materialized through OpenRouter's
-provider-neutral `reasoning.effort` abstraction: Commons sends `low`, Lantern
-sends `medium`, and Founding sends `xhigh`. Built-in defaults do not tailor
+Built-in tier effort is app-owned and materialized as requested OpenRouter
+`reasoning.effort`: Commons sends `low`, Lantern sends `medium`, and Founding
+sends `xhigh`. OpenRouter documents `reasoning.effort` as a unified abstraction
+that maps across providers, so provider diagnostics prove the requested and sent
+value, not every upstream model's private realized thinking budget. Built-in defaults do not tailor
 temperature, top-p, seed, verbosity, or reasoning-return flags per model. Runtime
 capability checks still deny any unsupported non-null tuning before provider
-execution.
+execution. Custom council tuning is also value-bounded before provider egress:
+`reasoning.effort` may only be `none`, `minimal`, `low`, `medium`, `high`, or
+`xhigh`; `verbosity` may only be `low`, `medium`, `high`, `xhigh`, or `max`.
+These enums are contract-owned so HTTP writes, UI controls, built-ins, session
+snapshots, and provider request materialization cannot drift into ad hoc string
+values.
 
 The server caps provider output at 8192 tokens for phase 1 and 16384 tokens for
 phases 2 and 3. A catalog row that cannot accept the phase-owned cap is denied
@@ -470,17 +632,20 @@ The built-in roster policy is positive and tier-owned:
 
 - Founding is the BYOK flagship. It uses the best current OpenRouter-accessible
   model IDs available for broad reasoning. Price is not a selection constraint.
-  The strongest available model in the tier is the synthesizer because phase 3
-  produces the final answer with the other artifacts as reference material, not
-  a mechanical summary. The seven slots are distinct; provider diversity is a
-  tie-breaker only and never justifies omitting a stronger current model.
+  The final-answer policy seat is the synthesizer because phase 3 produces the
+  final answer with the other artifacts as reference material, not a mechanical
+  summary. Direct benchmark scores prove the policy when the exact model row is
+  scored; when benchmark rows lag a product-tier model such as GPT-5.5 Pro, the
+  docs name the evidence gap instead of claiming a scored ranking. The seven
+  slots are distinct; provider diversity is a tie-breaker only and never
+  justifies omitting a stronger current model.
 - Lantern is the deliberate mid-tier bridge. It uses strong current models that
   sit below the flagship set while preserving distinct model IDs and useful
-  provider breadth. Its strongest member is the synthesizer, and it sends medium
-  reasoning effort by default.
+  provider breadth. Its synthesizer is the final-answer policy seat, and it
+	  sends medium requested reasoning effort by default.
 - Commons is the demo council. It is paid, cheap, reliable, and good enough to
   sell the product; it is not a free-model showcase and it does not use `:free`,
-  `~latest`, or preview model aliases. Commons sends low reasoning effort by
+	  `~latest`, or preview model aliases. Commons sends low requested reasoning effort by
   default because the product already runs multi-phase deliberation; xhigh
   per-member demo calls multiply latency and cost without being the demo
   contract. Commons uses nonzero-priced rows from the paid-cheap
@@ -493,14 +658,14 @@ Current built-in rosters:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Founding | `openai/gpt-5.5` | `anthropic/claude-opus-4.7` | `google/gemini-3.1-pro-preview` | `moonshotai/kimi-k2.6` | `xiaomi/mimo-v2.5-pro` | `x-ai/grok-4.3` | `openai/gpt-5.5-pro` |
 | Lantern | `anthropic/claude-sonnet-4.6` | `deepseek/deepseek-v4-pro` | `z-ai/glm-5.1` | `qwen/qwen3.6-plus` | `google/gemini-3-flash-preview` | `mistralai/mistral-medium-3-5` | `qwen/qwen3.6-max-preview` |
-| Commons | `qwen/qwen3.6-flash` | `google/gemini-3.1-flash-lite` | `openai/gpt-5-mini` | `deepseek/deepseek-v4-flash` | `openai/gpt-5-nano` | `mistralai/mistral-small-2603` | `minimax/minimax-m2.7` |
+| Commons | `qwen/qwen3.6-35b-a3b` | `google/gemini-3.1-flash-lite` | `openai/gpt-5-mini` | `deepseek/deepseek-v4-flash` | `openai/gpt-5-nano` | `mistralai/mistral-small-2603` | `minimax/minimax-m2.7` |
 
-The 2026-05-14 catalog rows for these IDs expose text output, nonzero prompt and
+The 2026-05-16 catalog rows for these IDs expose text output, nonzero prompt and
 completion pricing, no expiration date, current context windows, maximum
 completion token metadata when OpenRouter publishes it, and model-specific
 `supported_parameters`. The 21 built-in model IDs are distinct across the three
 tier clusters. Commons live execution uses the app-compatible low-effort tuning
-shape, Lantern uses medium effort, and Founding uses xhigh effort for the
+shape, Lantern uses medium requested effort, and Founding uses xhigh requested effort for the
 flagship council. Built-in defaults therefore send only `reasoning.effort`;
 the phase-owned `max_tokens` and phase-2 `response_format` are materialized by
 the workflow, not by the council template.
@@ -512,8 +677,13 @@ families in the relevant current frontier, bridge, and cheap-intelligence
 clusters. OpenRouter confirms the exact transport IDs, pricing, no catalog
 expiration date, and supported parameter rows for the surviving built-ins.
 LMArena is a secondary cross-check for top-tier relative strength when current
-benchmark rows lag exact product names.
+benchmark rows lag exact product names. The current benchmark citation scores
+GPT-5.5 directly and does not publish the same scored metric row for GPT-5.5
+Pro; GPT-5.5 Pro remains the Founding final-answer policy seat and must be
+proven by live completion before release rather than represented as a
+benchmark-proven rank.
 
+- Source: `vendor:openrouter:2026-05-16:https://openrouter.ai/api/v1/models?output_modalities=text`
 - Source: `vendor:artificial-analysis:2026-05-13:https://artificialanalysis.ai/leaderboards/models`
 - Source: `vendor:artificial-analysis:2026-05-13:https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index`
 - Source: `vendor:lmarena:2026-05-13:https://lmarena.ai/leaderboard`
@@ -526,26 +696,26 @@ synthesis; and the full live proof must produce completed BYOK sessions for
 Commons, Lantern, and Founding plus the demo Commons flow. Rows that fail the
 exact schema, return malformed JSON, time out, refuse, emit empty content, hit
 provider instability, or exhaust account credits block release until replaced or
-the provider condition is resolved. The 2026-05-14 live proof retired
-`bytedance-seed/seed-2.0-lite` from Commons because it returned a phase-2 review
-row whose `verdict_input` failed the app-owned material-prose and length
-contract. The same exact phase-2 probe validated `deepseek/deepseek-v4-flash`,
-`qwen/qwen3.6-35b-a3b`, `google/gemma-4-31b-it`, `arcee-ai/trinity-mini`, and
-`openai/gpt-oss-120b`; DeepSeek V4 Flash is the surviving replacement because it
-is cheaper than GPT-5 Mini, current in the OpenRouter catalog, supports the
-required request parameters, and sits higher than the lower-cost fallback cluster
-in the current Artificial Analysis intelligence/cost view. `qwen/qwen3.6-27b`
-remains inactive because it exceeds the Commons GPT-5 Mini blended row ceiling.
-The initially considered `x-ai/grok-4.1-fast` row is also inactive because the
-current OpenRouter catalog marks it with an expiration date, which the workflow
-denies before provider execution.
+the provider condition is resolved. Commons member 1 is
+`qwen/qwen3.6-35b-a3b`, not `qwen/qwen3.6-flash`, because the current OpenRouter
+row is cheaper on both prompt and completion pricing, exposes the required
+reasoning, max-token, structured-output, and response-format parameters, has a
+larger published output cap, and has current benchmark evidence in the
+cheap-intelligence cluster. DeepSeek V4 Flash survives as another low-cost row
+because it is cheaper than GPT-5 Mini, current in the OpenRouter catalog,
+supports the required request parameters, and sits higher than lower-cost
+fallback rows in the current Artificial Analysis intelligence/cost view.
+`qwen/qwen3.6-27b` remains inactive because it exceeds the Commons GPT-5 Mini
+blended row ceiling. The initially considered `x-ai/grok-4.1-fast` row is also
+inactive because it is not present in the current OpenRouter `/api/v1/models`
+active catalog, so the workflow denies it before provider execution.
 
 Retired built-in IDs are not aliases. `openai/gpt-5.4-mini`,
 `openai/gpt-5.4-nano`, `x-ai/grok-4.20`, `x-ai/grok-4.20-multi-agent`,
 `deepseek/deepseek-v3.2`, `google/gemini-2.5-flash`,
 `qwen/qwen3.5-35b-a3b`, `openai/gpt-oss-120b`,
 `arcee-ai/trinity-mini`, `x-ai/grok-4.1-fast`, `google/gemma-4-31b-it`,
-`qwen/qwen3.6-27b`, `qwen/qwen3.6-35b-a3b`, and
+`qwen/qwen3.6-27b`, `qwen/qwen3.6-flash`, and
 `bytedance-seed/seed-2.0-lite` are no longer active built-ins. The surviving roster
 table is the complete public built-in set.
 
@@ -567,6 +737,9 @@ recovery retries terminalization for abandoned pending rows on terminal sessions
 through a bounded supervisor lifecycle step so a transient database failure does
 not leave restart-owned billing diagnostics pending. Pending diagnostics on
 nonterminal or reclaimable work are left untouched.
+Session detail and diagnostics payloads expose the redacted terminal job error
+as `terminalError` so local and live proof surfaces name parser/provider
+blockers without exposing credentials.
 
 - Source: `vendor:openrouter:2026-05-13:https://openrouter.ai/docs/api/api-reference/generations/get-generation`
 
@@ -598,7 +771,10 @@ diagnostics.
 - Continue is allowed only for failed sessions and requeues the same session in
   one transaction; credential materialization failure cannot clear the failed
   state without a runnable replacement job.
-- Rerun is allowed only for terminal sessions and creates a new session.
+- Rerun is allowed only for terminal sessions and creates a new session. Blank
+  edited matter is not sent as a schema-failing override; the client either
+  reuses the original matter or blocks with docket guidance before any
+  cost-bearing request.
 - Completed sessions are idempotent.
 - Claimed terminal transitions bind `jobs.id`, `jobs.session_id`, `jobs.state`,
   `jobs.lease_owner`, and an unexpired `jobs.lease_expires_at` before updating
@@ -685,6 +861,16 @@ because concurrent writes can mangle the directory
 Because Next rewrites `next-env.d.ts` from the effective `distDir`, the
 local/proof launcher restores the canonical file after the dev process exits
 (`node_modules:node_modules/.pnpm/next@16.2.1_@playwright+test@1.59.1_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/lib/typescript/writeAppTypeDeclarations.js:52`).
+The gate runs `next typegen` before TypeScript checks so clean checkouts
+materialize canonical `.next/types` without relying on ignored local cache
+state; Next 16.2.1 exposes `typegen` as a first-class CLI command for route,
+page, and layout definitions
+(`node_modules:node_modules/.pnpm/next@16.2.1_@playwright+test@1.59.1_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/bin/next:101`).
+The Next development indicator is disabled in `apps/web/next.config.ts` so
+rendered proof captures product UI rather than framework debugging chrome; the
+installed config contract accepts `devIndicators: false` for development
+indicators
+(`node_modules:apps/web/node_modules/next/dist/server/config-shared.d.ts:1006`).
 Playwright waits on an explicit `url` or `port`, accepts per-server environment
 projection, and recommends an explicit `baseURL` for relative navigation, so The
 Seven projects `SEVEN_BASE_URL` instead of relying on a hidden default. Browser

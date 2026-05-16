@@ -25,13 +25,21 @@ It also offers a zero-friction demo path (email → magic link) that uses a serv
 
 ## User Experience (Target)
 
+The UI is a serious scholarly council workbench. It uses medieval and early
+print-culture cues as institutional structure: docket, proceedings, verdict,
+archive, seats, sigils, seals, marginalia, and ruled folio surfaces. It does
+not present as a generic SaaS dashboard or a fantasy game skin.
+
 - Setup (BYOK): paste OpenRouter key → choose password → key is encrypted and stored locally; password never leaves the browser.
 - Setup (demo): enter email → receive magic link → 24‑hour session starts immediately.
-- Use: submit a query (+ optional file attachments) → watch responses/reviews/synthesis arrive → inspect artifacts and costs.
+- BYOK admission selects the Founding Council by default, so a paid-key user
+  starts on the strongest roster unless they intentionally choose Lantern or
+  Commons.
+- Use: file a matter (+ optional evidence exhibits) → watch six reviewers and the synthesizer move through proceedings → inspect drafts, critiques, verdict, provider record, and costs.
 - Customize (BYOK only):
   - Councils are saved 7-slot lineups (`A–G`) that define the 6 “members” + the final “verdict” model.
   - Prompts are editable only at the phase layer (Phase 1/2/3). There are no per-member prompt overrides.
-  - Members may optionally expose a small set of high-signal tuning controls when the selected model supports them.
+  - Member model selection validates against the current catalog, shows readable model names before provider slugs, and exposes only the high-signal tuning controls the selected model supports.
   - Three built-in councils ship as immutable templates: Founding is the BYOK best-of-best roster, Lantern is the deliberate mid-tier bridge, and Commons is the paid low-cost demo roster. The 21 built-in model IDs are distinct across those tier clusters; users Duplicate to edit their own.
 - Demo constraints:
   - Demo runs use the Commons Council only; councils and models are not editable.
@@ -40,7 +48,7 @@ It also offers a zero-friction demo path (email → magic link) that uses a serv
   - **Continue**: if a session is interrupted and ends `failed`, you can continue the *same* session run.
     - Already-delivered artifacts are preserved; only missing inference is executed.
     - Continue uses the original run snapshot.
-  - **Rerun**: create a new session id and rerun the question with an explicitly chosen council (optionally with a query override).
+  - **Rerun**: create a new session id and rerun the matter with an explicitly chosen council (optionally with a query override).
   - Restart recovery: queued and leased jobs recover through the durable job table instead of silently stalling after a process restart.
 
 ## Non‑Goals
@@ -49,5 +57,9 @@ It also offers a zero-friction demo path (email → magic link) that uses a serv
 - No server-side key escrow or key recovery.
 - No automatic semantic retries that fabricate missing artifacts; recovery may replay only durable state and explicit user actions.
 - No multi-provider abstraction beyond OpenRouter (OpenRouter remains the first-class provider boundary).
+- No novelty fantasy chrome. The scholarly/council identity is expressed
+  through typography hierarchy, disciplined density, rules, folio surfaces,
+  sigils, docket language, and traceable proceedings rather than glows, casino
+  gradients, full-pill controls, or display-font UI text.
 
-Last updated: 2026-05-13.
+Last updated: 2026-05-15.

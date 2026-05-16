@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const MAX_PHASE_PROMPT_CHARS = 6000;
-export const MAX_OUTPUT_FORMAT_CHARS = 3000;
+export const MAX_OUTPUT_FORMAT_CHARS = 6000;
 
 export type PhasePrompts = Readonly<{
   phase1: string;

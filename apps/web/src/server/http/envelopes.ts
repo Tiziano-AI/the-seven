@@ -1,6 +1,11 @@
 import "server-only";
 
-import { buildErrorEnvelope, buildSuccessEnvelope, type ErrorEnvelope } from "@the-seven/contracts";
+import {
+  buildErrorEnvelope,
+  buildSuccessEnvelope,
+  type ErrorEnvelope,
+  jsonApiCacheControl,
+} from "@the-seven/contracts";
 import { NextResponse } from "next/server";
 import { redactErrorDetails, redactText } from "../domain/redaction";
 
@@ -15,6 +20,7 @@ export function jsonSuccess(input: {
   return NextResponse.json(envelope, {
     status: input.status ?? 200,
     headers: {
+      "Cache-Control": jsonApiCacheControl,
       "X-Trace-Id": input.traceId,
     },
   });
@@ -36,6 +42,7 @@ export function jsonError(input: {
   return NextResponse.json(envelope, {
     status: input.status,
     headers: {
+      "Cache-Control": jsonApiCacheControl,
       "X-Trace-Id": input.traceId,
     },
   });

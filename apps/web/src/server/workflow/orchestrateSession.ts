@@ -50,6 +50,7 @@ async function failSession(input: {
   sessionId: number;
   failureKind: SessionFailureKind;
   error: unknown;
+  apiKey?: string;
 }) {
   if (input.error instanceof ClaimedJobLeaseLostError) {
     throw input.error;
@@ -61,6 +62,9 @@ async function failSession(input: {
     failureKind: input.failureKind,
     lastError: redactErrorMessage(input.error, "Unknown orchestration failure"),
   });
+  if (input.apiKey) {
+    scheduleSessionCostBackfill({ sessionId: input.sessionId, apiKey: input.apiKey });
+  }
 }
 
 /**
@@ -80,7 +84,7 @@ export async function orchestrateClaimedJob(input: {
     await markJobFailed({
       jobId: input.jobId,
       leaseOwner: input.leaseOwner,
-      lastError: "Session not found",
+      lastError: "Manuscript backing row not found",
     });
     return;
   }
@@ -209,6 +213,7 @@ export async function orchestrateClaimedJob(input: {
         sessionId: session.id,
         failureKind: toFailureKind(error, "phase1_inference_failed"),
         error,
+        apiKey,
       });
       return;
     }
@@ -224,6 +229,7 @@ export async function orchestrateClaimedJob(input: {
         sessionId: session.id,
         failureKind: "phase1_inference_failed",
         error: new Error("Phase 1 incomplete after execution"),
+        apiKey,
       });
       return;
     }
@@ -289,6 +295,7 @@ export async function orchestrateClaimedJob(input: {
         sessionId: session.id,
         failureKind: toFailureKind(error, "phase2_inference_failed"),
         error,
+        apiKey,
       });
       return;
     }
@@ -304,6 +311,7 @@ export async function orchestrateClaimedJob(input: {
         sessionId: session.id,
         failureKind: "phase2_inference_failed",
         error: new Error("Phase 2 incomplete after execution"),
+        apiKey,
       });
       return;
     }
@@ -320,6 +328,7 @@ export async function orchestrateClaimedJob(input: {
         sessionId: session.id,
         failureKind: "phase2_inference_failed",
         error,
+        apiKey,
       });
       return;
     }
@@ -364,6 +373,7 @@ export async function orchestrateClaimedJob(input: {
           sessionId: session.id,
           failureKind: toFailureKind(result.error, "phase3_inference_failed"),
           error: result.error,
+          apiKey,
         });
         return;
       }
@@ -396,6 +406,7 @@ export async function orchestrateClaimedJob(input: {
       sessionId: session.id,
       failureKind: "internal_error",
       error,
+      apiKey,
     });
   }
 }

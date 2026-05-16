@@ -102,6 +102,35 @@ describe("decodeAttachmentToText", () => {
     });
   });
 
+  test("accepts plain text attachments and normalizes CRLF newlines", async () => {
+    const result = await decodeAttachmentToText(textUpload("evidence.txt", "alpha\r\nbeta"));
+
+    expect(result).toEqual({
+      ok: true,
+      attachment: {
+        name: "evidence.txt",
+        text: "alpha\nbeta",
+      },
+    });
+    expect(officeParserMocks.parseOffice).not.toHaveBeenCalled();
+  });
+
+  test("rejects detected unsupported MIME even when the filename extension is allowed", async () => {
+    fileTypeMocks.fileTypeFromBuffer.mockResolvedValue({ mime: "image/png", ext: "png" });
+    const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+
+    const result = await decodeAttachmentToText({ name: "evidence.txt", base64: pngSignature });
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: "unsupported_type",
+        message: "Attachment evidence.txt is image/png (png), which is not a supported format.",
+      },
+    });
+    expect(officeParserMocks.parseOffice).not.toHaveBeenCalled();
+  });
+
   test("rejects extracted text above the character cap", async () => {
     const result = await decodeAttachmentToText(
       textUpload("huge.txt", "x".repeat(MAX_ATTACHMENT_EXTRACTED_CHARS + 1)),

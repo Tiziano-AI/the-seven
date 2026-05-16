@@ -27,6 +27,9 @@ app is not.
 - Gate projection: `pnpm local:gate --full` clears reserved runtime/projection
   keys before invoking `devtools/gate.py`; the gate materializes its own
   browser-proof projection.
+- UI surface: `apps/web/src/app/theme.css` owns tokens; `apps/web/src/app/*.css`
+  owns the scholarly workbench class vocabulary; client components under
+  `apps/web/src/components/**` own rendered route behavior.
 
 ## Contract Owners
 
@@ -39,6 +42,7 @@ app is not.
   query, and body values directly.
 - Response envelopes and error-detail constructors come from
   `packages/contracts/src/http`.
+- JSON API adapters mark success and error envelopes `Cache-Control: no-store`.
 - Session identity for session subresources is the `[sessionId]` path parameter.
 - Ingress metadata is admitted before auth. Server trace IDs are canonical audit
   truth.
@@ -50,9 +54,12 @@ app is not.
 - Demo authority is the `seven_demo_session` web cookie issued by
   `GET /api/v1/demo/consume`.
 - Demo logout authority is the revocation state on the matching
-  `demo_sessions` row; cookie clearing follows successful server revocation.
-- Cookie-auth mutating routes enforce same-origin admission only when demo-cookie
-  authority is admitted for a cookie-capable route. BYOK routes remain
+  `demo_sessions` row. The route clears the cookie after successful server
+  revocation or after a typed `401` proof that the cookie no longer maps to
+  admitted demo authority; same-origin admission failures do not clear it.
+- Demo-cookie mutating routes enforce same-origin admission before route input
+  parsing and before cookie-auth denial. Any-auth mutating routes enforce the
+  same-origin gate when the resolved authority is demo. BYOK routes remain
   header-based and report `demo_not_allowed` when a demo cookie reaches a
   BYOK-only route.
 - Rate limiting runs before DB user creation and demo-session lookup.
@@ -64,8 +71,8 @@ app is not.
 - Founding is the BYOK best-of-best roster. Provider diversity is only a
   tie-breaker after current quality evidence; Lantern is the declared mid-tier
   bridge, Commons is the paid low-cost demo roster, and all 21 built-in model
-  IDs are distinct across the three tier clusters. Position 7 is the strongest
-  model in its tier and owns synthesis.
+  IDs are distinct across the three tier clusters. Position 7 is the
+  final-answer policy seat and owns synthesis.
 - Commons uses nonzero-priced model IDs and excludes `:free`, `~latest`,
   preview aliases, expiring catalog rows, and rows above the current selected
   GPT-5 Mini blended row ceiling.
@@ -89,10 +96,53 @@ app is not.
 ## Operator Validation Owners
 
 - `devtools/gate.py` proves owned file guardrails, squashed DB posture, canonical
-  root ownership, package-manifest boundaries, and exact active contract tokens.
+  root ownership, package-manifest boundaries, canonical Next route type
+  materialization before TypeScript checks, and exact active contract tokens.
 - `pnpm local:doctor` proves minimal local development readiness.
 - `pnpm local:doctor --live` and `pnpm local:live` prove live-provider readiness
   only when live keys and secret hygiene are present.
+
+## UI Owners
+
+- `/` owns the Petition Desk and active Run Workbench.
+- The locked Petition Desk gate presents a stored BYOK unlock first when this
+  browser has an encrypted key; the demo magic-link request is primary only for
+  browsers without a stored key.
+- `/councils` owns the Council Library/editor.
+- `/sessions` owns the Archive ledger. It loads ledger-first and opens a
+  manuscript only from row activation, deep link, or explicit restored
+  selection.
+- `/sessions/[sessionId]` owns one deep-linked Manuscript.
+- The visual contract is the scholarly council workbench: docket language,
+  proceedings, verdict article, provider record, archive rows, sigils, seals,
+  ruled folio surfaces, small radii, and readable typography.
+- Every UI route owns a page-level heading. Workbench cards may lead visually,
+  but screen-reader navigation still starts from the route owner.
+- Petition, demo request, BYOK unlock, and rerun submissions are form-owned.
+  Blank rerun matter is handled before request submission instead of relying on
+  raw schema-error recovery.
+  Exclusive council/filter/tuning choices use radio semantics. Evidence is a
+  product-owned exhibit picker with keyboard selection, drag/drop, selected
+  exhibit ledger, per-exhibit removal, and clear-all recovery.
+- The medieval/display face is not a UI chrome font. It is reserved for the
+  wordmark, seat letters, selected title plates, and verdict drop-caps.
+- Typography is locally bundled through `next/font/local`; rendered proof and
+  production builds do not depend on Google Fonts network fetches.
+- Council model selection is a workbench combobox ledger. Human model names are
+  primary, exact provider IDs are secondary evidence, and no browser-default
+  datalist/dropdown chrome owns the editable seat surface.
+- Council tuning is capability-driven. The editor validates each selected model
+  against the catalog, prunes unsupported saved tuning, and renders only controls
+  backed by supported provider parameters.
+- Demo seals are server-issued cookie authority and client-visible UI state.
+  They self-expire at the server timestamp and are rechecked when the tab is
+  shown; expired seals return the workbench to the locked state.
+- BYOK admission selects Founding before the paid-key session starts so Commons
+  does not remain the accidental default for a paid-key run.
+- Provider Record, Continue, and Rerun controls own visible state transitions:
+  Provider Record scrolls to the loaded call ledger; Continue states that it
+  uses the original council; Prepare Rerun opens a docket, and the final Run
+  Again submit states that it uses a freshly chosen council.
 
 ## Gate Boundary
 

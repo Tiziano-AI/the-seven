@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const dbMocks = vi.hoisted(() => ({
   getSessionById: vi.fn(),
+  getSessionTerminalError: vi.fn(),
   listCatalogModelsByIds: vi.fn(),
   listProviderCalls: vi.fn(),
   listSessionArtifacts: vi.fn(),
@@ -26,6 +27,7 @@ describe("sessionViews service", () => {
     vi.resetModules();
     for (const mock of [
       dbMocks.getSessionById,
+      dbMocks.getSessionTerminalError,
       dbMocks.listCatalogModelsByIds,
       dbMocks.listProviderCalls,
       dbMocks.listSessionArtifacts,
@@ -80,6 +82,7 @@ describe("sessionViews service", () => {
     dbMocks.listSessionArtifacts.mockResolvedValue([]);
     dbMocks.listProviderCalls.mockResolvedValue([]);
     dbMocks.listCatalogModelsByIds.mockResolvedValue([]);
+    dbMocks.getSessionTerminalError.mockResolvedValue(null);
 
     const { getSessionDetail } = await loadSessionViews();
     const detail = await getSessionDetail(3, 12);
@@ -88,6 +91,68 @@ describe("sessionViews service", () => {
     expect(detail.session.status).toBe("processing");
     expect(detail.artifacts).toEqual([]);
     expect(detail.providerCalls).toEqual([]);
+    expect(detail.terminalError).toBeNull();
+    expect(dbMocks.getSessionTerminalError).not.toHaveBeenCalled();
+  });
+
+  test("exposes terminal errors only for failed session detail and diagnostics", async () => {
+    dbMocks.getSessionById.mockResolvedValue({
+      id: 13,
+      userId: 3,
+      query: "Why did the review fail?",
+      questionHash: "hash-failed",
+      ingressSource: "web",
+      ingressVersion: null,
+      councilNameAtRun: "The Lantern Council",
+      status: "failed",
+      failureKind: "phase2_inference_failed",
+      createdAt: new Date("2026-05-14T01:25:29.823Z"),
+      updatedAt: new Date("2026-05-14T01:25:30.363Z"),
+      totalTokens: 0,
+      totalCostUsdMicros: 0,
+      totalCostIsPartial: true,
+      snapshotJson: {
+        version: 1,
+        createdAt: "2026-05-14T01:25:29.782Z",
+        query: "Why did the review fail?",
+        userMessage: "Why did the review fail?",
+        attachments: [],
+        outputFormats: {
+          phase1: "phase1",
+          phase2: "phase2",
+          phase3: "phase3",
+        },
+        council: {
+          nameAtRun: "The Lantern Council",
+          phasePrompts: {
+            phase1: "prompt1",
+            phase2: "prompt2",
+            phase3: "prompt3",
+          },
+          members: [1, 2, 3, 4, 5, 6, 7].map((memberPosition) => ({
+            memberPosition,
+            model: { provider: "openrouter", modelId: `model-${memberPosition}` },
+            tuning: null,
+          })),
+        },
+      },
+    });
+    dbMocks.listSessionArtifacts.mockResolvedValue([]);
+    dbMocks.listProviderCalls.mockResolvedValue([]);
+    dbMocks.listCatalogModelsByIds.mockResolvedValue([]);
+    dbMocks.getSessionTerminalError.mockResolvedValue(
+      "Phase 2 evaluation is invalid: list too long",
+    );
+
+    const { getSessionDetail, getSessionDiagnostics } = await loadSessionViews();
+    const detail = await getSessionDetail(3, 13);
+    const diagnostics = await getSessionDiagnostics(3, 13);
+
+    routeContract("sessions.get").successPayloadSchema.parse(detail);
+    sessionDiagnosticsPayloadSchema.parse(diagnostics);
+    expect(detail.terminalError).toBe("Phase 2 evaluation is invalid: list too long");
+    expect(diagnostics.terminalError).toBe("Phase 2 evaluation is invalid: list too long");
+    expect(dbMocks.getSessionTerminalError).toHaveBeenCalledTimes(2);
   });
 
   test("maps session detail into the public contract shape", async () => {
@@ -191,6 +256,9 @@ describe("sessionViews service", () => {
         modelName: "Model Seven",
       },
     ]);
+    dbMocks.getSessionTerminalError.mockRejectedValue(
+      new Error("stale terminal error should stay private"),
+    );
 
     const { getSessionDetail, getSessionDiagnostics } = await loadSessionViews();
     const detail = await getSessionDetail(3, 9);
@@ -222,8 +290,12 @@ describe("sessionViews service", () => {
       billingLookupStatus: "succeeded",
       responseId: "resp-1",
     });
-    sessionDiagnosticsPayloadSchema.parse(await getSessionDiagnostics(3, 9));
+    expect(detail.terminalError).toBeNull();
+    const diagnostics = await getSessionDiagnostics(3, 9);
+    expect(diagnostics.terminalError).toBeNull();
+    sessionDiagnosticsPayloadSchema.parse(diagnostics);
     expect(dbMocks.listSessionArtifacts).toHaveBeenCalledTimes(1);
+    expect(dbMocks.getSessionTerminalError).not.toHaveBeenCalled();
   });
 
   test("exports sessions as markdown and json from the same detail contract", async () => {
@@ -289,11 +361,12 @@ describe("sessionViews service", () => {
         modelName: "Claude",
       },
     ]);
+    dbMocks.getSessionTerminalError.mockResolvedValue(null);
 
     const { exportSessions } = await loadSessionViews();
     const exported = await exportSessions(3, [9]);
 
-    expect(exported.markdown).toContain("# Session 9");
+    expect(exported.markdown).toContain("# Manuscript 9");
     expect(exported.markdown).toContain("## Query");
     expect(exported.markdown).toContain("### Phase 1 · Member A · response");
     expect(exported.markdown).toContain("Answer A");
@@ -359,6 +432,7 @@ describe("sessionViews service", () => {
     ]);
     dbMocks.listProviderCalls.mockResolvedValue([]);
     dbMocks.listCatalogModelsByIds.mockResolvedValue([]);
+    dbMocks.getSessionTerminalError.mockResolvedValue(null);
 
     const { getSessionDetail } = await loadSessionViews();
 

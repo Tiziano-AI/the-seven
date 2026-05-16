@@ -1,6 +1,15 @@
-import { buildErrorEnvelope, buildSuccessEnvelope, routeContract } from "@the-seven/contracts";
+import {
+  buildErrorEnvelope,
+  buildSuccessEnvelope,
+  jsonApiCacheControl,
+  routeContract,
+} from "@the-seven/contracts";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { apiRequest } from "./apiClient";
+
+function jsonApiHeaders(traceId: string) {
+  return { "Cache-Control": jsonApiCacheControl, "X-Trace-Id": traceId } as const;
+}
 
 describe("apiRequest", () => {
   beforeEach(() => {
@@ -26,6 +35,7 @@ describe("apiRequest", () => {
           resource: "sessions.rerun",
           payload: { sessionId: 43 },
         }),
+        { headers: jsonApiHeaders("trace") },
       );
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -51,6 +61,7 @@ describe("apiRequest", () => {
             resource: "sessions.create",
             payload: { sessionId: 43 },
           }),
+          { headers: jsonApiHeaders("trace") },
         ),
       ),
     );
@@ -75,7 +86,7 @@ describe("apiRequest", () => {
             resource: "sessions.create",
             payload: { sessionId: 43 },
           }),
-          { status: 200 },
+          { status: 200, headers: jsonApiHeaders("trace") },
         ),
       ),
     );
@@ -103,6 +114,19 @@ describe("apiRequest", () => {
     ).rejects.toThrow("SEVEN_BASE_URL is required");
   });
 
+  test("rejects explicit bodies for no-body route contracts", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      apiRequest({
+        route: routeContract("demo.logout"),
+        body: {},
+      }),
+    ).rejects.toThrow("API POST /api/v1/demo/logout does not accept a request body");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test("rejects undeclared error denials for the route", async () => {
     vi.stubGlobal(
       "fetch",
@@ -115,7 +139,7 @@ describe("apiRequest", () => {
             message: "OpenRouter request failed",
             details: { service: "openrouter" },
           }),
-          { status: 502 },
+          { status: 502, headers: jsonApiHeaders("trace") },
         ),
       ),
     );
@@ -139,7 +163,7 @@ describe("apiRequest", () => {
             message: "Internal server error",
             details: { errorId: "opaque-error-id" },
           }),
-          { status: 500 },
+          { status: 500, headers: jsonApiHeaders("trace") },
         ),
       ),
     );
@@ -153,5 +177,77 @@ describe("apiRequest", () => {
       status: 500,
       details: { errorId: "opaque-error-id" },
     });
+  });
+
+  test("rejects JSON API responses without no-store", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          buildSuccessEnvelope({
+            traceId: "trace",
+            now: new Date("2026-05-09T00:00:00.000Z"),
+            resource: "sessions.rerun",
+            payload: { sessionId: 43 },
+          }),
+        ),
+      ),
+    );
+
+    await expect(
+      apiRequest({
+        route: routeContract("sessions.rerun"),
+        params: { sessionId: 42 },
+        body: { councilRef: { kind: "built_in", slug: "commons" } },
+      }),
+    ).rejects.toThrow("API POST /api/v1/sessions/[sessionId]/rerun did not return");
+  });
+
+  test("rejects success and error envelopes whose trace header differs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          buildSuccessEnvelope({
+            traceId: "trace",
+            now: new Date("2026-05-09T00:00:00.000Z"),
+            resource: "sessions.rerun",
+            payload: { sessionId: 43 },
+          }),
+          { headers: jsonApiHeaders("wrong-trace") },
+        ),
+      ),
+    );
+
+    await expect(
+      apiRequest({
+        route: routeContract("sessions.rerun"),
+        params: { sessionId: 42 },
+        body: { councilRef: { kind: "built_in", slug: "commons" } },
+      }),
+    ).rejects.toThrow("trace header does not match envelope trace_id");
+    vi.unstubAllGlobals();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          buildErrorEnvelope({
+            traceId: "trace",
+            now: new Date("2026-05-09T00:00:00.000Z"),
+            kind: "internal_error",
+            message: "Internal server error",
+            details: { errorId: "opaque-error-id" },
+          }),
+          { status: 500, headers: jsonApiHeaders("wrong-trace") },
+        ),
+      ),
+    );
+
+    await expect(
+      apiRequest({
+        route: routeContract("demo.logout"),
+      }),
+    ).rejects.toThrow("trace header does not match envelope trace_id");
   });
 });

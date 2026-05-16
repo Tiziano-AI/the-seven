@@ -8,8 +8,8 @@ This is the required verification pyramid for the launch-candidate milestone.
 - BYOK crypto roundtrip and auth-store semantics
 - demo cookie serialization and clearing
 - council draft validation
-- attachment count, filename, byte, MIME, parser-timeout, and extracted-char
-  denials
+- attachment count, filename, byte, extension/MIME mismatch, detected
+  unsupported MIME, parser-timeout, and extracted-char denials
 - prompt snapshot construction
 - redaction mapper behavior
 - error-detail constructors and envelope builders
@@ -21,6 +21,8 @@ This is the required verification pyramid for the launch-candidate milestone.
   policy, schemas, success payload, and denial rows
 - every JSON route success envelope validates against the registry payload
 - every JSON route typed error path validates against the error envelope
+- JSON API success and error envelopes carry `Cache-Control: no-store`, and
+  `X-Trace-Id` matches envelope `trace_id`
 - invalid path params, invalid query, invalid body, invalid ingress, and missing
   auth denials include a server trace header
 - public request body schemas reject extra keys instead of stripping them
@@ -55,7 +57,9 @@ This is the required verification pyramid for the launch-candidate milestone.
 - magic-link request creates one email link
 - `GET /api/v1/demo/consume` validates token, sets a cookie, and redirects to
   `<SEVEN_PUBLIC_ORIGIN>/`
-- API-ingress token reuse, expired token, and missing token return typed denials
+- API-ingress token reuse, expired token, missing token, blank token, and
+  whitespace-only token return typed denials; browser-ingress blank and
+  whitespace-only demo links redirect to the demo-link recovery state
 - browser-ingress missing, reused, expired, invalid, or disabled demo links
   redirect to the public origin with a recovery state
 - malformed demo consume `Host` authority denies before rate-limit or token
@@ -66,10 +70,10 @@ This is the required verification pyramid for the launch-candidate milestone.
 
 ## Provider
 
-- built-in councils validate against a mocked 2026-05-14 OpenRouter catalog
+- built-in councils validate against a mocked 2026-05-16 OpenRouter catalog
 - Founding uses current best-of-best OpenRouter model IDs for BYOK and treats
   provider diversity as a tie-breaker only
-- each built-in tier uses its strongest selected model as the synthesizer
+- each built-in tier uses position 7 as the final-answer policy seat
 - Lantern uses a declared mid-tier bridge roster rather than leftovers
 - Commons uses paid low-cost demo model IDs with nonzero pricing and no
   `:free`, `~latest`, preview aliases, catalog expiration date, or row above the
@@ -88,8 +92,9 @@ This is the required verification pyramid for the launch-candidate milestone.
 - chat completions use the OpenRouter streaming transport internally while
   preserving the stored complete-response artifact contract
 - phase-2 review calls require `response_format` and `structured_outputs`, record
-  the exact missing capability list on denial, and send the compact provider-facing `response_format` with
-  provider parameter enforcement
+  the exact missing capability list on denial, and send the compact
+  provider-facing `response_format` with provider parameter enforcement plus
+  prompt-visible candidate count, score, item-count, and string-length bounds
 - phase-3 synthesis calls receive compact synthesis material rather than the
   canonical persisted phase-2 review object; exact phase-3 probes and full live proof own
   synthesizer acceptance
@@ -107,12 +112,15 @@ This is the required verification pyramid for the launch-candidate milestone.
   params, sent params, denied params, requested output cap, sent reasoning
   effort, sent OpenRouter provider-routing controls, upstream status/code,
   response model, generation ID, and finite billing lookup status without secrets
+- failed session detail and diagnostics expose the redacted terminal job error
+  as `terminalError` so parser/provider blockers are visible in proof output
 
 ## Database
 
 - schema constraints
 - one squashed init migration
-- transaction semantics for submit, atomic failed-session continue, and rerun
+- transaction semantics for submit with decoded attachments, atomic
+  failed-session continue, and rerun with copied source artifacts
 - job claim, lease renewal, expiry, reclaim, and max-attempt terminalization
 - lease-loss cancellation and active-lease verification before processing
   transitions, provider egress, artifact writes, and diagnostic writes
@@ -131,10 +139,13 @@ This is the required verification pyramid for the launch-candidate milestone.
 - full fresh session
 - partial-artifact resume
 - completed-session idempotency
-- rerun isolation
+- rerun isolation, including distinct queued session/job creation and rollback
+  on credential materialization failure
 - provider rate-limit surfacing
-- phase-2 evaluation JSON validates, normalizes, and rejects duplicate, missing, or extra
-  candidate review rows and invalid scores before phase 3
+- phase-2 evaluation JSON validates, normalizes, and rejects duplicate, missing,
+  or extra candidate review rows, invalid scores, overlarge lists, overlong
+  strings, and placeholder prose before phase 3; prompt projection tests assert
+  that provider-visible instructions mirror these parser-owned bounds
 - phase-2 and phase-3 JSON payload builders preserve hostile strings as data
   and do not create delimiter-based instruction surfaces
 - bounded retry behavior
@@ -151,15 +162,88 @@ and proves demo-cookie server authority, End Demo revocation, and stale-cookie
 denial against the running app.
 
 - BYOK setup, unlock, and lock
-- demo magic-link flow through cookie
+- stored BYOK browsers see the unlock path before demo email, with password
+  manager hints on BYOK and unlock fields; unlocking the stored key must prove
+  subsequent BYOK-only requests carry the restored `Authorization` header
+- demo magic-link request renders a durable receipt; live proof owns provider
+  email delivery and cookie consumption
+- demo magic-link request, BYOK unlock/setup, matter filing, and rerun are
+  form-owned submit surfaces with in-flight duplicate-submit guards
+- demo magic-link email admission uses email autofill and blocks syntactically
+  invalid addresses before the request
+- visible demo seals self-expire at the server-issued expiry time and return the
+  workbench to the locked state
 - End Demo waits for server logout, clears the cookie, locks the UI, and proves
   the stale cookie no longer authorizes `GET /api/v1/demo/session`
-- ask with attachments
+- BYOK admission selects Founding so the demo-only Commons roster does not
+  remain the accidental paid-key default
+- matter filing with attachments, including server-side decoded-text snapshot
+  persistence and submit-boundary denial before enqueue for unsupported detected
+  MIME
+- evidence upload renders as a product-owned exhibit picker, not native file
+  chrome
+- selected exhibits can be removed one-by-one or cleared as a set before submit
+- council/rerun council, archive status, and tuning choices expose native radio
+  semantics rather than pressed-button exclusivity
+- docketed matter, verdict, and recovery record render as navigable headings
+- authenticated and locked route entries expose one page-level heading
+- failed-run recovery and status surfaces map internal failure enums to
+  operator-facing language
+- verdict/proceedings markdown wraps long prose, URLs, inline code, and table
+  cells while preserving scroll for code blocks and tables
+- council proceedings render seven readable seats without raw provider IDs as
+  the primary label
+- council editor model slots render product-owned catalog suggestions, readable
+  model names as primary identity, and provider IDs only as evidence
+- council editor validates model catalog rows and hides unsupported tuning
+  controls before save
+- Provider Record member cells render seat alias/role rather than bare member
+  position integers
+- Provider Record renders capability admission, sent/denied parameters,
+  provider route, billing status, response ID, and error status/code
+- Provider Record begins with a run-level summary that separates accepted
+  provider outputs from failed or denied attempts and from unsettled billing
+  attempts
+- Provider Record loading scrolls to the call ledger so the user sees the
+  receipt that was requested
+- Archive loads ledger-first without arbitrary auto-selection; mobile Archive
+  renders the selected manuscript before the archive list once a row is opened,
+  so focused verdict, recovery, and Provider Record proof starts at the
+  requested matter
+- Provider Record fixtures mirror runtime-real diagnostics rows: phase-1
+  success sends `max_tokens,reasoning`, phase-2 structured success sends
+  `max_tokens,reasoning,response_format` with pending billing settlement,
+  pre-egress capability denial sends no provider parameters or upstream status,
+  and upstream errors do not mix denied parameters with provider transport
+  failures
+- review-signal copy is correct for no rankings, one ranking, unanimous
+  rankings, split rankings, dissent, and synthesis; verdict copy states that
+  Synthesizer G resolves by evidence and correctness rather than majority rank
+- archive export proof asserts both generated dossier files, suggested
+  filenames, and contents
+- rerun proof covers unchanged-matter reruns, edited `queryOverride` reruns, and
+  blank edited-matter recovery before any cost-bearing request
+- active runs show pending token/cost evidence instead of final-looking zero
+  usage
+- rendered desktop, tablet, and mobile proof covers locked gate, demo receipt,
+  demo composer, BYOK composer, submitted workbench, archive, processing run,
+  completed verdict, Provider Record, failed recovery, and seat-first council
+  editor
+- mobile proof includes focused viewport captures for demo receipt, submitted
+  workbench, processing run, completed verdict, Provider Record, and failed
+  recovery, plus full-page captures for long-surface continuity
+- the rendered proof directory regenerates a contact sheet from the fresh proof
+  set for visual review
+- verdict candidate/reviewer chips route to the canonical seat/proceedings
+  evidence anchors
+- proceedings render full phase-2 critique substance, not only scores
 - council duplicate, edit, save, and delete
 - sessions search, select, and export
 - session detail deep link
-- continue failed run
-- rerun completed run
+- continue failed run from the detail recovery panel
+- failed-run recovery copy distinguishes Continue with the original council
+  from Rerun with a freshly chosen council
+- rerun completed run from the detail rerun panel
 
 ## Local Operator
 
@@ -172,8 +256,13 @@ denial against the running app.
   than ambient shell overrides
 - `pnpm local:gate --full` scrubs reserved runtime/projection keys before
   build/test phases and lets full-gate e2e materialize its own projection
+- `devtools/gate.py` runs Next route type generation before TypeScript checks so
+  clean checkouts do not depend on ignored `.next/types` cache state
 - local proof isolates Next's dev `distDir` so an existing `apps/web`
   `.next/dev/lock` cannot break a launch-owned browser proof
+- local proof disables Next's development indicator so screenshots contain
+  product UI, not framework debugging chrome
+- rendered proof uses locally bundled fonts, not runtime Google Fonts fetches
 - `pnpm local:live` refuses to run while another same-repo `pnpm local:dev` or
   `next dev` worker can claim jobs from the same database
 - Playwright self-start mode never reuses an ambient server; external-server
@@ -237,8 +326,12 @@ denial against the running app.
     enforcement
   - demo request/consume through real Resend outbound email plus Receiving API
     listing and body retrieval
+  - every JSON API proof response used by live demo-cookie calls carries
+    `Cache-Control: no-store`, and logout/stale-cookie proof verifies
+    `X-Trace-Id` equality with envelope `trace_id`
   - BYOK and demo sessions must reach `completed`; failed sessions with provider
-    diagnostics are evidence for debugging, not launch proof
+    diagnostics and redacted `terminalError` are evidence for debugging, not
+    launch proof
   - demo proof cannot be skipped by environment flag
 - `pnpm local:live` additionally asserts:
   - `pnpm local:doctor --live`
@@ -282,6 +375,7 @@ without provider, email, or authenticated side effects:
 - unauthenticated `GET https://theseven.ai/api/v1/demo/session` returns the
   declared 401 error envelope with a server trace header through the normal
   ingress and rate-limit path.
+- the unauthenticated API response carries `Cache-Control: no-store`.
 
 The executable public smoke command is:
 

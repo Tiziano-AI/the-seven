@@ -174,7 +174,7 @@ export async function autocompleteModels(query: string, limit: number) {
   }
 
   return dedupeSuggestions(
-    [...buildBuiltInSuggestions(query), ...dynamicRows.map(buildDynamicSuggestion)],
+    [...dynamicRows.map(buildDynamicSuggestion), ...buildBuiltInSuggestions(query)],
     limit,
   );
 }

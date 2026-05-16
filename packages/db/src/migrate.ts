@@ -4,6 +4,9 @@ import path from "node:path";
 import { serverRuntime } from "@the-seven/config";
 import { closeDatabaseClient, createDatabaseClient } from "./client";
 
+const MIGRATION_LOCK_CLASS_ID = 1_937_007_475;
+const MIGRATION_LOCK_OBJECT_ID = 20_260_515;
+
 function resolveRepoRoot(startDirectory = process.cwd()): string {
   let currentDirectory = path.resolve(startDirectory);
 
@@ -58,6 +61,10 @@ async function runIsolatedSchemaInitSql(
   const connection = await client.pool.connect();
   try {
     await connection.query("begin");
+    await connection.query("select pg_advisory_xact_lock($1, $2)", [
+      MIGRATION_LOCK_CLASS_ID,
+      MIGRATION_LOCK_OBJECT_ID,
+    ]);
     for (const statement of statements) {
       await connection.query(statement);
     }

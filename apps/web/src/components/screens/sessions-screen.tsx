@@ -1,84 +1,99 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/app/auth-provider";
 import { SessionInspector } from "@/components/sessions/session-inspector";
+import {
+  downloadText,
+  formatCostEvidence,
+  formatTokenEvidence,
+} from "@/components/sessions/session-inspector-formatters";
 import { SessionStatusBadge } from "@/components/sessions/status-badge";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  continueSession,
-  exportSessions,
-  fetchCouncils,
-  fetchSession,
-  fetchSessions,
-  rerunSession,
-} from "@/lib/api";
-import { writeActiveSessionId } from "@/lib/storage";
+import { exportSessions, fetchSessions } from "@/lib/api";
+import { readActiveSessionId, writeActiveSessionId } from "@/lib/storage";
 import { cn } from "@/lib/utils";
-
-function downloadText(filename: string, text: string, type: string) {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
 
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
-  { value: "completed", label: "Completed" },
-  { value: "processing", label: "Running" },
-  { value: "pending", label: "Pending" },
-  { value: "failed", label: "Failed" },
+  { value: "completed", label: "Verdicts" },
+  { value: "processing", label: "Deliberating" },
+  { value: "pending", label: "Filed" },
+  { value: "failed", label: "Recovery" },
 ] as const;
+
+type ArchiveIntent = "recovery" | "rerun" | null;
 
 export function SessionsScreen() {
   const auth = useAuth();
   const [sessions, setSessions] = useState<Awaited<ReturnType<typeof fetchSessions>>>([]);
+  const restoredSessionIdRef = useRef<number | null>(readActiveSessionId());
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [archiveIntent, setArchiveIntent] = useState<ArchiveIntent>(null);
+  const [archiveLoadIssue, setArchiveLoadIssue] = useState<string | null>(null);
+  const [archiveLoadPending, setArchiveLoadPending] = useState(false);
+  const detailRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    const authHeader = auth.authHeader;
+  const loadArchive = useCallback(async () => {
     if (!auth.isAuthenticated) {
       setSessions([]);
+      setSelectedSessionId(null);
+      setArchiveLoadIssue(null);
+      return;
+    }
+    setArchiveLoadPending(true);
+    try {
+      const result = await fetchSessions(auth.authHeader);
+      setSessions(result);
+      setArchiveLoadIssue(null);
+      setSelectedSessionId((current) => {
+        if (current && result.some((session) => session.id === current)) {
+          return current;
+        }
+        const restoredSessionId = restoredSessionIdRef.current;
+        restoredSessionIdRef.current = null;
+        if (restoredSessionId && result.some((session) => session.id === restoredSessionId)) {
+          return restoredSessionId;
+        }
+        writeActiveSessionId(null);
+        return null;
+      });
+    } catch (error) {
+      if (auth.handleAuthorityDenial(error)) {
+        return;
+      }
+      setArchiveLoadIssue(error instanceof Error ? error.message : "Archive could not load.");
+    } finally {
+      setArchiveLoadPending(false);
+    }
+  }, [auth.authHeader, auth.handleAuthorityDenial, auth.isAuthenticated]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated) {
+      setSessions([]);
+      setSelectedSessionId(null);
+      setArchiveLoadIssue(null);
       return;
     }
 
-    let cancelled = false;
-    async function load(currentAuthHeader: string | null) {
-      try {
-        const result = await fetchSessions(currentAuthHeader);
-        if (!cancelled) {
-          setSessions(result);
-          if (!selectedSessionId && result[0]) {
-            setSelectedSessionId(result[0].id);
-          }
-        }
-      } catch (error) {
-        if (!cancelled) {
-          toast.error(error instanceof Error ? error.message : "Failed to load sessions");
-        }
-      }
-    }
-
-    void load(authHeader);
+    void loadArchive();
     const interval = setInterval(() => {
-      void load(authHeader);
+      if (document.hidden) {
+        return;
+      }
+      void loadArchive();
     }, 2500);
     return () => {
-      cancelled = true;
       clearInterval(interval);
     };
-  }, [auth.authHeader, auth.isAuthenticated, selectedSessionId]);
+  }, [auth.isAuthenticated, loadArchive]);
 
   const filteredSessions = useMemo(() => {
     return sessions.filter((session) => {
@@ -94,166 +109,170 @@ export function SessionsScreen() {
     if (!auth.isAuthenticated || selectedIds.length === 0) return;
     try {
       const result = await exportSessions(auth.authHeader, selectedIds);
-      downloadText("sessions.md", result.markdown, "text/markdown");
-      downloadText("sessions.json", result.json, "application/json");
-      toast.success("Selected sessions exported");
+      downloadText("dossier.md", result.markdown, "text/markdown");
+      downloadText("dossier.json", result.json, "application/json");
+      toast.success("Dossier marks exported");
     } catch (error) {
+      if (auth.handleAuthorityDenial(error)) {
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "Export failed");
     }
   }
 
-  async function handleContinueRow(sessionId: number) {
-    if (!auth.isAuthenticated) return;
-    try {
-      await continueSession(auth.authHeader, sessionId);
-      toast.success("Run continued");
-      const next = await fetchSession(auth.authHeader, sessionId);
-      setSessions((current) =>
-        current.map((session) =>
-          session.id === sessionId ? { ...session, status: next.session.status } : session,
-        ),
-      );
-      setSelectedSessionId(sessionId);
-      writeActiveSessionId(sessionId);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Continue failed");
-    }
-  }
-
-  async function handleRerunRow(sessionId: number, councilName: string) {
-    if (!auth.isAuthenticated) return;
-    try {
-      const councils = (await fetchCouncils(auth.authHeader)).councils;
-      const matched = councils.find((council) => council.name === councilName);
-      if (!matched) {
-        toast.error(
-          `Council "${councilName}" is no longer available. Open the run and pick another.`,
-        );
-        setSelectedSessionId(sessionId);
-        writeActiveSessionId(sessionId);
-        return;
+  function openSessionDetail(sessionId: number, intent: ArchiveIntent = null) {
+    setSelectedSessionId(sessionId);
+    setArchiveIntent(intent);
+    writeActiveSessionId(sessionId);
+    requestAnimationFrame(() => {
+      if (window.innerWidth <= 1080) {
+        detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-      const result = await rerunSession({
-        authHeader: auth.authHeader,
-        sessionId,
-        councilRef: matched.ref,
-      });
-      toast.success("New run created");
-      const refreshed = await fetchSessions(auth.authHeader);
-      setSessions(refreshed);
-      setSelectedSessionId(result.sessionId);
-      writeActiveSessionId(result.sessionId);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Rerun failed");
-    }
+    });
   }
 
   if (!auth.isAuthenticated) {
     return (
-      <Card className="p-8 text-center">
-        <p className="text-sm text-[var(--text-muted)]">
-          Unlock BYOK or start a demo session to view the journal.
-        </p>
-      </Card>
+      <div>
+        <h1 className="sr-only">Archive</h1>
+        <Card className="p-8 text-center">
+          <p className="text-sm text-[var(--text-muted)]">
+            Unlock BYOK or start a demo session to view the archive.
+          </p>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[440px_minmax(0,1fr)]">
+    <div className={cn("archive-grid", selectedSessionId !== null && "archive-grid-detail-open")}>
       <Card className="p-6">
         <div className="flex items-baseline justify-between gap-3">
-          <h1 className="surface-title text-sm uppercase tracking-[0.22em]">Journal</h1>
+          <h1 className="surface-title">Archive</h1>
           <Button
             variant="ghost"
             size="sm"
             onClick={handleExportSelected}
             disabled={selectedIds.length === 0}
           >
-            Export Selected
+            Export Dossier
           </Button>
         </div>
 
         <div className="mt-4 space-y-3">
           <Input
             value={search}
+            aria-label="Search archive"
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search query or council"
+            placeholder="Search matter or council"
           />
-          <div className="flex flex-wrap gap-1.5">
+          <fieldset className="choice-grid">
+            <legend className="docket-question-label">Archive status</legend>
             {STATUS_FILTERS.map((filter) => (
-              <button
+              <label
                 key={filter.value}
-                type="button"
-                className={cn(
-                  "btn-nav",
-                  "px-3 text-xs",
-                  statusFilter === filter.value && "btn-nav-active",
-                )}
-                style={{ fontSize: "0.78rem", minHeight: "2rem", padding: "0.3rem 0.7rem" }}
-                onClick={() => setStatusFilter(filter.value)}
+                className={cn("filter-chip", statusFilter === filter.value && "filter-chip-active")}
               >
+                <input
+                  className="choice-input"
+                  type="radio"
+                  name="archive-status-filter"
+                  value={filter.value}
+                  checked={statusFilter === filter.value}
+                  onChange={(event) => {
+                    if (event.currentTarget.checked) setStatusFilter(filter.value);
+                  }}
+                />
                 {filter.label}
-              </button>
+              </label>
             ))}
-          </div>
+          </fieldset>
         </div>
 
         <div className="mt-5 space-y-3">
+          {archiveLoadIssue ? (
+            <div className="panel archive-empty-state" role="status">
+              <div>
+                <p className="m-0 text-sm font-semibold text-[var(--text)]">
+                  Archive could not load.
+                </p>
+                <p className="m-0 mt-1 text-sm text-[var(--text-muted)]">
+                  {sessions.length > 0
+                    ? "Showing the last loaded archive entries until refresh succeeds."
+                    : "No archive entries are shown until the ledger refresh succeeds."}
+                </p>
+                <p className="m-0 mt-1 text-xs text-[var(--text-dim)]">{archiveLoadIssue}</p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  void loadArchive();
+                }}
+                disabled={archiveLoadPending}
+              >
+                {archiveLoadPending ? "Retrying…" : "Retry archive load"}
+              </Button>
+            </div>
+          ) : null}
           {filteredSessions.map((session) => {
             const isSelected = selectedSessionId === session.id;
             const canContinue = session.status === "failed";
             const canRerun = session.status === "failed" || session.status === "completed";
             return (
-              // biome-ignore lint/a11y/useSemanticElements: row contains nested action buttons; <button> would nest interactive descendants
               <div
                 key={session.id}
                 className={cn(
-                  "panel space-y-3",
-                  "cursor-pointer transition-[border-color]",
-                  isSelected ? "border-[var(--gold)]" : "hover:border-[var(--gold-soft)]",
+                  "panel archive-row",
+                  isSelected ? "archive-row-active" : "hover:border-[var(--brass-soft)]",
                 )}
-                onClick={() => {
-                  setSelectedSessionId(session.id);
-                  writeActiveSessionId(session.id);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setSelectedSessionId(session.id);
-                    writeActiveSessionId(session.id);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="line-clamp-2 text-sm font-semibold">{session.query}</div>
+                    <button
+                      type="button"
+                      className="archive-row-title line-clamp-2"
+                      aria-label={`Open manuscript for matter ${session.id}: ${session.query}`}
+                      onClick={() => openSessionDetail(session.id)}
+                    >
+                      {session.query}
+                    </button>
                     <div className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--text-dim)]">
                       {session.councilNameAtRun}
                     </div>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(session.id)}
-                    onChange={(event) => {
+                  <button
+                    type="button"
+                    className={
+                      selectedIds.includes(session.id)
+                        ? "filter-chip filter-chip-active"
+                        : "filter-chip"
+                    }
+                    aria-pressed={selectedIds.includes(session.id)}
+                    aria-label={
+                      selectedIds.includes(session.id)
+                        ? `Remove matter ${session.id} from dossier: ${session.query}`
+                        : `Add matter ${session.id} to dossier: ${session.query}`
+                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
                       setSelectedIds((current) =>
-                        event.target.checked
-                          ? [...current, session.id]
-                          : current.filter((id) => id !== session.id),
+                        current.includes(session.id)
+                          ? current.filter((id) => id !== session.id)
+                          : [...current, session.id],
                       );
                     }}
-                    onClick={(event) => event.stopPropagation()}
-                  />
+                  >
+                    {selectedIds.includes(session.id) ? "In dossier" : "Add to dossier"}
+                  </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <SessionStatusBadge status={session.status} failureKind={session.failureKind} />
-                  <Badge>{session.totalTokens} tokens</Badge>
-                  <Badge>
-                    {session.totalCostIsPartial && session.totalCostUsdMicros === 0
-                      ? "cost pending"
-                      : `$${session.totalCost}`}
-                  </Badge>
+                  <span className="meta-chip">
+                    {formatTokenEvidence(session.status, session.totalTokens)}
+                  </span>
+                  <span className="meta-chip">{formatCostEvidence(session)}</span>
                 </div>
                 {(canContinue || canRerun) && (
                   <div className="flex flex-wrap gap-2 pt-1">
@@ -261,24 +280,26 @@ export function SessionsScreen() {
                       <Button
                         variant="secondary"
                         size="sm"
+                        aria-label={`Open recovery for matter ${session.id}: ${session.query}`}
                         onClick={(event) => {
                           event.stopPropagation();
-                          void handleContinueRow(session.id);
+                          openSessionDetail(session.id, "recovery");
                         }}
                       >
-                        Continue
+                        Open Recovery
                       </Button>
                     ) : null}
                     {canRerun ? (
                       <Button
                         variant="ghost"
                         size="sm"
+                        aria-label={`Open rerun docket for matter ${session.id}: ${session.query}`}
                         onClick={(event) => {
                           event.stopPropagation();
-                          void handleRerunRow(session.id, session.councilNameAtRun);
+                          openSessionDetail(session.id, "rerun");
                         }}
                       >
-                        Rerun
+                        Open rerun docket
                       </Button>
                     ) : null}
                   </div>
@@ -286,23 +307,40 @@ export function SessionsScreen() {
               </div>
             );
           })}
-          {filteredSessions.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">
-              No sessions match the current filters.
-            </p>
+          {!archiveLoadIssue && filteredSessions.length === 0 ? (
+            sessions.length === 0 ? (
+              <div className="panel archive-empty-state">
+                <p className="m-0 text-sm text-[var(--text-muted)]">
+                  No matters have entered the archive yet.
+                </p>
+                <Link className="text-link" href="/">
+                  File a matter at the Petition Desk
+                </Link>
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">
+                No archive entries match the current filters.
+              </p>
+            )
           ) : null}
         </div>
       </Card>
 
-      <SessionInspector
-        authenticated={auth.isAuthenticated}
-        authHeader={auth.authHeader}
-        sessionId={selectedSessionId}
-        onSpawnedSession={(sessionId) => {
-          setSelectedSessionId(sessionId);
-          writeActiveSessionId(sessionId);
-        }}
-      />
+      <div className="archive-detail-panel" ref={detailRef}>
+        <SessionInspector
+          authenticated={auth.isAuthenticated}
+          authHeader={auth.authHeader}
+          sessionId={selectedSessionId}
+          emptyState="archive"
+          initialAction={archiveIntent}
+          onAuthorityDenial={auth.handleAuthorityDenial}
+          onSpawnedSession={(sessionId) => {
+            setSelectedSessionId(sessionId);
+            setArchiveIntent(null);
+            writeActiveSessionId(sessionId);
+          }}
+        />
+      </div>
     </div>
   );
 }

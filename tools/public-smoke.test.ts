@@ -1,3 +1,4 @@
+import { jsonApiCacheControl } from "@the-seven/contracts";
 import { describe, expect, test } from "vitest";
 import { publicSmokeOrigin, runPublicSmoke } from "./public-smoke";
 
@@ -35,7 +36,7 @@ describe("public smoke", () => {
         }
         return Response.json(errorEnvelope(), {
           status: 401,
-          headers: { "x-trace-id": TRACE_ID },
+          headers: { "cache-control": jsonApiCacheControl, "x-trace-id": TRACE_ID },
         });
       },
     });
@@ -50,6 +51,7 @@ describe("public smoke", () => {
       },
       demoSession: {
         status: 401,
+        cacheControl: jsonApiCacheControl,
         traceId: TRACE_ID,
         kind: "unauthorized",
         reason: "missing_auth",
@@ -70,10 +72,30 @@ describe("public smoke", () => {
           }
           return Response.json(errorEnvelope(), {
             status: 401,
-            headers: { "x-trace-id": "wrong-trace" },
+            headers: { "cache-control": jsonApiCacheControl, "x-trace-id": "wrong-trace" },
           });
         },
       }),
     ).rejects.toThrow("trace header does not match");
+  });
+
+  test("rejects an API denial without no-store", async () => {
+    await expect(
+      runPublicSmoke({
+        origin: "https://theseven.ai",
+        fetchImpl: async (input) => {
+          if (String(input) === "https://theseven.ai/") {
+            return new Response("<main>The Seven</main>", {
+              status: 200,
+              headers: { "content-type": "text/html" },
+            });
+          }
+          return Response.json(errorEnvelope(), {
+            status: 401,
+            headers: { "x-trace-id": TRACE_ID },
+          });
+        },
+      }),
+    ).rejects.toThrow("did not return Cache-Control: no-store");
   });
 });
