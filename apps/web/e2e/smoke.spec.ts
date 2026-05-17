@@ -124,12 +124,16 @@ test("invalid BYOK stays locked and does not store a key", async ({ page }) => {
   await expect(page.getByText("Ask once. Get one answer you can inspect.")).toBeVisible();
   await page.getByRole("button", { name: /Use your OpenRouter key/u }).click();
   await expect(page.getByLabel("OpenRouter API key")).toBeVisible();
+  await expect(page.getByLabel("OpenRouter API key")).toBeFocused();
 
   await page.getByLabel("OpenRouter API key").fill("sk-or-invalid");
   await page.getByLabel("Local Password").fill("invalid-key-proof");
   await page.getByRole("button", { name: "Save and unlock key" }).click();
 
-  await expect(page.getByText("OpenRouter rejected this key")).toBeVisible();
+  await expect(page.locator("#byok-key-issue")).toContainText("OpenRouter rejected this key");
+  await expect(page.locator("#byok-key-issue")).toContainText(
+    "Check that this is a valid OpenRouter API key, or use the 24-hour demo instead.",
+  );
   await expect(page.getByText("Ask once. Get one answer you can inspect.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Save and unlock key" })).toBeVisible();
   await expect

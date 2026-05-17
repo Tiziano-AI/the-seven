@@ -4,24 +4,14 @@ import { useSearchParams } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/app/auth-provider";
-import { DemoEndConfirmation } from "@/components/app/demo-end-confirmation";
 import { HomeAuthGate } from "@/components/screens/home-auth-gate";
-import {
-  AskAnotherQuestionPanel,
-  CouncilChoicePanel,
-  DemoCouncilPanel,
-  EvidencePicker,
-} from "@/components/screens/home-petition-panels";
+import { HomeQuestionComposer } from "@/components/screens/home-question-composer";
 import {
   councilChoiceValue,
   demoLinkBannerMessage,
 } from "@/components/screens/home-screen-formatters";
 import { HomeSessionWorkbench } from "@/components/screens/home-session-workbench";
 import { SessionInspector } from "@/components/sessions/session-inspector";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   createSession,
   fetchCouncils,
@@ -41,6 +31,11 @@ import {
   writeDraftQuery,
   writeLastCouncilRef,
 } from "@/lib/storage";
+
+const BYOK_KEY_REJECTION_GUIDANCE = [
+  "OpenRouter rejected this key.",
+  "Check that this is a valid OpenRouter API key, or use the 24-hour demo instead.",
+].join(" ");
 
 export function HomeScreen() {
   const auth = useAuth();
@@ -69,6 +64,7 @@ export function HomeScreen() {
   const [demoByokError, setDemoByokError] = useState<string | null>(null);
   const [byokValidationPending, setByokValidationPending] = useState(false);
   const [byokUnlockPending, setByokUnlockPending] = useState(false);
+  const [byokKeyIssue, setByokKeyIssue] = useState<string | null>(null);
   const [resetKeyConfirmOpen, setResetKeyConfirmOpen] = useState(false);
 
   useEffect(() => {
@@ -164,114 +160,43 @@ export function HomeScreen() {
   );
 
   const composer = (
-    <Card className={activeSessionId ? "p-4" : "p-5"}>
-      <section className="petition-band">
-        <p className="docket-meta">
-          {auth.mode === "demo" ? (
-            <>
-              <span>Demo</span>
-              <span className="docket-meta-pair">
-                <span className="docket-dot">·</span>
-                <span className="docket-accent">
-                  {selectedCouncilName || "The Commons Council"}
-                </span>
-              </span>
-            </>
-          ) : (
-            <>
-              <span>Ask</span>
-              {selectedCouncilName ? (
-                <span className="docket-meta-pair">
-                  <span className="docket-dot">·</span>
-                  <span className="docket-accent">{selectedCouncilName}</span>
-                </span>
-              ) : null}
-            </>
-          )}
-        </p>
-
-        <form className="workbench-form" onSubmit={handleSubmitQuestion}>
-          {activeSessionId && postSubmitComposerNoteVisible ? (
-            <AskAnotherQuestionPanel
-              canReuseLastQuestion={Boolean(lastSubmittedQuestion)}
-              onReuseLastQuestion={() => {
-                if (lastSubmittedQuestion) setQuery(lastSubmittedQuestion);
-              }}
-              onDismiss={() => setPostSubmitComposerNoteVisible(false)}
-            />
-          ) : null}
-          <div className="space-y-2">
-            <Label htmlFor="matter-question">Question</Label>
-            <Textarea
-              id="matter-question"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                  event.preventDefault();
-                  void handleSubmitQuestion();
-                }
-              }}
-              placeholder="Ask a question for the council to answer."
-              className={activeSessionId ? "min-h-[92px]" : "min-h-[150px]"}
-            />
-          </div>
-          {auth.mode === "demo" ? (
-            <>
-              <DemoCouncilPanel
-                onUnlockByok={() => {
-                  setDemoByokError(null);
-                  setDemoByokConfirmOpen(true);
-                }}
-              />
-              {demoByokConfirmOpen ? (
-                <DemoEndConfirmation
-                  title="End demo session and use your key?"
-                  body="The server ends the demo session before the browser cookie is cleared. Your OpenRouter key can be used after the demo session closes."
-                  confirmLabel="End demo and use your key"
-                  pendingLabel="Ending demo…"
-                  pending={demoByokEnding}
-                  error={demoByokError}
-                  onCancel={() => {
-                    setDemoByokError(null);
-                    setDemoByokConfirmOpen(false);
-                  }}
-                  onConfirm={handleEndDemoAndOpenByok}
-                />
-              ) : null}
-            </>
-          ) : (
-            <CouncilChoicePanel
-              councils={availableCouncils}
-              selectedCouncil={selectedCouncil}
-              onSelectCouncil={setSelectedCouncil}
-            />
-          )}
-          <EvidencePicker
-            selectedFiles={selectedFiles}
-            onFilesSelected={setSelectedFiles}
-            onRemoveFile={(index) => {
-              setSelectedFiles((current) =>
-                current.filter((_, currentIndex) => currentIndex !== index),
-              );
-            }}
-            onClearFiles={() => setSelectedFiles([])}
-          />
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="submit"
-              disabled={submitting || !query.trim() || !selectedCouncilRef}
-              size={activeSessionId ? "default" : "lg"}
-            >
-              {submitting ? "Asking…" : "Ask the council"}
-            </Button>
-            <span className="text-xs text-[var(--text-dim)]">
-              ⌘/Ctrl+Enter asks · drafts persist locally
-            </span>
-          </div>
-        </form>
-      </section>
-    </Card>
+    <HomeQuestionComposer
+      activeSessionId={activeSessionId}
+      authMode={auth.mode}
+      selectedCouncilName={selectedCouncilName}
+      query={query}
+      submitting={submitting}
+      canSubmitWithCouncil={Boolean(selectedCouncilRef)}
+      postSubmitComposerNoteVisible={postSubmitComposerNoteVisible}
+      canReuseLastQuestion={Boolean(lastSubmittedQuestion)}
+      demoByokConfirmOpen={demoByokConfirmOpen}
+      demoByokEnding={demoByokEnding}
+      demoByokError={demoByokError}
+      availableCouncils={availableCouncils}
+      selectedCouncil={selectedCouncil}
+      selectedFiles={selectedFiles}
+      onQueryChange={setQuery}
+      onSubmitQuestion={handleSubmitQuestion}
+      onReuseLastQuestion={() => {
+        if (lastSubmittedQuestion) setQuery(lastSubmittedQuestion);
+      }}
+      onDismissPostSubmitComposerNote={() => setPostSubmitComposerNoteVisible(false)}
+      onSelectCouncil={setSelectedCouncil}
+      onFilesSelected={setSelectedFiles}
+      onRemoveFile={(index) => {
+        setSelectedFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
+      }}
+      onClearFiles={() => setSelectedFiles([])}
+      onRequestByokFromDemo={() => {
+        setDemoByokError(null);
+        setDemoByokConfirmOpen(true);
+      }}
+      onCancelDemoByok={() => {
+        setDemoByokError(null);
+        setDemoByokConfirmOpen(false);
+      }}
+      onConfirmDemoByok={handleEndDemoAndOpenByok}
+    />
   );
 
   async function handleValidateAndStore() {
@@ -279,9 +204,11 @@ export function HomeScreen() {
       if (!canAdmitByokUnlock()) {
         return;
       }
+      setByokKeyIssue(null);
       setByokValidationPending(true);
       const validation = await validateByokKey(apiKey);
       if (!validation.valid) {
+        setByokKeyIssue(BYOK_KEY_REJECTION_GUIDANCE);
         toast.error("OpenRouter rejected this key");
         return;
       }
@@ -294,10 +221,12 @@ export function HomeScreen() {
       auth.setByokKey(apiKey);
       setApiKey("");
       setPassword("");
+      setByokKeyIssue(null);
       setHasStoredByok(true);
       toast.success("OpenRouter key unlocked");
     } catch (error) {
       if (error instanceof ApiErrorResponse && error.kind === "unauthorized") {
+        setByokKeyIssue(BYOK_KEY_REJECTION_GUIDANCE);
         toast.error("OpenRouter rejected this key");
         return;
       }
@@ -459,16 +388,23 @@ export function HomeScreen() {
         byokValidationPending={byokValidationPending}
         byokUnlockPending={byokUnlockPending}
         byokAdmissionBlocked={auth.demoSessionProbeFailed}
+        byokKeyIssue={byokKeyIssue}
         apiKey={apiKey}
         password={password}
         resetKeyConfirmOpen={resetKeyConfirmOpen}
         onDemoEmailChange={setDemoEmail}
         onRequestDemo={handleRequestDemo}
-        onOpenByok={() => setByokOpen(true)}
+        onOpenByok={() => {
+          setByokKeyIssue(null);
+          setByokOpen(true);
+        }}
         onRetryDemoSession={() => {
           void auth.refreshDemoSession();
         }}
-        onApiKeyChange={setApiKey}
+        onApiKeyChange={(value) => {
+          setApiKey(value);
+          if (byokKeyIssue) setByokKeyIssue(null);
+        }}
         onPasswordChange={setPassword}
         onValidateAndStore={handleValidateAndStore}
         onUnlockStoredKey={handleUnlockStoredKey}

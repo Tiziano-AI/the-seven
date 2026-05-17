@@ -117,7 +117,9 @@ app is not.
   inspector, copy/export/private-link controls, and repeat controls.
 - The locked Workbench gate presents a stored BYOK unlock first when this
   browser has an encrypted key; the demo magic-link request is primary only for
-  browsers without a stored key.
+  browsers without a stored key. BYOK setup uses plain trust copy first,
+  progressive `Technical details` for storage mechanics, field-focused mobile
+  reveal, and inline recovery guidance for rejected keys.
 - `/sessions` owns the Archive ledger. Rows open or select only. Recovery and
   run-again actions live in the selected detail after preserved work and reused
   inputs are visible.

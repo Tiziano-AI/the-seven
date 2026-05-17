@@ -207,10 +207,14 @@ The route information architecture is:
   through the page. The locked gate presents a stored BYOK unlock as the primary
   path when this browser already holds an encrypted key; otherwise the demo
   magic-link request is primary and only syntactically valid email addresses can
-  be submitted. Demo sessions expire in the client at their server-issued expiry
+  be submitted. BYOK setup explains the trust boundary in normal-user language
+  before asking for a key, keeps storage mechanics behind `Technical details`,
+  focuses the OpenRouter key field when the setup panel opens on mobile, and
+  renders rejected-key recovery guidance beside the form instead of relying on a
+  toast alone. Demo sessions expire in the client at their server-issued expiry
   time and are rechecked when the tab becomes visible. BYOK admission selects
-  Founding before the paid-key session starts, so a user who brings their own
-  key starts on the flagship roster unless they deliberately choose a lower-cost
+  Founding before the paid-key session starts, so a user who brings their own key
+  starts on the flagship roster unless they deliberately choose a lower-cost
   council.
 - `/sessions` is the Archive. It stores past runs and supports search, filters,
   selection, and selected export. Rows open or select only; they do not expose

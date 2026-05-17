@@ -24,6 +24,7 @@ export function HomeAuthGate(props: {
   byokValidationPending: boolean;
   byokUnlockPending: boolean;
   byokAdmissionBlocked: boolean;
+  byokKeyIssue: string | null;
   apiKey: string;
   password: string;
   resetKeyConfirmOpen: boolean;
@@ -111,10 +112,18 @@ export function HomeAuthGate(props: {
     ) : (
       <div className="space-y-3">
         <p className="text-sm leading-6 text-[var(--text-muted)]">
-          Your OpenRouter key is encrypted locally in this browser. The server sees the plaintext
-          transiently per request. Temporary worker credentials are encrypted on the server for the
-          active run and removed with the run ledger.
+          Your key stays encrypted in this browser behind your password. The app uses it only when
+          you ask a question and does not store a readable copy.
         </p>
+        <details className="text-sm text-[var(--text-dim)]">
+          <summary className="cursor-pointer font-semibold text-[var(--text-muted)]">
+            Technical details
+          </summary>
+          <p className="mt-2 leading-6">
+            The server can read the key only while handling the request. Temporary run credentials
+            are encrypted on the server and deleted when the run finishes.
+          </p>
+        </details>
         {props.byokAdmissionBlocked ? (
           <div role="alert" className="alert-danger confirm-panel">
             <p className="m-0 text-sm">
@@ -139,10 +148,17 @@ export function HomeAuthGate(props: {
                 id="byok-api-key"
                 type="password"
                 autoComplete="off"
+                autoFocus={props.byokOpen && !props.hasStoredByok}
                 value={props.apiKey}
                 onChange={(event) => props.onApiKeyChange(event.target.value)}
                 placeholder="sk-or-v1-..."
+                aria-describedby={props.byokKeyIssue ? "byok-key-issue" : undefined}
               />
+              {props.byokKeyIssue ? (
+                <p id="byok-key-issue" role="alert" className="alert-danger m-0 text-sm">
+                  {props.byokKeyIssue}
+                </p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="byok-password">Local Password</Label>

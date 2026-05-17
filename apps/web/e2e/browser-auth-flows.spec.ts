@@ -88,8 +88,17 @@ test("locked gate blocks invalid demo email and prioritizes stored key unlock", 
   await page.getByLabel("Email for a 24-hour demo").fill("not-an-email");
   await expect(page.getByRole("button", { name: "Send magic link" })).toBeDisabled();
   await page.getByRole("button", { name: /Use your OpenRouter key/u }).click();
+  await expect(page.getByLabel("OpenRouter API key")).toBeFocused();
   await expect(page.locator("#byok-api-key")).toHaveAttribute("autocomplete", "off");
   await expect(page.locator("#byok-password")).toHaveAttribute("autocomplete", "new-password");
+  await expect(page.getByText("Technical details")).toBeVisible();
+  await expect(
+    page.getByText("The server can read the key only while handling the request."),
+  ).not.toBeVisible();
+  await page.getByText("Technical details").click();
+  await expect(
+    page.getByText("The server can read the key only while handling the request."),
+  ).toBeVisible();
   await page.getByLabel("OpenRouter API key").fill("sk-or-invalid-browser-proof");
   await page.getByLabel("Local Password").fill("browser-proof-password");
   await expect(page.getByRole("button", { name: "Save and unlock key" })).toBeEnabled();

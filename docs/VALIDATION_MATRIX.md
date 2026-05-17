@@ -162,6 +162,9 @@ and proves demo-cookie server authority, End demo revocation, and stale-cookie
 denial against the running app.
 
 - BYOK setup, unlock, and lock
+- BYOK setup uses plain trust copy, progressive technical details, autofocuses
+  the OpenRouter key field when revealed, and shows inline invalid-key recovery
+  guidance beside the form
 - stored BYOK browsers see the unlock path before demo email, with password
   manager hints on BYOK and unlock fields; unlocking the stored key must prove
   subsequent BYOK-only requests carry the restored `Authorization` header
