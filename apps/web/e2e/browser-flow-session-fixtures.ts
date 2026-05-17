@@ -74,6 +74,7 @@ export function sessionSummary(input: {
 export function sessionSnapshot(input: {
   query: string;
   councilName?: string;
+  councilRef?: CouncilRef;
   attachments?: ReadonlyArray<Readonly<{ name: string; text: string }>>;
 }) {
   return {
@@ -85,6 +86,7 @@ export function sessionSnapshot(input: {
     outputFormats: outputFormats(),
     council: {
       nameAtRun: input.councilName ?? "The Commons Council",
+      refAtRun: input.councilRef ?? { kind: "built_in", slug: "commons" },
       phasePrompts: phasePrompts(),
       members: councilMembers(),
     },
@@ -112,7 +114,7 @@ function phaseTwoEvaluation(top: CandidateId) {
   return JSON.stringify({
     ranking,
     reviews,
-    best_final_answer_inputs: ["Use the strongest material evidence in the verdict."],
+    best_final_answer_inputs: ["Use the strongest material evidence in the final answer."],
     major_disagreements: ["Reviewers disagreed on the weight of the source evidence."],
   });
 }
@@ -178,7 +180,7 @@ function artifactsForVotes(input: {
           phase: 3,
           memberPosition: 7,
           content:
-            "Final verdict: grant the guild toll petition with conditions, grounded in candidate evidence [A] and reviewer critique [R1].",
+            "Final answer: approve the vendor plan with conditions, grounded in candidate evidence [A] and reviewer critique [R1].",
         }),
       ]
     : [];
@@ -198,6 +200,7 @@ export function sessionDetail(input: {
   query: string;
   status: SessionStatus;
   councilName?: string;
+  councilRef?: CouncilRef;
   attachments?: ReadonlyArray<Readonly<{ name: string; text: string }>>;
   ingressSource?: IngressSource;
 }) {

@@ -2,10 +2,9 @@
 
 The Seven is a privacy-first multi-model council for hard questions. Six
 reviewer models answer the prompt, each reviewer evaluates all six candidate
-answers, and a seventh synthesizer produces one final verdict from the request,
-candidates, and compact reviewer summaries. The whole run is preserved as
-Proceedings so drafts, critiques, rankings, provider records, and verdict stay
-inspectable.
+answers, and a seventh synthesizer produces one final answer from the request,
+candidates, and compact reviewer summaries. The whole run is preserved so
+drafts, critiques, rankings, run details, and the answer stay inspectable.
 
 It is bring-your-own-key by default: the browser encrypts the reusable key
 locally, the server sees plaintext only transiently per request, and durable
@@ -44,16 +43,18 @@ low-cost demo flow is available behind an email magic link.
 
 ## Runtime Contract
 
-- UI routes: `/`, `/councils`, `/sessions`, `/sessions/[sessionId]`
-- UI register: a scholarly council workbench. `/` is the Petition Desk and
-  active Run Workbench, `/councils` is the Council Library/editor, `/sessions`
-  is the Archive ledger, and `/sessions/[sessionId]` is a run Manuscript. The
-  Archive loads ledger-first and opens a manuscript only after row activation, a
-  deep link, or explicit restored selection. The interface uses
-  docket/proceedings/verdict/provider-record language, disciplined density,
-  ruled folio surfaces, small radii, readable typography, form-owned
-  submissions, radio-owned exclusive choices, and a product-owned evidence
-  exhibit picker with remove/clear recovery.
+- UI routes: `/`, `/sessions`, `/sessions/[sessionId]`, `/councils`
+- UI register: a scholarly council workbench with plain-language product
+  controls. `/` is the Workbench for asking, reading the answer, inspecting how
+  the council worked, copying/downloading, saving a private link, and running
+  again. `/sessions` is the Archive ledger; rows open stored runs and detail
+  panels own recovery/run-again actions. `/sessions/[sessionId]` is a deep link
+  to the same answer-first run inspector. `/councils` is advanced Council
+  settings reached from `Manage councils`, not the primary path for demo/default users. The interface keeps
+  the medieval/scholarly identity in sigils, seals, ruled folio surfaces, small
+  radii, restrained color, and typography; labels and descriptions stay simple:
+  Ask, Answer, Inspect, Copy, Download, Private link, Archive, Run again, and
+  Manage councils.
 - API routes: `/api/v1/**`
 - Built-ins:
   - Founding: current best-of-best BYOK roster with xhigh requested effort;

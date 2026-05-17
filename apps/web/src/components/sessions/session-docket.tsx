@@ -5,13 +5,13 @@ import { SessionStatusBadge } from "./status-badge";
 type SessionStatus = "pending" | "processing" | "completed" | "failed";
 
 function formatIngressSource(source: string): string {
-  if (source === "web") return "Web petition";
-  if (source === "cli") return "CLI petition";
-  if (source === "api") return "API petition";
+  if (source === "web") return "Asked in the browser";
+  if (source === "cli") return "Asked from CLI";
+  if (source === "api") return "Asked from API";
   return "Unknown ingress";
 }
 
-/** Renders the manuscript docket header and live evidence totals for the active session. */
+/** Renders the run header and live evidence totals for the active session. */
 export function SessionDocket(props: {
   councilName: string;
   latencyLabel: string | null;
@@ -27,7 +27,7 @@ export function SessionDocket(props: {
   return (
     <section className="docket">
       <p className="docket-meta">
-        <span>Matter filed with</span> <span className="docket-accent">{props.councilName}</span>
+        <span>Asked with</span> <span className="docket-accent">{props.councilName}</span>
         {props.latencyLabel ? (
           <span className="docket-meta-pair">
             <span className="docket-dot">·</span>
@@ -59,7 +59,7 @@ export function SessionDocket(props: {
         <span className="meta-chip">{props.costEvidenceLabel}</span>
       </div>
       <div>
-        <h2 className="docket-question-label">Docketed matter</h2>
+        <h2 className="docket-question-label">Question</h2>
         <p className="docket-question">{props.query}</p>
       </div>
     </section>

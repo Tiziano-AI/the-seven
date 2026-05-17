@@ -72,22 +72,40 @@ function PhaseTwoSummary(props: { evaluation: PhaseTwoEvaluation }) {
   );
 }
 
-/** Renders the persisted phase-1 and phase-2 proceedings with stable chip anchors. */
+function phaseLabel(phase: number) {
+  if (phase === 1) return "Draft answers";
+  if (phase === 2) return "Critiques";
+  return `Phase ${phase}`;
+}
+
+function savedItemLabel(phase: number, count: number) {
+  const noun = phase === 1 ? "draft answer" : phase === 2 ? "critique" : "item";
+  return `${count} ${noun}${count === 1 ? "" : "s"} saved. Open one to inspect the full text.`;
+}
+
+/** Renders persisted council work behind progressive disclosure with stable chip anchors. */
 export function SessionProceedings(props: {
   artifacts: readonly SessionProceedingsArtifact[];
-  proceedingsRef: RefObject<HTMLDivElement | null>;
+  proceedingsRef: RefObject<HTMLElement | null>;
   formatCost: (micros: number | null) => string;
 }) {
   return (
-    <div ref={props.proceedingsRef} className="space-y-4">
+    <section
+      ref={props.proceedingsRef}
+      id="how-it-worked-panel"
+      className="space-y-4"
+      tabIndex={-1}
+      aria-label="How it worked"
+    >
       {[1, 2].map((phase) => {
         const artifacts = props.artifacts.filter((artifact) => artifact.phase === phase);
         if (artifacts.length === 0) return null;
         return (
           <section key={phase} className="space-y-3">
-            <h3 className="surface-title">
-              {phase === 1 ? "Proceedings · Drafts" : "Proceedings · Critiques"}
-            </h3>
+            <h3 className="surface-title">{phaseLabel(phase)}</h3>
+            <p className="m-0 text-sm text-[var(--text-muted)]">
+              {savedItemLabel(phase, artifacts.length)}
+            </p>
             <div className="grid gap-3">
               {artifacts.map((artifact) => {
                 const position = artifact.memberPosition;
@@ -96,27 +114,34 @@ export function SessionProceedings(props: {
                   : undefined;
                 const phaseTwoEvaluation = phase === 2 ? parsePhaseTwo(artifact.content) : null;
                 return (
-                  <div key={artifact.id} id={anchorId} className="panel space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
+                  <details
+                    key={artifact.id}
+                    id={anchorId}
+                    className="panel disclosure-card"
+                    open={false}
+                  >
+                    <summary className="disclosure-summary">
                       {isMemberPosition(position) ? (
                         <Sigil position={position} className="h-5 w-5 text-[var(--brass-soft)]" />
                       ) : null}
                       <span className="seal">{artifact.member.label}</span>
+                      <span>{phaseLabel(phase)}</span>
                       <span className="meta-chip meta-chip-wrap">{artifact.modelName}</span>
                       <span className="meta-chip">{props.formatCost(artifact.costUsdMicros)}</span>
-                    </div>
+                    </summary>
                     {phaseTwoEvaluation ? (
                       <div className="grid gap-2">
                         <PhaseTwoSummary evaluation={phaseTwoEvaluation} />
                         {candidateReviewRows(phaseTwoEvaluation).map((row) => (
-                          <div
+                          <details
                             key={row.candidateId}
                             className="critique-row border-t border-[var(--border)] pt-2"
                           >
-                            <div className="flex flex-wrap items-center gap-2">
+                            <summary className="disclosure-summary disclosure-summary-compact">
                               <span className="cell-id text-base">{row.candidateId}</span>
                               <span className="meta-chip">score {row.score}</span>
-                            </div>
+                              <span>Review details</span>
+                            </summary>
                             <ReviewList title="Strengths" items={row.review.strengths} />
                             <ReviewList title="Weaknesses" items={row.review.weaknesses} />
                             <ReviewList
@@ -127,11 +152,11 @@ export function SessionProceedings(props: {
                               title="Missing evidence"
                               items={row.review.missing_evidence}
                             />
-                            <p className="critique-title">Verdict input</p>
+                            <p className="critique-title">Final-answer input</p>
                             <p className="m-0 text-sm leading-6 text-[var(--text-muted)]">
                               {row.review.verdict_input}
                             </p>
-                          </div>
+                          </details>
                         ))}
                       </div>
                     ) : (
@@ -139,7 +164,7 @@ export function SessionProceedings(props: {
                         {phase === 2 ? (
                           <div className="alert-danger" role="status">
                             Structured critique unavailable. Raw reviewer record is preserved below;
-                            use Provider Record if recovery is needed.
+                            use Run details if recovery is needed.
                           </div>
                         ) : null}
                         <div
@@ -154,13 +179,13 @@ export function SessionProceedings(props: {
                         </div>
                       </>
                     )}
-                  </div>
+                  </details>
                 );
               })}
             </div>
           </section>
         );
       })}
-    </div>
+    </section>
   );
 }

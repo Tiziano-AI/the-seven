@@ -1,11 +1,44 @@
 import type { SessionSnapshot } from "@the-seven/contracts";
 import { MEMBER_POSITIONS } from "@the-seven/contracts";
 import { describe, expect, test, vi } from "vitest";
-import { buildSystemPromptForPhase, formatSnapshotUserMessage } from "./sessionSnapshot";
+import {
+  buildSessionSnapshot,
+  buildSystemPromptForPhase,
+  formatSnapshotUserMessage,
+} from "./sessionSnapshot";
 
 vi.mock("server-only", () => ({}));
 
 describe("session snapshot prompt materialization", () => {
+  test("stores the council identity used by the run", () => {
+    const snapshot = buildSessionSnapshot({
+      now: new Date("2026-05-11T00:00:00.000Z"),
+      query: "Question?",
+      attachments: [],
+      outputFormats: {
+        phase1: "Output: Markdown.",
+        phase2: "Output: JSON.",
+        phase3: "Output: Markdown final.",
+      },
+      council: {
+        nameAtRun: "Custom Council",
+        refAtRun: { kind: "user", councilId: 901 },
+        phasePrompts: {
+          phase1: "Answer.",
+          phase2: "Evaluate.",
+          phase3: "Synthesize.",
+        },
+        members: MEMBER_POSITIONS.map((memberPosition) => ({
+          memberPosition,
+          model: { provider: "openrouter", modelId: `model-${memberPosition}` },
+          tuning: null,
+        })),
+      },
+    });
+
+    expect(snapshot.council.refAtRun).toEqual({ kind: "user", councilId: 901 });
+  });
+
   test("hydrates attachment context without changing the base user request", () => {
     const message = formatSnapshotUserMessage("Explain the attached plan.", [
       {

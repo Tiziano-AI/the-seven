@@ -23,6 +23,10 @@ async function waitForToastToClear(page: Page, text: string) {
   await expect(page.getByText(text)).toBeHidden({ timeout: toastSettleMs + 1000 });
 }
 
+function modeButton(page: Page, name: string) {
+  return page.locator(".manuscript-action-bar").getByRole("button", { name, exact: true });
+}
+
 async function denyDemoSession(page: Page) {
   await page.route("**/api/v1/demo/session", async (route) => {
     if (!(await parseRouteIngress(route, "demo.session"))) {
@@ -69,9 +73,9 @@ test.describe("rendered scholarly workbench proof", () => {
       await denyDemoSession(page);
       await allowDemoRequest(page);
       await page.goto("/");
-      await expect(page.getByText("Seven independent readings")).toBeVisible();
+      await expect(page.getByText("Ask once. Get one answer you can inspect.")).toBeVisible();
       await captureRenderedProof(page, testInfo, `${viewport.label}-locked`);
-      await page.getByLabel("Email for a 24-hour demo seal").fill("reader@example.com");
+      await page.getByLabel("Email for a 24-hour demo").fill("reader@example.com");
       await page.getByRole("button", { name: "Send magic link" }).click();
       await expect(page.getByText("Check your inbox")).toBeVisible();
       await page.waitForTimeout(toastSettleMs);
@@ -86,8 +90,8 @@ test.describe("rendered scholarly workbench proof", () => {
       installApiMocks(page);
       await allowDemoSession(page);
       await page.reload();
-      await expect(page.getByText(/Demo seal · expires/)).toBeVisible();
-      await expect(page.getByText("Demo petitions are locked to Commons")).toBeVisible();
+      await expect(page.getByText(/Demo active · expires/)).toBeVisible();
+      await expect(page.getByText("Demo questions use Commons")).toBeVisible();
       await captureRenderedProof(page, testInfo, `${viewport.label}-demo-composer`);
 
       await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -95,15 +99,15 @@ test.describe("rendered scholarly workbench proof", () => {
       await page.context().clearCookies();
       await unlockByok(page);
       await page.waitForTimeout(toastSettleMs);
-      await expect(page.getByLabel("Matter")).toBeVisible();
+      await expect(page.getByLabel("Question")).toBeVisible();
       await captureRenderedProof(page, testInfo, `${viewport.label}-byok-composer`);
-      await page.getByLabel("Matter").fill("Rendered proof petition after filing");
-      await page.getByRole("button", { name: "Submit for deliberation" }).click();
-      await expect(page.getByText("File another matter")).toBeVisible();
+      await page.getByLabel("Question").fill("Rendered proof question after filing");
+      await page.getByRole("button", { name: "Ask the council" }).click();
+      await expect(page.getByText("Ready for another question")).toBeVisible();
       await expect(
-        page.locator(".docket-question").getByText("Matter with evidence"),
+        page.locator(".docket-question").getByText("Rendered proof question after filing"),
       ).toBeVisible();
-      await waitForToastToClear(page, "Deliberation submitted");
+      await waitForToastToClear(page, "Question sent");
       await captureFocusedProof(
         page,
         testInfo,
@@ -116,11 +120,12 @@ test.describe("rendered scholarly workbench proof", () => {
       await captureRenderedProof(page, testInfo, `${viewport.label}-archive`);
       await page
         .getByRole("button", {
-          name: "Open manuscript for matter 105: Awaiting first scholia docket",
+          name: "Open saved run 105: Working answer before reviews",
           exact: true,
         })
         .click();
-      await expect(page.getByRole("region", { name: "Council proceedings" })).toContainText(
+      await modeButton(page, "Council").click();
+      await expect(page.getByRole("region", { name: "Council" })).toContainText(
         "Reviewers convening",
       );
       await captureFocusedProof(
@@ -131,33 +136,54 @@ test.describe("rendered scholarly workbench proof", () => {
       );
       await page
         .getByRole("button", {
-          name: "Open manuscript for matter 102: Completed petition on guild tolls",
+          name: "Open saved run 102: Completed vendor selection question",
           exact: true,
         })
         .click();
-      await expect(page.getByText(/Final verdict: grant the guild toll petition/)).toBeVisible();
+      await expect(page.getByText(/Final answer: approve the vendor plan/)).toBeVisible();
+      await captureFocusedProof(page, testInfo, `${viewport.label}-completed-answer`, "#verdict-G");
+      await modeButton(page, "How it worked").click();
+      await expect(page.locator("#how-it-worked-panel")).toContainText("Draft answers");
+      await page.locator("#proceedings-phase1-A").getByText("Reviewer A").click();
+      await expect(page.locator("#proceedings-phase1-A")).toContainText(
+        "Draft memorandum from reviewer 1.",
+      );
+      await page.locator("#proceedings-phase2-A").getByText("Reviewer A").click();
+      await page.locator("#proceedings-phase2-A").getByText("Review details").first().click();
+      await expect(page.locator("#proceedings-phase2-A")).toContainText("Strengths");
+      await expect(page.locator("#proceedings-phase2-A")).toContainText("Missing evidence");
       await captureFocusedProof(
         page,
         testInfo,
-        `${viewport.label}-completed-verdict`,
-        "#verdict-G",
+        `${viewport.label}-how-it-worked`,
+        "#how-it-worked-panel",
       );
-      await page.getByRole("button", { name: "Provider Record" }).click();
-      const providerRecord = page.locator("#provider-record-panel");
-      await expect(providerRecord).toContainText("accepted provider outputs recorded");
-      await expect(providerRecord).toContainText("billing succeeded");
-      await expect(providerRecord).toContainText("reasoning effort low");
-      await expect(providerRecord).toContainText("Phase 2 · Needs attention");
-      await expect(providerRecord).toContainText("code rate_limited");
+      await modeButton(page, "Run details").click();
+      const runDetails = page.locator("#run-details-panel");
+      await expect(runDetails).toContainText("accepted model outputs recorded");
+      await expect(runDetails).toContainText("billing succeeded");
+      await expect(runDetails).toContainText("reasoning effort low");
+      await expect(runDetails).toContainText("Phase 2 · Needs attention");
+      await expect(runDetails).toContainText("code rate_limited");
       await captureFocusedProof(
         page,
         testInfo,
-        `${viewport.label}-provider-record`,
-        "#provider-record-panel",
+        `${viewport.label}-run-details`,
+        "#run-details-panel",
       );
+      await modeButton(page, "Exports").click();
+      await expect(page.locator("#exports-panel")).toContainText("Copy and download");
+      await captureFocusedProof(page, testInfo, `${viewport.label}-exports`, "#exports-panel");
+      await modeButton(page, "Run again").click();
+      await expect(page.getByLabel("Question for this run")).toBeVisible();
+      await expect(page.getByRole("radio", { name: "The Commons Council" })).toBeChecked();
+      await expect(
+        page.locator("#rerun-docket").getByRole("button", { name: "Run again" }),
+      ).toBeEnabled();
+      await captureFocusedProof(page, testInfo, `${viewport.label}-run-again`, "#rerun-docket");
       await page
         .getByRole("button", {
-          name: "Open manuscript for matter 101: Recover interrupted chancery petition",
+          name: "Open saved run 101: Recover interrupted pricing question",
           exact: true,
         })
         .click();
@@ -170,12 +196,15 @@ test.describe("rendered scholarly workbench proof", () => {
         "#recovery-ledger",
       );
 
-      await page.getByRole("link", { name: "Council Library" }).click();
-      await expect(page.getByRole("heading", { name: "Council Library" })).toBeVisible();
+      await page.getByRole("link", { name: "Ask" }).click();
+      await page.getByRole("link", { name: "Manage councils" }).click();
+      await expect(page.getByRole("heading", { name: "Manage councils" })).toBeVisible();
       await page.getByRole("button", { name: /The Commons Council/ }).click();
-      await expect(page.getByLabel("Name")).toHaveValue("The Commons Council");
+      await expect(
+        page.locator(".council-editor-panel").getByText("The Commons Council", { exact: true }),
+      ).toBeVisible();
       await page.getByRole("button", { name: "Duplicate" }).click();
-      await expect(page.getByLabel("Name")).toHaveValue("Commons Copy");
+      await expect(page.getByLabel("Council name")).toHaveValue("Commons Copy");
       await expect(page.locator(".model-suggestion-ledger")).toHaveCount(0);
       const firstSeat = page.locator(".role-card").first();
       await firstSeat.getByRole("button", { name: "Change Seat A model catalog" }).click();

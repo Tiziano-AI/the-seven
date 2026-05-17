@@ -2,33 +2,31 @@ import { expect, test } from "@playwright/test";
 import { unlockByok } from "./browser-flow-auth";
 import { installApiMocks } from "./browser-flow-fixtures";
 
-test("denied manuscript load keeps the archive row selected with recovery controls", async ({
-  page,
-}) => {
+test("denied run load keeps the archive row selected with retry controls", async ({ page }) => {
   installApiMocks(page);
   await unlockByok(page);
   await page.getByRole("link", { name: "Archive" }).click();
 
-  const completedRow = page.locator(".panel", { hasText: "Completed petition on guild tolls" });
+  const completedRow = page.locator(".panel", { hasText: "Completed vendor selection question" });
   await completedRow
     .getByRole("button", {
-      name: "Open manuscript for matter 102: Completed petition on guild tolls",
+      name: "Open saved run 102: Completed vendor selection question",
       exact: true,
     })
     .click();
   await expect(
-    page.locator(".docket-question").getByText("Completed petition on guild tolls"),
+    page.locator(".docket-question").getByText("Completed vendor selection question"),
   ).toBeVisible();
 
-  const deniedRow = page.locator(".panel", { hasText: "Sealed denied manuscript" });
+  const deniedRow = page.locator(".panel", { hasText: "Denied saved run" });
   await deniedRow
     .getByRole("button", {
-      name: "Open manuscript for matter 109: Sealed denied manuscript",
+      name: "Open saved run 109: Denied saved run",
       exact: true,
     })
     .click();
-  await expect(page.getByText("Manuscript could not load.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Retry manuscript load" })).toBeVisible();
+  await expect(page.getByText("Saved run could not load.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry run load" })).toBeVisible();
   await expect(deniedRow).toHaveClass(/archive-row-active/u);
   await expect(page.locator(".docket-question")).toHaveCount(0);
 });

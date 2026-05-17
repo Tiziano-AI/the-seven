@@ -26,7 +26,7 @@ deleted instead of shimmed.
 - Councils remain 7 fixed member slots `A-G`, with shared phase prompts and
   optional per-member tuning.
 - Runs remain immutable historical records. Continue resumes missing work inside
-  the same failed session. Rerun creates a new session.
+  the same failed session. Run again creates a new session.
 - Provider traffic remains server-side. Browsers never call OpenRouter directly.
 - Live updates remain polling-based in v1. No parallel realtime transport is
   introduced.
@@ -113,7 +113,7 @@ schema validation, not repo-wide negative string scans.
   - client components and design-system code under `src/components/**`
   - design tokens in `src/app/theme.css`; scholarly workbench primitives in
     `components.css`, proceedings/verdict classes in `inspector.css`, archive
-    and recovery-ledger classes in `archive.css`, Provider Record diagnostic
+    and recovery-ledger classes in `archive.css`, run-detail diagnostic
     ledger classes in `diagnostics.css`, and gate/editor folio classes in
     `surface.css`, all imported from `globals.css`
   - inspector splits into `components/inspector/council-track.tsx`,
@@ -138,9 +138,9 @@ No runtime code remains in `client/`, `server/`, or `shared/`.
 
 ## Scholarly Council UI Contract
 
-The web product is a serious medieval/scholarly council workbench: a docket
-desk, seven-seat proceedings view, verdict article, provider call ledger, and
-session archive. The visual register is institutional and archival, not generic
+The web product is a serious medieval/scholarly council workbench: an ask
+surface, seven-seat work view, answer article, run-detail ledger, and session
+archive. The visual register is institutional and archival, not generic
 SaaS and not fantasy game ornament.
 
 `apps/web/src/app/theme.css` is the only raw token owner for rendered CSS
@@ -154,7 +154,7 @@ small radii, and quiet focus rings.
 Typography is hierarchical:
 
 - the medieval/display face is reserved for the wordmark, seat letters, selected
-  title plates, and verdict drop-caps;
+  title plates, and answer drop-caps;
 - body copy, controls, labels, nav, badges, forms, and tables use the readable
   body face;
 - provider model IDs, route evidence, costs, tokens, and diagnostics use the
@@ -175,44 +175,69 @@ Source Serif 4 normal/italic
 and Victor Mono
 (`vendor:Google Fonts:2026-05-15:https://raw.githubusercontent.com/google/fonts/main/ofl/victormono/VictorMono%5Bwght%5D.ttf`).
 
+The product journey is one loop:
+
+1. Ask a question.
+2. Watch the council work.
+3. Read the answer.
+4. Inspect the work only when needed.
+5. Copy, download, save a private link, store, edit, or run again.
+
+The medieval/scholarly metaphor is visual and structural. User-facing labels,
+descriptions, buttons, and empty states are plain English for normal people.
+Visible chrome uses `Ask`, `Answer`, `Inspect`, `Copy`, `Download`, `Private
+link`, `Archive`, `Run again`, and `Manage councils` instead of route jargon. Internal
+component names may keep council and manuscript terms where they identify code
+owners, but the rendered product does not require the user to learn those terms.
+
 The route information architecture is:
 
-- `/` is the Petition Desk and active Run Workbench. The authenticated composer
-  files a `Matter`, chooses a `Council`, attaches `Evidence`, and submits for
-  `Deliberation` through real form submissions. Council, rerun-council, archive
-  filter, and tuning choices are native radio semantics where the user is making
-  one exclusive choice. Evidence uses a product-owned exhibit picker with
-  keyboard file selection, drag/drop, a selected-exhibit ledger, per-exhibit
-  removal, and clear-all recovery. After submit, the run status, proceedings,
-  verdict, and record are primary; the composer becomes an explicit `File another
-  matter` surface with the submitted draft cleared unless the user chooses to
-  reuse it. The locked gate presents a stored BYOK unlock as the primary path
-  when this browser already holds an encrypted key; otherwise the demo magic-link
-  request is primary and only syntactically valid email addresses can be
-  submitted. Demo seals expire in the client at their server-issued expiry time
-  and are rechecked when the tab becomes visible. BYOK admission selects
+- `/` is the primary Workbench. It owns the first-success loop: ask composer,
+  council choice, optional evidence, active run state, answer, inspection,
+  copy/export/private-link, and repeat controls. The composer asks for the user's
+  question first. Council choice and evidence stay visible but progressive:
+  default users can ask without understanding provider setup, while BYOK users
+  can open settings when they want to choose or manage a council. Council,
+  run-again council, archive filter, and tuning choices use native radio semantics
+  where the user is making one exclusive choice. Evidence uses a product-owned
+  exhibit picker with keyboard file selection, drag/drop, a selected-exhibit
+  ledger, per-exhibit removal, and clear-all recovery. After submit, the
+  answer-first run inspector is primary; `Ask another question` and `Edit and
+  run again` stay near the answer so repeat use does not require scrolling back
+  through the page. The locked gate presents a stored BYOK unlock as the primary
+  path when this browser already holds an encrypted key; otherwise the demo
+  magic-link request is primary and only syntactically valid email addresses can
+  be submitted. Demo sessions expire in the client at their server-issued expiry
+  time and are rechecked when the tab becomes visible. BYOK admission selects
   Founding before the paid-key session starts, so a user who brings their own
   key starts on the flagship roster unless they deliberately choose a lower-cost
   council.
-- `/councils` is the Council Library and editor. BYOK users duplicate templates,
-  inspect and edit seven member seats first, and then edit phase contracts.
-  Model selection uses a product-owned catalog suggestion ledger: readable model
-  names are primary, exact provider IDs stay muted evidence, and current catalog
-  validation gates editable seats. Tuning controls render only when the selected
-  model advertises the matching OpenRouter parameter; unsupported saved tuning is
-  pruned at edit time before the council can be saved. Demo users see a locked
-  Commons-only explanation.
-- `/sessions` is the Archive. It is a dense ledger for search, filters,
-  selection, export, recovery inspection, and detail inspection. Archive loading
-  starts ledger-first and does not auto-open an arbitrary manuscript; a row
-  click, deep link, or explicit restored selection opens the manuscript. Archive
-  row actions select the run; cost-bearing Continue and Rerun actions execute
-  from the detail panel after the original matter, council, preserved artifacts,
-  and reused work are visible. Desktop keeps the archive ledger beside the
-  selected manuscript. Mobile renders an opened manuscript before the archive
-  ledger so a requested verdict, recovery record, or Provider Record is the
-  first visible surface instead of being buried below the docket list.
-- `/sessions/[sessionId]` is the deep-linked Manuscript for one run.
+- `/sessions` is the Archive. It stores past runs and supports search, filters,
+  selection, and selected export. Rows open or select only; they do not expose
+  recovery or run again as premature row-level actions. Desktop keeps the archive
+  ledger beside the selected run detail after the user chooses a row. Archive
+  loads ledger-first; it never restores a remembered run as an arbitrary open
+  detail. Mobile renders an opened run detail before the archive list so a
+  requested answer, recovery state, or run-detail proof is the first visible
+  surface instead of being buried below the ledger.
+  Cost-bearing Continue and Run again actions execute from the selected detail
+  after the original question, council, preserved work, and reused work are
+  visible.
+- `/sessions/[sessionId]` is the deep link for one stored run. It renders the
+  same answer-first inspector as the Workbench and Archive detail so users learn
+  one inspection model.
+- `/councils` is advanced Council settings, reached from `Manage councils` in
+  the Workbench council area and from run detail when a BYOK user wants to
+  duplicate or edit a roster. It is not equal-weight primary navigation for
+  demo/default users. BYOK users duplicate templates, inspect and edit seven
+  member seats first, then expand phase contracts only when they need advanced
+  prompt control. Model selection uses a product-owned catalog suggestion
+  ledger: readable model names are primary, exact provider IDs stay muted
+  evidence, and current catalog validation gates editable seats. Tuning controls
+  render only when the selected model advertises the matching OpenRouter
+  parameter; unsupported saved tuning is pruned at edit time before the council
+  can be saved. Demo users see a short locked explanation and a clear return to
+  the Workbench.
 
 The council track renders seven typed seats from run snapshot and artifact
 state. Each seat shows seat letter, role, concise model label, exact full model
@@ -222,54 +247,93 @@ render as `not reached`, and preserved draft-only work renders as preserved
 evidence.
 The track reports reviewer ranking signals, not consensus or a vote winner.
 Review-signal copy is grammatical for no rankings, one ranking, unanimous
-rankings, and split rankings, including singular split leaders. Verdict copy
+rankings, and split rankings, including singular split leaders. Answer copy
 states that Synthesizer G resolves by correctness and cited evidence rather than
 majority ranking.
 
-The verdict renders as an analytical article with semantic headings for the
-docketed matter, verdict, and recovery record. The submitted query is a docket
-entry, not a pull quote. Proceedings, Provider Record, and Export Dossier are
-separate control surfaces with distinct visual registers for status seals,
-metadata, and diagnostics. Verdict chips use one canonical evidence map:
-candidate chips open Proceedings before scrolling to the matching phase-1
-draft with the council seat as fallback; reviewer chips open Proceedings before
-scrolling to the matching phase-2 critique with a phase-1 draft fallback.
-Proceedings render the full phase-2 critique payload: scores, strengths,
-weaknesses, critical errors, missing evidence, verdict input, major
-disagreements, and final-answer inputs.
-Each route owns one page-level heading even when the visual surface starts with a
-workbench card. Provider Record rows use the same seat vocabulary as
-Proceedings: seat sigil, seat alias, and role are primary; raw integer member
-positions are only evidence.
-The Provider Record control loads the receipt and moves focus of attention to
-that ledger instead of changing a button label offscreen. Provider Record begins
-with a run-level summary separating accepted provider outputs from failed,
-denied, or unsettled billing attempts, so a completed verdict can coexist with
+The run inspector is answer-first and stable across Workbench, Archive detail,
+and deep links:
+
+- The top of the inspector always shows the question, current status, council
+  name, and primary answer or recovery state. Action controls occupy a stable
+  rail that does not change size or move between `processing`, `completed`,
+  `failed`, and `selected from Archive` states.
+- The primary actions are `Copy answer`, `Copy answer with notes`, `Copy
+  private link`, `Download answer`, `Download full record`, `Ask another
+  question`, `Edit and run again`, and `Continue` where recovery is available.
+  Disabled and loading states preserve dimensions and announce the exact pending
+  action.
+- Inspection uses progressive disclosure rather than a long wall of text.
+  Canonical inspector modes are `Answer`, `How it worked`, `Council`, `Run
+  details`, `Exports`, and `Run again`. Desktop may render the modes as a side
+  rail or tabs beside the answer. Mobile renders them as a compact mode grid
+  followed by one open panel at a time.
+- The answer renders as a readable article with semantic headings for the
+  question, answer, and recovery state. The submitted query is compact metadata,
+  not a giant pull quote. Long prose, links, inline code, and table cells wrap
+  inside the article; tables and code blocks keep horizontal scroll when that
+  preserves meaning.
+- `How it worked` owns the former proceedings payload. It starts collapsed at
+  phase and seat summaries with counts, status, and issue badges. Individual
+  drafts, critiques, scores, strengths, weaknesses, critical errors, missing
+  evidence, final-answer input, major disagreements, and final-answer inputs expand
+  only after the user asks to inspect them. Issue rows may open by default.
+- `Council` owns the seven-seat track from run snapshot and artifact state. Each
+  seat shows seat letter, role, concise model label, exact full model ID as
+  visible muted evidence, phase/ranking state, and split/synthesis state.
+- `Run details` owns the provider call ledger. It begins with a plain summary of
+  accepted outputs, denied calls, failed calls, and unsettled billing. Rows use
+  the same seat vocabulary as the council track: seat sigil, seat alias, and
+  role are primary; raw integer member positions are only evidence. Loading the
+  ledger moves focus of attention to the open panel instead of changing a button
+  label offscreen.
+- `Exports` owns all copy and download affordances. `Copy answer` writes the
+  final answer text, `Copy answer with notes` writes the answer plus visible
+  council notes/evidence labels, `Copy private link` writes the auth-scoped run
+  URL for the current user, `Download answer` saves a readable Markdown answer,
+  and `Download full record` saves the full JSON audit artifact. Archive bulk
+  export rows are labeled `Add to export` and `Remove from export`; the header
+  asks the user to select runs before export and changes to `Export selected`
+  with the included count once at least one run is selected.
+- Answer chips use one canonical evidence map: candidate chips open `How it
+  worked` before scrolling to the matching phase-1 draft with the council seat
+  as fallback; reviewer chips open `How it worked` before scrolling to the
+  matching phase-2 critique with a phase-1 draft fallback.
+Each route owns one page-level heading even when the visual surface starts with
+a workbench card.
+The provider ledger summary separates accepted provider outputs from failed,
+denied, or unsettled billing attempts, so a completed answer can coexist with
 issue rows without implying that failed calls contributed evidence or that
 pending billing is final cost evidence.
-Failed-run recovery copy maps internal failure enums to product language, names
-the redacted terminal job error when one exists, names the original council for
-Continue, and names a freshly chosen council for Prepare Rerun, because only the
-final Run Again submit starts a new cost-bearing deliberation.
+Failed-run recovery copy maps internal failure enums to product language and
+names the redacted terminal job error when one exists. Continue uses the
+original council. New session snapshots persist `council.refAtRun`; Run again
+uses that identity to start from the original council when it is still
+available. Legacy snapshots that only have a council name preselect by name only
+when exactly one available council matches, allow an explicit council change,
+and only the final Run again submit starts a new cost-bearing run.
 Arbitrary markdown output is contained: ordinary prose, links, inline code, and
-table cells wrap inside the manuscript; tables and code blocks keep horizontal
-scroll when that preserves meaning.
-Rendered Provider Record fixtures use runtime-real rows: phase-1 success,
+table cells wrap inside the answer article; tables and code blocks keep
+horizontal scroll when that preserves meaning.
+Rendered Run details fixtures use runtime-real rows: phase-1 success,
 phase-2 structured success, pre-egress capability denial, and upstream
 transport failure stay separate so proof never validates an impossible provider
 call state.
 
 UI proof requires rendered desktop, tablet, and mobile evidence for the locked
-gate, demo receipt, demo composer, BYOK composer, submitted workbench, archive,
-processing run, completed verdict, Provider Record, failed recovery, and
-seat-first council editor. Mobile detail states also require focused viewport
-captures for the demo receipt, submitted workbench, processing run, completed
-verdict, Provider Record, and failed recovery so long surfaces are proven both
-as complete pages and usable first viewports. The regenerated contact sheet is
-the review index for the current proof set. Screenshot capture hides only the
-unfocused fixed skip link so full-page images do not paint offscreen
-accessibility chrome over scrolled content; focused skip-link behavior remains
-covered by browser acceptance proof.
+gate, demo receipt, ask composer, BYOK composer, submitted Workbench, Archive,
+processing run, completed answer, `How it worked`, `Run details`, failed
+recovery, export/copy panel, run-again panel, and seat-first council settings.
+Mobile detail states also require focused viewport captures for the demo receipt,
+submitted Workbench, processing run, completed answer, `Run details`, failed
+recovery, and export/copy panel so long surfaces are proven both as complete
+pages and usable first viewports. At least one proof path must exercise a state
+transition: ask submission to processing, completed answer mode switching,
+copy/download affordance visibility, Archive row open, or run-again preparation.
+The regenerated contact sheet is the review index for the current proof set.
+Screenshot capture hides only the unfocused fixed skip link so full-page images
+do not paint offscreen accessibility chrome over scrolled content; focused
+skip-link behavior remains covered by browser acceptance proof.
 Functional e2e proof alone is not sufficient for this surface.
 
 ## Runtime Stack
@@ -771,10 +835,13 @@ diagnostics.
 - Continue is allowed only for failed sessions and requeues the same session in
   one transaction; credential materialization failure cannot clear the failed
   state without a runnable replacement job.
-- Rerun is allowed only for terminal sessions and creates a new session. Blank
-  edited matter is not sent as a schema-failing override; the client either
-  reuses the original matter or blocks with docket guidance before any
-  cost-bearing request.
+- Run again is allowed only for terminal sessions and creates a new session. New
+  snapshots store the original council identity as `council.refAtRun`, and the
+  client preselects that exact council when it is still available while still
+  allowing an explicit council change. Legacy name-only snapshots preselect only
+  when the name match is unambiguous. Blank edited question is not sent as a
+  schema-failing override; the client either reuses the original question or
+  blocks with Run again guidance before any cost-bearing request.
 - Completed sessions are idempotent.
 - Claimed terminal transitions bind `jobs.id`, `jobs.session_id`, `jobs.state`,
   `jobs.lease_owner`, and an unexpired `jobs.lease_expires_at` before updating

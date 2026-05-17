@@ -209,12 +209,12 @@ function buildSeats(
     } else {
       const synthesis = phase3ByPosition.get(position) ?? null;
       const synthesizerVote = synthesis
-        ? "verdict entered"
+        ? "answer entered"
         : status === "failed"
           ? "not reached"
           : status === "completed"
-            ? "verdict missing"
-            : "awaiting verdict";
+            ? "answer missing"
+            : "awaiting answer";
       draftSeats.push({
         position,
         alias: member.alias,
@@ -239,7 +239,7 @@ function buildSeats(
   return { seats, reviewerVotes, reviewerCount };
 }
 
-/** Renders the seven-seat proceedings state for one persisted session. */
+/** Renders the seven-seat council state for one persisted session. */
 export function CouncilTrack(props: {
   members: ReadonlyArray<InspectorSnapshotMember>;
   artifacts: ReadonlyArray<InspectorArtifact>;
@@ -253,9 +253,9 @@ export function CouncilTrack(props: {
   );
 
   return (
-    <section className="track" aria-label="Council proceedings">
+    <section className="track" aria-label="Council">
       <header className="track-head">
-        <h2 className="track-caption">Proceedings</h2>
+        <h2 className="track-caption">Council</h2>
         <p className="track-review-signal">
           {renderMarkedCandidate(reviewSignalLine(reviewerVotes, reviewerCount))}
         </p>

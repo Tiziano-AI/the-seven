@@ -18,7 +18,7 @@ export function demoLinkBannerMessage(state: string): string {
   return "That demo link is invalid or already used. Request a fresh one below.";
 }
 
-/** Formats selected exhibit byte counts for the petition desk. */
+/** Formats selected file byte counts for the ask composer. */
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

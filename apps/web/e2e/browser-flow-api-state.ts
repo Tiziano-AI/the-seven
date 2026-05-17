@@ -8,6 +8,7 @@ export type BrowserFlowApiMockState = Readonly<{
   deleteCount: number;
   exportBodies: unknown[];
   continueSessionIds: number[];
+  rerunSessionIds: number[];
   rerunBodies: unknown[];
   councilListUsesByok: boolean[];
   authValidateBodies: unknown[];
@@ -29,6 +30,7 @@ export function createBrowserFlowApiMockState(): MutableBrowserFlowApiMockState 
     deleteCount: 0,
     exportBodies: [],
     continueSessionIds: [],
+    rerunSessionIds: [],
     rerunBodies: [],
     councilListUsesByok: [],
     authValidateBodies: [],
@@ -40,29 +42,30 @@ export function createBrowserFlowSessionMap(): BrowserFlowSessionMap {
   return new Map<number, ReturnType<typeof sessionSummary>>([
     [
       101,
-      sessionSummary({ id: 101, query: "Recover interrupted chancery petition", status: "failed" }),
+      sessionSummary({ id: 101, query: "Recover interrupted pricing question", status: "failed" }),
     ],
     [
       102,
-      sessionSummary({ id: 102, query: "Completed petition on guild tolls", status: "completed" }),
+      sessionSummary({
+        id: 102,
+        query: "Completed vendor selection question",
+        status: "completed",
+      }),
     ],
-    [104, sessionSummary({ id: 104, query: "Filed abbey archive question", status: "pending" })],
+    [104, sessionSummary({ id: 104, query: "Filed roadmap planning question", status: "pending" })],
     [
       105,
-      sessionSummary({ id: 105, query: "Awaiting first scholia docket", status: "processing" }),
+      sessionSummary({ id: 105, query: "Working answer before reviews", status: "processing" }),
     ],
-    [106, sessionSummary({ id: 106, query: "Single-review manor dispute", status: "processing" })],
-    [
-      107,
-      sessionSummary({ id: 107, query: "Split testimony on harbor dues", status: "completed" }),
-    ],
-    [108, sessionSummary({ id: 108, query: "Two-review charter split", status: "processing" })],
-    [109, sessionSummary({ id: 109, query: "Sealed denied manuscript", status: "completed" })],
+    [106, sessionSummary({ id: 106, query: "Single-review vendor dispute", status: "processing" })],
+    [107, sessionSummary({ id: 107, query: "Split evidence on launch risk", status: "completed" })],
+    [108, sessionSummary({ id: 108, query: "Two-review launch split", status: "processing" })],
+    [109, sessionSummary({ id: 109, query: "Denied saved run", status: "completed" })],
     [
       110,
       sessionSummary({
         id: 110,
-        query: "CLI-filed borough petition",
+        query: "CLI-filed operations question",
         status: "pending",
         ingressSource: "cli",
       }),
@@ -71,7 +74,7 @@ export function createBrowserFlowSessionMap(): BrowserFlowSessionMap {
       111,
       sessionSummary({
         id: 111,
-        query: "API-filed abbey petition",
+        query: "API-filed product question",
         status: "pending",
         ingressSource: "api",
       }),
@@ -80,10 +83,19 @@ export function createBrowserFlowSessionMap(): BrowserFlowSessionMap {
       112,
       sessionSummary({
         id: 112,
-        query: "Partial-cost abbey verdict",
+        query: "Partial-cost answer",
         status: "completed",
         totalCostUsdMicros: 123,
         totalCostIsPartial: true,
+      }),
+    ],
+    [
+      113,
+      sessionSummary({
+        id: 113,
+        query: "Custom council vendor question",
+        status: "completed",
+        councilName: "Commons Copy",
       }),
     ],
   ]);

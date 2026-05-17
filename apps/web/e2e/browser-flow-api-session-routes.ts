@@ -24,6 +24,26 @@ import {
 } from "./browser-flow-provider-calls";
 import { sessionDetail, sessionSnapshot, sessionSummary } from "./browser-flow-session-fixtures";
 
+function submittedQuestion(body: unknown) {
+  if (typeof body === "object" && body !== null && "query" in body) {
+    const query = body.query;
+    if (typeof query === "string" && query.trim().length > 0) {
+      return query;
+    }
+  }
+  return "Question with evidence";
+}
+
+function rerunQuestion(body: unknown, fallback: string) {
+  if (typeof body === "object" && body !== null && "queryOverride" in body) {
+    const queryOverride = body.queryOverride;
+    if (typeof queryOverride === "string" && queryOverride.trim().length > 0) {
+      return queryOverride;
+    }
+  }
+  return fallback;
+}
+
 type BrowserFlowSessionRouteInput = Readonly<{
   route: Route;
   request: ReturnType<Route["request"]>;
@@ -75,11 +95,9 @@ export async function handleSessionApiMockRoute(
       return true;
     }
     state.createSessionBodies.push(body);
+    const query = submittedQuestion(body);
     await new Promise((resolve) => setTimeout(resolve, 100));
-    sessions.set(
-      77,
-      sessionSummary({ id: 77, query: "Matter with evidence", status: "completed" }),
-    );
+    sessions.set(77, sessionSummary({ id: 77, query, status: "completed" }));
     await fulfillSuccess(route, "sessions.create", { sessionId: 77 });
     return true;
   }
@@ -105,8 +123,8 @@ export async function handleSessionApiMockRoute(
     state.exportBodies.push(body);
     const title =
       body.sessionIds.length === 1
-        ? `# Manuscript ${body.sessionIds[0]}`
-        : `# Dossier ${body.sessionIds.join(", ")}`;
+        ? `# Run ${body.sessionIds[0]}`
+        : `# Saved runs ${body.sessionIds.join(", ")}`;
     await fulfillSuccess(route, "sessions.export", {
       markdown: title,
       json: '{"ok":true}',
@@ -156,7 +174,7 @@ export async function handleSessionApiMockRoute(
       sessionId,
       sessionSummary({
         id: sessionId,
-        query: "Recover interrupted chancery petition",
+        query: "Recover interrupted pricing question",
         status: "processing",
       }),
     );
@@ -174,11 +192,10 @@ export async function handleSessionApiMockRoute(
     if (!(await requireResolvedDemoMutationSameOrigin(route, "sessions.rerun", authority))) {
       return true;
     }
-    if (
-      (await parseRouteParams(route, "sessions.rerun", {
-        sessionId: rerunMatch[1] ?? "",
-      })) === null
-    ) {
+    const params = await parseRouteParams(route, "sessions.rerun", {
+      sessionId: rerunMatch[1] ?? "",
+    });
+    if (params === null) {
       return true;
     }
     if ((await parseRouteQuery(route, "sessions.rerun")) === null) {
@@ -196,12 +213,14 @@ export async function handleSessionApiMockRoute(
       await fulfillDemoCouncilOnly(route, "sessions.rerun");
       return true;
     }
+    state.rerunSessionIds.push(params.sessionId);
     state.rerunBodies.push(body);
+    const sourceSummary = sessions.get(params.sessionId);
     sessions.set(
       103,
       sessionSummary({
         id: 103,
-        query: "Completed petition on guild tolls",
+        query: rerunQuestion(body, sourceSummary?.query ?? "Question with evidence"),
         status: "pending",
       }),
     );
@@ -234,7 +253,7 @@ export async function handleSessionApiMockRoute(
     const sessionId = params.sessionId;
     const summary =
       sessions.get(sessionId) ??
-      sessionSummary({ id: sessionId, query: "Matter with evidence", status: "completed" });
+      sessionSummary({ id: sessionId, query: "Question with evidence", status: "completed" });
     const attachments = sessionId === 77 ? [{ name: "notes.txt", text: "attached notes" }] : [];
     if (sessionId === 109) {
       await fulfillNotFound(route, "sessions.get", "session");
@@ -248,6 +267,7 @@ export async function handleSessionApiMockRoute(
         query: summary.query,
         status: summary.status,
         councilName: summary.councilNameAtRun,
+        councilRef: sessionId === 113 ? { kind: "user", councilId: 901 } : undefined,
         attachments,
         ingressSource: summary.ingressSource,
       }),
@@ -281,7 +301,7 @@ export async function handleSessionApiMockRoute(
       sessions.get(sessionId) ??
       sessionSummary({
         id: sessionId,
-        query: "Completed petition on guild tolls",
+        query: "Completed vendor selection question",
         status: "completed",
       });
     await fulfillSuccess(route, "sessions.diagnostics", {

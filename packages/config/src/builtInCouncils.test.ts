@@ -450,7 +450,7 @@ describe("built-in council rosters", () => {
 
       expect(council.members.map((member) => member.memberPosition)).toEqual(MEMBER_POSITIONS);
       expect(council.members[6]?.model.modelId).toBe(expectedSynthesizer);
-      expect(council.description.toLowerCase()).toContain("delivers the verdict");
+      expect(council.description.toLowerCase()).toContain("writes the final answer");
     }
   });
 

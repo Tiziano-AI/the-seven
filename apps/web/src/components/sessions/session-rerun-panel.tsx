@@ -8,7 +8,7 @@ import type { fetchCouncils } from "@/lib/api";
 
 type AvailableCouncils = Awaited<ReturnType<typeof fetchCouncils>>["councils"];
 
-/** Renders the explicit cost-bearing rerun docket for a selected archived session. */
+/** Renders the explicit cost-bearing run-again form for a selected run. */
 export function SessionRerunPanel(props: {
   fieldPrefix: string;
   rerunQuery: string;
@@ -20,7 +20,6 @@ export function SessionRerunPanel(props: {
   rerunning: boolean;
   actionPending: boolean;
   actionMessage: string | null;
-  originalCouncilName: string;
   onQueryChange: (value: string) => void;
   onCouncilChange: (value: string) => void;
   onRetryCouncils: () => void;
@@ -32,7 +31,7 @@ export function SessionRerunPanel(props: {
       : props.exhibitCount === 1
         ? "1 exhibit"
         : `${props.exhibitCount} exhibits`;
-  const matterBlank = props.rerunQuery.trim().length === 0;
+  const questionBlank = props.rerunQuery.trim().length === 0;
   return (
     <Card className="p-6">
       <form
@@ -43,22 +42,21 @@ export function SessionRerunPanel(props: {
         }}
       >
         <p className="m-0 text-sm leading-6 text-[var(--text-muted)] md:col-span-2">
-          Run again creates a new archived run, keeps the original run unchanged, and reuses{" "}
-          {exhibitLabel} from the original docket. It starts a new seven-seat deliberation with the
-          active key or demo quota. The archived run used {props.originalCouncilName}; choose the
-          council explicitly for this new run.
+          Run again creates a new saved run and keeps the original answer unchanged. It reuses{" "}
+          {exhibitLabel} from the original question. The original council is selected when
+          available; choose another council only if you want to change who answers.
         </p>
         <div className="space-y-2">
-          <Label htmlFor={`${props.fieldPrefix}-rerun-query`}>Rerun Matter</Label>
+          <Label htmlFor={`${props.fieldPrefix}-rerun-query`}>Question for this run</Label>
           <Textarea
             id={`${props.fieldPrefix}-rerun-query`}
             value={props.rerunQuery}
             disabled={props.actionPending}
             onChange={(event) => props.onQueryChange(event.target.value)}
           />
-          {matterBlank ? (
+          {questionBlank ? (
             <p className="m-0 text-xs text-[var(--text-dim)]">
-              Blank rerun matter reuses the original docket matter.
+              A blank question reuses the original question.
             </p>
           ) : null}
         </div>
@@ -66,7 +64,7 @@ export function SessionRerunPanel(props: {
           {props.councilLoadIssue ? (
             <div className="panel p-3" role="alert">
               <p className="m-0 text-sm font-semibold text-[var(--text)]">
-                Council Library could not load.
+                Council settings could not load.
               </p>
               <p className="m-0 mt-1 text-xs text-[var(--text-dim)]">{props.councilLoadIssue}</p>
               <Button
@@ -77,13 +75,13 @@ export function SessionRerunPanel(props: {
                 onClick={props.onRetryCouncils}
                 disabled={props.actionPending || props.councilLoadPending}
               >
-                {props.councilLoadPending ? "Retrying…" : "Retry Council Library"}
+                {props.councilLoadPending ? "Retrying…" : "Retry council settings"}
               </Button>
             </div>
           ) : null}
           <fieldset className="choice-grid">
             <legend className="docket-question-label" id={`${props.fieldPrefix}-rerun-council`}>
-              Rerun Council
+              Council
             </legend>
             {props.availableCouncils.map((council) => {
               const value =
@@ -116,8 +114,8 @@ export function SessionRerunPanel(props: {
           {!props.rerunCouncil ? (
             <p className="m-0 text-xs text-[var(--text-dim)]">
               {props.councilLoadPending
-                ? "Loading councils before the rerun can start."
-                : "Choose a council before starting the rerun."}
+                ? "Loading councils before you can run again."
+                : "Choose a council before running again."}
             </p>
           ) : null}
         </div>
@@ -126,7 +124,7 @@ export function SessionRerunPanel(props: {
             type="submit"
             disabled={props.actionPending || props.councilLoadPending || !props.rerunCouncil}
           >
-            {props.rerunning ? "Creating rerun…" : "Run again"}
+            {props.rerunning ? "Creating new run…" : "Run again"}
           </Button>
           {props.actionMessage ? (
             <p role="status" className="m-0 mt-2 text-sm text-[var(--text-muted)]">

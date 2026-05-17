@@ -34,12 +34,12 @@ function candidateTarget(id: string | null): { targetId: string; fallbackId: str
 
 function chipActionLabel(kind: "candidate" | "reviewer", targetId: string | null): string {
   if (kind === "candidate" && targetId) {
-    return `Open candidate ${targetId} draft in Proceedings`;
+    return `Open candidate ${targetId} draft in How it worked`;
   }
   if (kind === "reviewer" && targetId) {
-    return `Open reviewer ${targetId} critique in Proceedings`;
+    return `Open reviewer ${targetId} critique in How it worked`;
   }
-  return "Open evidence in Proceedings";
+  return "Open evidence in How it worked";
 }
 
 function buildComponents(
@@ -93,11 +93,11 @@ export function VerdictCard(props: {
   return (
     <article className="card verdict">
       <header className="verdict-head">
-        <h2 className="verdict-label">Verdict</h2>
+        <h2 className="verdict-label">Answer</h2>
         <span className="verdict-rule" />
       </header>
       <p className="verdict-note">
-        Synthesizer G weighs cited evidence and correctness; reviewer rankings are not a vote.
+        The final answer weighs cited evidence and correctness; reviewer rankings are not a vote.
       </p>
       <div className="verdict-body">
         <ReactMarkdown
@@ -110,7 +110,7 @@ export function VerdictCard(props: {
       {props.onOpenProceedings ? (
         <footer className="verdict-foot">
           <button type="button" className="proceedings-link" onClick={props.onOpenProceedings}>
-            {props.proceedingsLabel ?? "Open Proceedings — drafts, critiques, ranking →"}
+            {props.proceedingsLabel ?? "See how it worked"}
           </button>
         </footer>
       ) : null}

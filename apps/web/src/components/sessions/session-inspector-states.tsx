@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { SessionInspectorMessage } from "./session-inspector-chrome";
 
-/** Renders non-manuscript inspector states without owning session data loading. */
+/** Renders non-loaded inspector states without owning session data loading. */
 export function SessionInspectorStateMessage(props: {
   authenticated: boolean;
   hasSessionId: boolean;
@@ -15,7 +15,7 @@ export function SessionInspectorStateMessage(props: {
   if (!props.authenticated) {
     return (
       <SessionInspectorMessage>
-        Unlock BYOK or start a demo session to inspect runs.
+        Use your OpenRouter key or start a demo session to inspect runs.
       </SessionInspectorMessage>
     );
   }
@@ -24,21 +24,21 @@ export function SessionInspectorStateMessage(props: {
     return (
       <SessionInspectorMessage>
         {props.emptyState === "archive"
-          ? "Select an archived matter to inspect its manuscript."
-          : "File a matter above and the council will assemble here."}
+          ? "Select a saved run to inspect its answer."
+          : "Ask a question above and the council will work here."}
       </SessionInspectorMessage>
     );
   }
 
   if (props.loading && !props.initialLoadIssue) {
-    return <SessionInspectorMessage>Loading manuscript…</SessionInspectorMessage>;
+    return <SessionInspectorMessage>Loading run…</SessionInspectorMessage>;
   }
 
   if (props.initialLoadIssue) {
     return (
       <SessionInspectorMessage>
         <div className="space-y-3">
-          <p className="m-0 font-semibold text-[var(--text)]">Manuscript could not load.</p>
+          <p className="m-0 font-semibold text-[var(--text)]">Saved run could not load.</p>
           <p className="m-0 text-sm text-[var(--text-muted)]">
             The archive entry is still selected, but the detail request failed. Retry before
             treating the run as unavailable.
@@ -52,7 +52,7 @@ export function SessionInspectorStateMessage(props: {
               onClick={props.onRetryInitialLoad}
               disabled={props.loading}
             >
-              {props.loading ? "Retrying…" : "Retry manuscript load"}
+              {props.loading ? "Retrying…" : "Retry run load"}
             </Button>
           </div>
         </div>
@@ -60,5 +60,5 @@ export function SessionInspectorStateMessage(props: {
     );
   }
 
-  return <SessionInspectorMessage>Manuscript unavailable.</SessionInspectorMessage>;
+  return <SessionInspectorMessage>Run unavailable.</SessionInspectorMessage>;
 }

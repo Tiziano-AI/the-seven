@@ -91,16 +91,16 @@ test("skip link uses route-neutral main-content copy", async ({ page }) => {
 
 test("locked routes keep route-owner headings", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Petition Desk", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ask", level: 1 })).toBeVisible();
 
   await page.goto("/councils");
-  await expect(page.getByRole("heading", { name: "Council Library", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Manage councils", level: 1 })).toBeVisible();
 
   await page.goto("/sessions");
   await expect(page.getByRole("heading", { name: "Archive", level: 1 })).toBeVisible();
 
   await page.goto("/sessions/101");
-  await expect(page.getByRole("heading", { name: "Manuscript", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Saved run", level: 1 })).toBeVisible();
 });
 
 test("invalid BYOK stays locked and does not store a key", async ({ page }) => {
@@ -121,17 +121,17 @@ test("invalid BYOK stays locked and does not store a key", async ({ page }) => {
   });
 
   await page.goto("/");
-  await expect(page.getByText("Workbench locked", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Bring Your Own Key" }).click();
-  await expect(page.getByLabel("OpenRouter API Key")).toBeVisible();
+  await expect(page.getByText("Ask once. Get one answer you can inspect.")).toBeVisible();
+  await page.getByRole("button", { name: /Use your OpenRouter key/u }).click();
+  await expect(page.getByLabel("OpenRouter API key")).toBeVisible();
 
-  await page.getByLabel("OpenRouter API Key").fill("sk-or-invalid");
+  await page.getByLabel("OpenRouter API key").fill("sk-or-invalid");
   await page.getByLabel("Local Password").fill("invalid-key-proof");
-  await page.getByRole("button", { name: "Validate and Unlock" }).click();
+  await page.getByRole("button", { name: "Save and unlock key" }).click();
 
   await expect(page.getByText("OpenRouter rejected this key")).toBeVisible();
-  await expect(page.getByText("Workbench locked", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Validate and Unlock" })).toBeVisible();
+  await expect(page.getByText("Ask once. Get one answer you can inspect.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save and unlock key" })).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => window.localStorage.getItem("seven.encrypted_api_key")))
     .toBeNull();
@@ -175,19 +175,19 @@ test("stale demo logout denial returns to locked UI", async ({ context, page }) 
     result: { payload: { expiresAt: number } };
   };
   expect(sessionEnvelope.result.payload.expiresAt).toBeGreaterThan(Date.now() + 60_000);
-  await expect(page.locator("header").getByText(/Demo seal/)).toBeVisible();
+  await expect(page.locator("header").getByText(/Demo/)).toBeVisible();
 
   const endDemoButton = page.locator("header").getByRole("button", {
-    name: "End Demo",
+    name: "End demo",
     exact: true,
   });
   await expect(endDemoButton).toBeEnabled();
   await endDemoButton.click();
   await expect(page.getByText(/returns to the locked state/)).toBeVisible();
-  await page.getByRole("button", { name: "End demo seal" }).click();
+  await page.getByRole("button", { name: "End demo session" }).click();
 
-  await expect(page.getByText("Workbench locked", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "End Demo", exact: true })).toBeHidden();
+  await expect(page.getByText("Ask once. Get one answer you can inspect.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "End demo", exact: true })).toBeHidden();
 });
 
 test.describe("authenticated smoke", () => {
@@ -227,23 +227,23 @@ test.describe("authenticated smoke", () => {
     await expect(page.locator(".docket-question").getByText(sessionQuery)).toBeVisible();
   });
 
-  test("End Demo revokes server authority", async ({ context, page }) => {
+  test("End demo revokes server authority", async ({ context, page }) => {
     if (!baseUrl) {
       throw new Error("SEVEN_BASE_URL is required for authenticated smoke.");
     }
     await page.goto("/");
-    await expect(page.locator("header").getByText(/Demo seal/)).toBeVisible();
+    await expect(page.locator("header").getByText(/Demo/)).toBeVisible();
 
     const logoutResponse = page.waitForResponse((response) =>
       response.url().endsWith("/api/v1/demo/logout"),
     );
-    await page.getByRole("button", { name: "End Demo", exact: true }).click();
+    await page.getByRole("button", { name: "End demo", exact: true }).click();
     await expect(page.getByText(/returns to the locked state/)).toBeVisible();
-    await page.getByRole("button", { name: "End demo seal" }).click();
+    await page.getByRole("button", { name: "End demo session" }).click();
     await expectSuccessfulLogout(await logoutResponse);
 
-    await expect(page.getByText("Workbench locked", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "End Demo", exact: true })).toBeHidden();
+    await expect(page.getByText("Ask once. Get one answer you can inspect.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "End demo", exact: true })).toBeHidden();
     const cookies = await context.cookies(baseUrl);
     expect(cookies.some((cookie) => cookie.name === demoCookieName)).toBe(false);
 

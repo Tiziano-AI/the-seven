@@ -410,27 +410,4 @@
     color: var(--parchment);
     font-weight: 700;
   }
-
-  .manuscript-action-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.6rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--ink-2);
-  }
-
-  @media (max-width: 720px) {
-    .manuscript-action-bar {
-      display: grid;
-      grid-template-columns: 1fr;
-    }
-
-    .manuscript-action-bar .btn {
-      min-height: 2.75rem;
-      width: 100%;
-    }
-  }
 }

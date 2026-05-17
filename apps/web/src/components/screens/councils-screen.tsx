@@ -1,9 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/app/auth-provider";
-import { DemoEndConfirmation } from "@/components/app/demo-end-confirmation";
 import {
   type EditableCouncilMember,
   ModelSlotEditor,
@@ -23,6 +23,7 @@ import {
   updateCouncil,
 } from "@/lib/api";
 import { FOUNDING_COUNCIL_CHOICE, writeLastCouncilRef } from "@/lib/storage";
+import { CouncilDemoNotice, CouncilLockedNotice } from "./councils-screen-notices";
 
 function encodeRef(ref: { kind: "built_in"; slug: string } | { kind: "user"; councilId: number }) {
   return ref.kind === "built_in" ? `built_in:${ref.slug}` : `user:${ref.councilId}`;
@@ -209,75 +210,41 @@ export function CouncilsScreen() {
   }
 
   if (!auth.isAuthenticated) {
-    return (
-      <div>
-        <h1 className="sr-only">Council Library</h1>
-        <Card className="p-6">
-          <p className="text-sm text-[var(--text-muted)]">
-            Unlock BYOK to manage the council library.
-          </p>
-        </Card>
-      </div>
-    );
+    return <CouncilLockedNotice message="Use your OpenRouter key to manage councils." />;
   }
 
   if (auth.mode === "demo") {
     return (
-      <div>
-        <h1 className="sr-only">Council Library</h1>
-        <Card className="p-6 space-y-4">
-          <p className="text-sm text-[var(--text-muted)]">
-            Demo mode is locked to the Commons Council. Council authoring is available only in BYOK
-            mode.
-          </p>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setDemoByokError(null);
-              setDemoByokConfirmOpen(true);
-            }}
-          >
-            End demo and unlock BYOK
-          </Button>
-          {demoByokConfirmOpen ? (
-            <DemoEndConfirmation
-              title="End demo seal and unlock BYOK?"
-              body="The server ends the demo seal before the browser cookie is cleared. Bring Your Own Key opens after the demo seal closes."
-              confirmLabel="End demo and unlock BYOK"
-              pendingLabel="Ending demo…"
-              pending={demoByokEnding}
-              error={demoByokError}
-              onCancel={() => {
-                setDemoByokError(null);
-                setDemoByokConfirmOpen(false);
-              }}
-              onConfirm={handleEndDemoAndOpenByok}
-            />
-          ) : null}
-        </Card>
-      </div>
+      <CouncilDemoNotice
+        demoByokConfirmOpen={demoByokConfirmOpen}
+        demoByokEnding={demoByokEnding}
+        demoByokError={demoByokError}
+        onCancelDemoEnd={() => {
+          setDemoByokError(null);
+          setDemoByokConfirmOpen(false);
+        }}
+        onConfirmDemoEnd={handleEndDemoAndOpenByok}
+        onOpenDemoEnd={() => {
+          setDemoByokError(null);
+          setDemoByokConfirmOpen(true);
+        }}
+      />
     );
   }
 
   const authHeader = auth.authHeader;
   if (!authHeader) {
-    return (
-      <div>
-        <h1 className="sr-only">Council Library</h1>
-        <Card className="p-6">
-          <p className="text-sm text-[var(--text-muted)]">
-            BYOK authentication is required before council data can load.
-          </p>
-        </Card>
-      </div>
-    );
+    return <CouncilLockedNotice message="Use your OpenRouter key before council data can load." />;
   }
 
   return (
     <div className="council-screen-grid grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
       <Card className="council-library-panel p-6">
-        <Badge className="seal">Council Library</Badge>
-        <h1 className="surface-title mt-4">Council Library</h1>
+        <Badge className="seal">Council settings</Badge>
+        <h1 className="surface-title mt-4">Manage councils</h1>
+        <Link className="text-link mt-3 inline-flex" href="/">
+          Back to Ask
+        </Link>
         <div className="mt-5 space-y-3">
           {councils.map((council) => {
             const ref = encodeRef(council.ref);
@@ -309,7 +276,7 @@ export function CouncilsScreen() {
             void handleDuplicate();
           }}
         >
-          <Label htmlFor={`${fieldPrefix}-duplicate-name`}>Duplicate Selected Council</Label>
+          <Label htmlFor={`${fieldPrefix}-duplicate-name`}>Duplicate selected council</Label>
           <Input
             id={`${fieldPrefix}-duplicate-name`}
             value={duplicateName}
@@ -346,6 +313,16 @@ export function CouncilsScreen() {
               ) : null}
             </div>
           </div>
+          {editable ? (
+            <div className="mt-5 max-w-xl space-y-2">
+              <Label htmlFor={`${fieldPrefix}-name`}>Council name</Label>
+              <Input
+                id={`${fieldPrefix}-name`}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </div>
+          ) : null}
           {deletePending ? (
             <div className="panel confirm-panel mt-5">
               <div>
@@ -371,7 +348,7 @@ export function CouncilsScreen() {
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="surface-title">The seven seats</h2>
             <p className="text-xs italic text-[var(--text-dim)]">
-              Six reviewers draft and critique; a seventh synthesizes the verdict.
+              Six reviewers draft and critique; a seventh writes the final answer.
             </p>
           </div>
           {hasInvalidSeats ? (
@@ -413,23 +390,14 @@ export function CouncilsScreen() {
           </div>
         </Card>
 
-        <Card className="p-6">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="surface-title">Phase contracts</h2>
-            <p className="text-xs italic text-[var(--text-dim)]">
-              Shared instructions and output protocols for the selected council.
-            </p>
-          </div>
+        <details className="card p-6">
+          <summary className="disclosure-summary">
+            <span className="surface-title">Advanced council instructions</span>
+            <span className="text-xs italic text-[var(--text-dim)]">
+              Prompts and output formats
+            </span>
+          </summary>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor={`${fieldPrefix}-name`}>Name</Label>
-              <Input
-                id={`${fieldPrefix}-name`}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                disabled={!editable}
-              />
-            </div>
             <div className="space-y-2">
               <p id={`${fieldPrefix}-phase1-output-label`} className="docket-question-label">
                 Answer protocol
@@ -470,14 +438,14 @@ export function CouncilsScreen() {
             </div>
             <div className="space-y-2">
               <p id={`${fieldPrefix}-phase3-output-label`} className="docket-question-label">
-                Verdict protocol
+                Final answer protocol
               </p>
               <pre id={`${fieldPrefix}-phase3-output`} className="protocol-block">
                 {outputFormats.phase3}
               </pre>
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor={`${fieldPrefix}-phase3-prompt`}>Verdict instructions</Label>
+              <Label htmlFor={`${fieldPrefix}-phase3-prompt`}>Final answer instructions</Label>
               <Textarea
                 id={`${fieldPrefix}-phase3-prompt`}
                 value={phasePrompts.phase3}
@@ -488,7 +456,7 @@ export function CouncilsScreen() {
               />
             </div>
           </div>
-        </Card>
+        </details>
       </div>
     </div>
   );

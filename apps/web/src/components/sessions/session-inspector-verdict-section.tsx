@@ -5,7 +5,7 @@ import { VerdictCard } from "@/components/inspector/verdict-card";
 import { MissingVerdictArtifactCard, SynthesizerCredit } from "./session-inspector-chrome";
 import { SessionRecoveryLedger } from "./session-recovery-ledger";
 
-/** Renders the verdict, missing-verdict, or failed-run recovery section. */
+/** Renders the answer, missing-answer, or failed-run recovery section. */
 export function SessionInspectorVerdictSection(props: {
   status: string;
   phase3Content: string | null;
@@ -24,7 +24,7 @@ export function SessionInspectorVerdictSection(props: {
   onOpenEvidenceTarget: (targetId: string, fallbackId?: string) => void;
   onOpenProceedings: () => void;
   onContinue: () => void;
-  onToggleRerun: () => void;
+  onRunAgain: () => void;
 }) {
   if (props.phase3Content) {
     return (
@@ -58,7 +58,7 @@ export function SessionInspectorVerdictSection(props: {
           continuing={props.continuing}
           actionPending={props.actionPending}
           onContinue={props.onContinue}
-          onToggleRerun={props.onToggleRerun}
+          onRunAgain={props.onRunAgain}
         />
       </div>
     );

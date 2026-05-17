@@ -6,8 +6,22 @@ import { Card } from "@/components/ui/card";
 
 type SessionStatus = "pending" | "processing" | "completed" | "failed";
 export type SessionAction = "continue" | "rerun" | null;
+export type InspectorMode = "answer" | "how" | "council" | "details" | "exports" | "rerun";
 
-/** Renders small, reusable manuscript state chrome for the session inspector. */
+const INSPECTOR_MODES: ReadonlyArray<{
+  value: InspectorMode;
+  label: string;
+  description: string;
+}> = [
+  { value: "answer", label: "Answer", description: "Read the result or recovery state." },
+  { value: "how", label: "How it worked", description: "Open drafts and critiques on demand." },
+  { value: "council", label: "Council", description: "See the seven seats for this run." },
+  { value: "details", label: "Run details", description: "Inspect model calls and billing state." },
+  { value: "exports", label: "Exports", description: "Copy, download, or save a private link." },
+  { value: "rerun", label: "Run again", description: "Edit the question and choose a council." },
+];
+
+/** Renders small, reusable run-state chrome for the session inspector. */
 export function SessionInspectorMessage(props: Readonly<{ children: ReactNode }>) {
   return <Card className="p-8 text-center text-sm text-[var(--text-muted)]">{props.children}</Card>;
 }
@@ -22,7 +36,7 @@ export function SessionProgressRibbon(
 ) {
   return (
     <div className="panel progress-ribbon" role="status">
-      <span>{props.status === "pending" ? "Filed for deliberation" : "Deliberating"}</span>
+      <span>{props.status === "pending" ? "Question sent" : "Council working"}</span>
       <strong>
         Reviewers entered: {props.reviewerArtifactCount} of {props.reviewerSeatCount}
       </strong>
@@ -31,7 +45,7 @@ export function SessionProgressRibbon(
   );
 }
 
-/** Renders a recoverable refresh warning for stale manuscript state. */
+/** Renders a recoverable refresh warning for stale run state. */
 export function SessionRefreshIssuePanel(
   props: Readonly<{ issue: string; onRefresh: () => void }>,
 ) {
@@ -50,13 +64,13 @@ export function MissingVerdictArtifactCard() {
   return (
     <Card className="p-6">
       <p className="text-sm text-[var(--text-muted)]">
-        Verdict artifact missing. Open Provider Record to inspect the run receipt.
+        Answer text is missing. Open Run details to inspect the run receipt.
       </p>
     </Card>
   );
 }
 
-/** Renders the verdict composer attribution line. */
+/** Renders the final-answer composer attribution line. */
 export function SynthesizerCredit(
   props: Readonly<{
     modelId: string | undefined;
@@ -85,46 +99,74 @@ export function SynthesizerCredit(
   );
 }
 
-/** Renders the cost-bearing and inspection action row for an open manuscript. */
-export function ManuscriptActionBar(
+/** Renders the stable mode rail for one loaded run. */
+export function SessionModeRail(
   props: Readonly<{
     status: SessionStatus;
-    rerunOpen: boolean;
     pendingAction: SessionAction;
     loadingDiagnostics: boolean;
     hasDiagnostics: boolean;
-    onToggleRerun: () => void;
-    onExport: () => void;
-    onLoadDiagnostics: () => void;
-    onOpenProceedings: () => void;
-    proceedingsOpen: boolean;
+    activeMode: InspectorMode;
+    onSelectMode: (mode: InspectorMode) => void;
   }>,
 ) {
   return (
     <div className="manuscript-action-bar">
-      {props.status === "completed" ? (
+      {INSPECTOR_MODES.map((mode) => {
+        const disabled =
+          mode.value === "rerun" && props.status !== "completed" && props.status !== "failed";
+        const loading = mode.value === "details" && props.loadingDiagnostics;
+        return (
+          <button
+            key={mode.value}
+            type="button"
+            className={
+              props.activeMode === mode.value
+                ? "inspector-mode inspector-mode-active"
+                : "inspector-mode"
+            }
+            aria-busy={loading || undefined}
+            aria-label={mode.label}
+            aria-pressed={props.activeMode === mode.value}
+            aria-describedby={`inspector-mode-${mode.value}-description`}
+            disabled={disabled || props.pendingAction !== null || loading}
+            onClick={() => props.onSelectMode(mode.value)}
+          >
+            <span>{mode.label}</span>
+            <span id={`inspector-mode-${mode.value}-description`} className="sr-only">
+              {mode.description}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Renders direct repeat actions beside the answer without moving the mode rail. */
+export function AnswerRepeatActions(
+  props: Readonly<{
+    status: SessionStatus;
+    pendingAction: SessionAction;
+    onAskAnother: () => void;
+    onRunAgain: () => void;
+  }>,
+) {
+  return (
+    <div className="answer-repeat-actions">
+      <Button variant="secondary" size="sm" onClick={props.onAskAnother}>
+        Ask another question
+      </Button>
+      {props.status === "completed" || props.status === "failed" ? (
         <Button
-          variant="secondary"
+          variant="outline"
           size="sm"
-          onClick={props.onToggleRerun}
+          onClick={props.onRunAgain}
           disabled={props.pendingAction !== null}
         >
-          {props.rerunOpen ? "Hide rerun docket" : "Prepare rerun"}
+          Edit and run again
         </Button>
       ) : null}
-      <Button variant="outline" size="sm" onClick={props.onExport}>
-        Export Dossier
-      </Button>
-      <Button variant="secondary" size="sm" onClick={props.onLoadDiagnostics}>
-        {props.loadingDiagnostics
-          ? "Loading…"
-          : props.hasDiagnostics
-            ? "Refresh Provider Record"
-            : "Provider Record"}
-      </Button>
-      <Button variant="outline" size="sm" onClick={props.onOpenProceedings}>
-        {props.proceedingsOpen ? "Scroll to Proceedings" : "Open Proceedings"}
-      </Button>
     </div>
   );
 }

@@ -158,7 +158,7 @@ This is the required verification pyramid for the launch-candidate milestone.
 
 Full-gate browser proof uses deterministic mocked API acceptance for UI-only
 state transitions. `pnpm local:live` projects the live authenticated smoke state
-and proves demo-cookie server authority, End Demo revocation, and stale-cookie
+and proves demo-cookie server authority, End demo revocation, and stale-cookie
 denial against the running app.
 
 - BYOK setup, unlock, and lock
@@ -167,83 +167,110 @@ denial against the running app.
   subsequent BYOK-only requests carry the restored `Authorization` header
 - demo magic-link request renders a durable receipt; live proof owns provider
   email delivery and cookie consumption
-- demo magic-link request, BYOK unlock/setup, matter filing, and rerun are
+- demo magic-link request, BYOK unlock/setup, question submission, and run again are
   form-owned submit surfaces with in-flight duplicate-submit guards
 - demo magic-link email admission uses email autofill and blocks syntactically
   invalid addresses before the request
-- visible demo seals self-expire at the server-issued expiry time and return the
+- visible demo sessions self-expire at the server-issued expiry time and return the
   workbench to the locked state
-- End Demo waits for server logout, clears the cookie, locks the UI, and proves
+- End demo waits for server logout, clears the cookie, locks the UI, and proves
   the stale cookie no longer authorizes `GET /api/v1/demo/session`
 - BYOK admission selects Founding so the demo-only Commons roster does not
   remain the accidental paid-key default
-- matter filing with attachments, including server-side decoded-text snapshot
+- question submission with attachments, including server-side decoded-text snapshot
   persistence and submit-boundary denial before enqueue for unsupported detected
   MIME
 - evidence upload renders as a product-owned exhibit picker, not native file
   chrome
 - selected exhibits can be removed one-by-one or cleared as a set before submit
-- council/rerun council, archive status, and tuning choices expose native radio
+- council/run-again council, archive status, and tuning choices expose native radio
   semantics rather than pressed-button exclusivity
-- docketed matter, verdict, and recovery record render as navigable headings
+- rendered primary labels are plain-language task labels; the medieval metaphor
+  stays in visual treatment, not required vocabulary
+- question, answer, inspection modes, and recovery record render as navigable
+  headings
 - authenticated and locked route entries expose one page-level heading
 - failed-run recovery and status surfaces map internal failure enums to
   operator-facing language
-- verdict/proceedings markdown wraps long prose, URLs, inline code, and table
+- answer and inspection markdown wraps long prose, URLs, inline code, and table
   cells while preserving scroll for code blocks and tables
-- council proceedings render seven readable seats without raw provider IDs as
-  the primary label
+- Workbench puts the question before council mechanics, keeps council/evidence
+  controls progressively disclosed, and keeps Ask another question / Edit and
+  run again near the completed answer
+- the answer-first inspector uses one stable action rail across processing,
+  completed, failed, Archive-selected, and deep-linked states; buttons do not
+  change size, shape, or position as state changes
+- inspector modes are progressive disclosure surfaces: Answer, How it worked,
+  Council, Run details, Exports, and Run again
+- How it worked starts from phase/seat summaries and expands drafts, critiques,
+  scores, strengths, weaknesses, critical errors, missing evidence,
+  final-answer input, major disagreements, and final-answer inputs on demand
+- Council renders seven readable seats without raw provider IDs as the primary
+  label
 - council editor model slots render product-owned catalog suggestions, readable
   model names as primary identity, and provider IDs only as evidence
 - council editor validates model catalog rows and hides unsupported tuning
   controls before save
-- Provider Record member cells render seat alias/role rather than bare member
+- Council settings are reached through Manage councils and are not equal-weight
+  top navigation for demo/default users
+- Run details member cells render seat alias/role rather than bare member
   position integers
-- Provider Record renders capability admission, sent/denied parameters,
+- Run details renders capability admission, sent/denied parameters,
   provider route, billing status, response ID, and error status/code
-- Provider Record begins with a run-level summary that separates accepted
+- Run details begins with a run-level summary that separates accepted
   provider outputs from failed or denied attempts and from unsettled billing
   attempts
-- Provider Record loading scrolls to the call ledger so the user sees the
+- Run details loading scrolls to the call ledger so the user sees the
   receipt that was requested
+- copy/export proof covers Copy answer, Copy answer with notes, Copy private
+  link, Download answer, Download full record, and Archive Export selected with
+  count-aware labels plus row-level Add/Remove export actions; the private-link
+  copy states that it reopens the run for the current account
+- Archive rows open/select only; recovery and run-again actions are detail-owned
+  after the preserved work and reused inputs are visible
 - Archive loads ledger-first without arbitrary auto-selection; mobile Archive
-  renders the selected manuscript before the archive list once a row is opened,
-  so focused verdict, recovery, and Provider Record proof starts at the
-  requested matter
-- Provider Record fixtures mirror runtime-real diagnostics rows: phase-1
+  renders the selected run before the archive list once a row is opened, so
+  focused answer, recovery, and Run details proof starts at the requested
+  question
+- Run details fixtures mirror runtime-real diagnostics rows: phase-1
   success sends `max_tokens,reasoning`, phase-2 structured success sends
   `max_tokens,reasoning,response_format` with pending billing settlement,
   pre-egress capability denial sends no provider parameters or upstream status,
   and upstream errors do not mix denied parameters with provider transport
   failures
 - review-signal copy is correct for no rankings, one ranking, unanimous
-  rankings, split rankings, dissent, and synthesis; verdict copy states that
+  rankings, split rankings, dissent, and synthesis; answer copy states that
   Synthesizer G resolves by evidence and correctness rather than majority rank
-- archive export proof asserts both generated dossier files, suggested
+- archive export proof asserts both generated selected-run files, suggested
   filenames, and contents
-- rerun proof covers unchanged-matter reruns, edited `queryOverride` reruns, and
-  blank edited-matter recovery before any cost-bearing request
+- Run again proof covers original-council default selection, unchanged-question
+  submissions, edited `queryOverride` submissions, explicit council changes, and
+  blank edited-question recovery before any cost-bearing request
 - active runs show pending token/cost evidence instead of final-looking zero
   usage
 - rendered desktop, tablet, and mobile proof covers locked gate, demo receipt,
-  demo composer, BYOK composer, submitted workbench, archive, processing run,
-  completed verdict, Provider Record, failed recovery, and seat-first council
-  editor
+  ask composer, BYOK composer, submitted Workbench, Archive, processing run,
+  completed answer, How it worked, Run details, failed recovery, export/copy
+  panel, run-again panel, and seat-first council settings
 - mobile proof includes focused viewport captures for demo receipt, submitted
-  workbench, processing run, completed verdict, Provider Record, and failed
-  recovery, plus full-page captures for long-surface continuity
+  Workbench, processing run, completed answer, Run details, failed recovery, and
+  export/copy panel, plus full-page captures for long-surface continuity
+- rendered proof includes at least one explicit state transition: ask submission
+  to processing, completed-answer mode switching, copy/download affordance
+  visibility, Archive row open, or run-again preparation
 - the rendered proof directory regenerates a contact sheet from the fresh proof
   set for visual review
-- verdict candidate/reviewer chips route to the canonical seat/proceedings
+- answer candidate/reviewer chips route to the canonical seat/How it worked
   evidence anchors
-- proceedings render full phase-2 critique substance, not only scores
+- How it worked renders full phase-2 critique substance, not only scores, when
+  expanded
 - council duplicate, edit, save, and delete
-- sessions search, select, and export
+- sessions search, add/remove export selection, open detail, and export selected
 - session detail deep link
 - continue failed run from the detail recovery panel
 - failed-run recovery copy distinguishes Continue with the original council
-  from Rerun with a freshly chosen council
-- rerun completed run from the detail rerun panel
+  from Run again with the selected council
+- run again from the detail Run again panel
 
 ## Local Operator
 

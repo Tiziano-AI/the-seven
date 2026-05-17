@@ -104,28 +104,50 @@ app is not.
 
 ## UI Owners
 
-- `/` owns the Petition Desk and active Run Workbench.
-- The locked Petition Desk gate presents a stored BYOK unlock first when this
+- The primary user loop is `Ask -> council works -> Answer -> Inspect -> Copy,
+  download, private link, store, edit, or run again`.
+- The medieval/scholarly identity is visual and structural. Rendered labels and
+  descriptions are plain English for normal people: `Ask`, `Answer`, `Inspect`,
+  `Copy`, `Download`, `Private link`, `Archive`, `Run again`, and `Manage councils`.
+  Route jargon such as Petition Desk, Manuscript, Dossier, Proceedings, and
+  Provider Record may identify internal code owners only; it does not own
+  primary user-facing chrome.
+- `/` owns the Workbench and the first-success loop. It contains the ask
+  composer, council choice, optional evidence, active run state, answer-first
+  inspector, copy/export/private-link controls, and repeat controls.
+- The locked Workbench gate presents a stored BYOK unlock first when this
   browser has an encrypted key; the demo magic-link request is primary only for
   browsers without a stored key.
-- `/councils` owns the Council Library/editor.
-- `/sessions` owns the Archive ledger. It loads ledger-first and opens a
-  manuscript only from row activation, deep link, or explicit restored
-  selection.
-- `/sessions/[sessionId]` owns one deep-linked Manuscript.
-- The visual contract is the scholarly council workbench: docket language,
-  proceedings, verdict article, provider record, archive rows, sigils, seals,
-  ruled folio surfaces, small radii, and readable typography.
+- `/sessions` owns the Archive ledger. Rows open or select only. Recovery and
+  run-again actions live in the selected detail after preserved work and reused
+  inputs are visible.
+- `/sessions/[sessionId]` owns one deep-linked stored run and renders the same
+  answer-first inspector used by Workbench and Archive detail.
+- `/councils` owns advanced Council settings. It is reached from `Manage
+  councils`; it is not equal-weight primary navigation for demo/default users.
+- The visual contract is the scholarly council workbench: sigils, seals, ruled
+  folio surfaces, small radii, restrained archive color, and readable
+  typography.
 - Every UI route owns a page-level heading. Workbench cards may lead visually,
   but screen-reader navigation still starts from the route owner.
-- Petition, demo request, BYOK unlock, and rerun submissions are form-owned.
-  Blank rerun matter is handled before request submission instead of relying on
-  raw schema-error recovery.
-  Exclusive council/filter/tuning choices use radio semantics. Evidence is a
-  product-owned exhibit picker with keyboard selection, drag/drop, selected
-  exhibit ledger, per-exhibit removal, and clear-all recovery.
+- Ask, demo request, BYOK unlock, Continue, and Run again submissions are
+  form-owned. A blank run-again question is handled before request submission
+  instead of relying on raw schema-error recovery. Exclusive council/filter/tuning choices
+  use radio semantics. Evidence is a product-owned exhibit picker with keyboard
+  selection, drag/drop, selected exhibit ledger, per-exhibit removal, and
+  clear-all recovery.
+- The answer-first inspector owns one stable action rail and one progressive
+  disclosure model across Workbench, Archive, and deep links. Canonical modes are
+  `Answer`, `How it worked`, `Council`, `Run details`, `Exports`, and `Run
+  again`; only one deep inspection panel is open by default on mobile.
+- Copy/export actions are first-class: `Copy answer`, `Copy answer with notes`,
+  `Copy private link`, `Download answer`, `Download full record`, and Archive
+  `Add to export`/`Remove from export` row controls feeding `Export selected`
+  with a count. Loading and disabled states preserve control dimensions and name
+  the pending action. The private link reopens the run for the current account;
+  downloads are the shareable artifacts for other people.
 - The medieval/display face is not a UI chrome font. It is reserved for the
-  wordmark, seat letters, selected title plates, and verdict drop-caps.
+  wordmark, seat letters, selected title plates, and answer drop-caps.
 - Typography is locally bundled through `next/font/local`; rendered proof and
   production builds do not depend on Google Fonts network fetches.
 - Council model selection is a workbench combobox ledger. Human model names are
@@ -134,15 +156,16 @@ app is not.
 - Council tuning is capability-driven. The editor validates each selected model
   against the catalog, prunes unsupported saved tuning, and renders only controls
   backed by supported provider parameters.
-- Demo seals are server-issued cookie authority and client-visible UI state.
+- Demo sessions are server-issued cookie authority and client-visible UI state.
   They self-expire at the server timestamp and are rechecked when the tab is
-  shown; expired seals return the workbench to the locked state.
+  shown; expired sessions return the workbench to the locked state.
 - BYOK admission selects Founding before the paid-key session starts so Commons
   does not remain the accidental default for a paid-key run.
-- Provider Record, Continue, and Rerun controls own visible state transitions:
-  Provider Record scrolls to the loaded call ledger; Continue states that it
-  uses the original council; Prepare Rerun opens a docket, and the final Run
-  Again submit states that it uses a freshly chosen council.
+- Run-details, Continue, and Run again controls own visible state transitions:
+  Run details opens the provider call ledger; Continue states that it uses the
+  original council; Edit and run again opens the Run again panel with the
+  original council selected by stored identity when available, and the final Run
+  again submit states that it uses the selected council.
 
 ## Gate Boundary
 

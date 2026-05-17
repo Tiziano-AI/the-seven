@@ -8,11 +8,11 @@ export function SessionStatusBadge(props: {
 }) {
   const label =
     props.status === "pending"
-      ? "Filed"
+      ? "Queued"
       : props.status === "processing"
-        ? "Deliberating"
+        ? "Council working"
         : props.status === "completed"
-          ? "Verdict entered"
+          ? "Answer ready"
           : props.failureKind
             ? `Needs recovery · ${formatFailureKind(props.failureKind)}`
             : "Needs recovery";

@@ -77,8 +77,11 @@ def _expected_render_proof_files() -> list[str]:
         "submitted-workbench",
         "archive",
         "processing-run",
-        "completed-verdict",
-        "provider-record",
+        "completed-answer",
+        "how-it-worked",
+        "run-details",
+        "exports",
+        "run-again",
         "failed-recovery",
         "council-editor",
     ]
@@ -93,8 +96,11 @@ def _expected_render_proof_files() -> list[str]:
             "demo-receipt",
             "submitted-workbench",
             "processing-run",
-            "completed-verdict",
-            "provider-record",
+            "completed-answer",
+            "how-it-worked",
+            "run-details",
+            "exports",
+            "run-again",
             "failed-recovery",
         )
     )

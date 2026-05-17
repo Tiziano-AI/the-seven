@@ -72,7 +72,7 @@ async function requireOwnedSession(userId: number, sessionId: number) {
   if (!session || session.userId !== userId) {
     throw new EdgeError({
       kind: "not_found",
-      message: "Manuscript not found",
+      message: "Run not found",
       details: notFoundDetails("session"),
       status: 404,
     });
@@ -231,18 +231,18 @@ export async function getSessionDiagnostics(userId: number, sessionId: number) {
 
 function buildMarkdownExport(detail: Awaited<ReturnType<typeof getSessionDetail>>) {
   const lines: string[] = [
-    `# Manuscript ${detail.session.id}`,
+    `# Run ${detail.session.id}`,
     ``,
     `- Status: ${detail.session.status}`,
     `- Council: ${detail.session.councilNameAtRun}`,
     `- Created: ${detail.session.createdAt}`,
     `- Question Hash: ${detail.session.questionHash}`,
     ``,
-    `## Query`,
+    `## Question`,
     ``,
     detail.session.snapshot.query,
     ``,
-    `## Artifacts`,
+    `## Saved work`,
     ``,
   ];
 

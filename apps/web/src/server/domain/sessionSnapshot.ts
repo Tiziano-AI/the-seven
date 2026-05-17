@@ -3,6 +3,7 @@ import "server-only";
 import type {
   AttachmentText,
   CouncilMemberAssignment,
+  CouncilRef,
   OutputFormats,
   PhasePrompts,
   SessionSnapshot,
@@ -41,6 +42,7 @@ export function buildSessionSnapshot(input: {
   outputFormats: OutputFormats;
   council: Readonly<{
     nameAtRun: string;
+    refAtRun: CouncilRef;
     phasePrompts: PhasePrompts;
     members: ReadonlyArray<CouncilMemberAssignment>;
   }>;
@@ -56,6 +58,7 @@ export function buildSessionSnapshot(input: {
     outputFormats: input.outputFormats,
     council: {
       nameAtRun: input.council.nameAtRun,
+      refAtRun: input.council.refAtRun,
       phasePrompts: input.council.phasePrompts,
       members: [...members],
     },

@@ -5,19 +5,22 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   continueSession,
-  exportSessions,
   fetchCouncils,
   fetchSession,
   fetchSessionDiagnostics,
   rerunSession,
 } from "@/lib/api";
-import type { SessionAction } from "./session-inspector-chrome";
-import { downloadText, manuscriptLoadIssue } from "./session-inspector-formatters";
+import type { SessionExportAction } from "./session-export-panel";
+import type { InspectorMode, SessionAction } from "./session-inspector-chrome";
+import { createSessionExportHandlers } from "./session-inspector-export-actions";
+import { runLoadIssue } from "./session-inspector-formatters";
 import { SessionInspectorLoaded } from "./session-inspector-loaded";
 import { scrollEvidenceTarget, scrollMemberEvidence } from "./session-inspector-scroll";
 import { SessionInspectorStateMessage } from "./session-inspector-states";
+import { selectOriginalCouncilRef } from "./session-rerun-default";
 
 type SessionDiagnostics = Awaited<ReturnType<typeof fetchSessionDiagnostics>>;
+type AvailableCouncils = Awaited<ReturnType<typeof fetchCouncils>>["councils"];
 type SessionDiagnosticsRecord = Readonly<{
   sessionId: number;
   diagnostics: SessionDiagnostics;
@@ -36,24 +39,22 @@ export function SessionInspector(props: {
   const [diagnosticsRecord, setDiagnosticsRecord] = useState<SessionDiagnosticsRecord | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
-  const [proceedingsOpen, setProceedingsOpen] = useState(false);
+  const [activeMode, setActiveMode] = useState<InspectorMode>("answer");
   const [rerunQuery, setRerunQuery] = useState("");
   const [rerunCouncil, setRerunCouncil] = useState("");
-  const [rerunOpen, setRerunOpen] = useState(false);
   const [refreshIssue, setRefreshIssue] = useState<string | null>(null);
   const [initialLoadIssue, setInitialLoadIssue] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
   const [pendingAction, setPendingAction] = useState<SessionAction>(null);
+  const [exportAction, setExportAction] = useState<SessionExportAction>(null);
   const [rerunActionMessage, setRerunActionMessage] = useState<string | null>(null);
   const [councilLoadIssue, setCouncilLoadIssue] = useState<string | null>(null);
   const [councilLoadPending, setCouncilLoadPending] = useState(false);
   const fieldPrefix = useId();
-  const proceedingsRef = useRef<HTMLDivElement | null>(null);
+  const proceedingsRef = useRef<HTMLElement | null>(null);
   const recoveryRef = useRef<HTMLDivElement | null>(null);
   const rerunRef = useRef<HTMLDivElement | null>(null);
-  const [availableCouncils, setAvailableCouncils] = useState<
-    Awaited<ReturnType<typeof fetchCouncils>>["councils"]
-  >([]);
+  const [availableCouncils, setAvailableCouncils] = useState<AvailableCouncils>([]);
 
   const loadAvailableCouncils = useCallback(async () => {
     if (!props.authenticated) {
@@ -73,7 +74,7 @@ export function SessionInspector(props: {
         setDiagnosticsRecord(null);
         return [];
       }
-      const message = error instanceof Error ? error.message : "Council Library could not load.";
+      const message = error instanceof Error ? error.message : "Council settings could not load.";
       setCouncilLoadIssue(message);
       return [];
     } finally {
@@ -89,6 +90,7 @@ export function SessionInspector(props: {
       setRefreshIssue(null);
       setInitialLoadIssue(null);
       setPendingAction(null);
+      setExportAction(null);
       setLoading(true);
       try {
         const nextDetail = await fetchSession(props.authHeader, sessionId);
@@ -97,6 +99,7 @@ export function SessionInspector(props: {
           setRerunQuery(nextDetail.session.snapshot.query);
           setRerunCouncil("");
           setRerunActionMessage(null);
+          setActiveMode("answer");
           setLastRefreshedAt(Date.now());
           setRefreshIssue(null);
           setInitialLoadIssue(null);
@@ -108,7 +111,7 @@ export function SessionInspector(props: {
           if (props.onAuthorityDenial?.(error)) {
             return;
           }
-          setInitialLoadIssue(manuscriptLoadIssue(error));
+          setInitialLoadIssue(runLoadIssue(error));
         }
       } finally {
         if (!isCancelled()) setLoading(false);
@@ -155,9 +158,7 @@ export function SessionInspector(props: {
             setDiagnosticsRecord(null);
             return;
           }
-          setRefreshIssue(
-            "Latest status could not be refreshed. The displayed proceedings may be stale.",
-          );
+          setRefreshIssue("Latest status could not be refreshed. The displayed run may be stale.");
         });
     }, 1500);
     return () => clearInterval(interval);
@@ -172,7 +173,7 @@ export function SessionInspector(props: {
   useEffect(() => {
     if (!detail || !props.initialAction) return;
     if (props.initialAction === "rerun") {
-      setRerunOpen(true);
+      setActiveMode("rerun");
     }
     requestAnimationFrame(() => {
       const target = props.initialAction === "rerun" ? rerunRef.current : recoveryRef.current;
@@ -184,6 +185,17 @@ export function SessionInspector(props: {
     if (!props.authenticated) return;
     void loadAvailableCouncils();
   }, [loadAvailableCouncils, props.authenticated]);
+
+  useEffect(() => {
+    if (!detail || rerunCouncil || availableCouncils.length === 0) return;
+    setRerunCouncil(
+      selectOriginalCouncilRef({
+        availableCouncils,
+        councilNameAtRun: detail.session.councilNameAtRun,
+        refAtRun: detail.session.snapshot.council.refAtRun,
+      }),
+    );
+  }, [availableCouncils, detail, rerunCouncil]);
 
   async function handleContinue() {
     if (!props.authenticated || !detail || pendingAction) return;
@@ -214,7 +226,7 @@ export function SessionInspector(props: {
       setAvailableCouncils(councils);
       if (councils.length === 0) {
         setRerunActionMessage(
-          councilLoadIssue ?? "Council Library could not load. Retry before starting the rerun.",
+          councilLoadIssue ?? "Council settings could not load. Retry before running again.",
         );
         return;
       }
@@ -239,7 +251,7 @@ export function SessionInspector(props: {
           : trimmedRerunQuery;
       if (trimmedRerunQuery.length === 0) {
         setRerunQuery(detail.session.snapshot.query);
-        setRerunActionMessage("Blank rerun matter reuses the original docket matter.");
+        setRerunActionMessage("A blank question reuses the original question.");
       }
       const result = await rerunSession({
         authHeader: props.authHeader,
@@ -248,7 +260,7 @@ export function SessionInspector(props: {
         queryOverride,
       });
       toast.success("New run created");
-      setRerunActionMessage("New run created. Opening the new manuscript.");
+      setRerunActionMessage("New run created. Opening it now.");
       props.onSpawnedSession?.(result.sessionId);
     } catch (error) {
       if (props.onAuthorityDenial?.(error)) {
@@ -256,7 +268,7 @@ export function SessionInspector(props: {
         setDiagnosticsRecord(null);
         return;
       }
-      setRerunActionMessage(error instanceof Error ? error.message : "Rerun failed");
+      setRerunActionMessage(error instanceof Error ? error.message : "Run again failed");
     } finally {
       setPendingAction(null);
     }
@@ -289,38 +301,21 @@ export function SessionInspector(props: {
       return;
     }
     requestAnimationFrame(() => {
-      const panel = window.document.getElementById("provider-record-panel");
+      const panel = window.document.getElementById("run-details-panel");
       panel?.scrollIntoView({ behavior: "auto", block: "start", inline: "nearest" });
       panel?.focus({ preventScroll: true });
     });
   }, [detail?.session.id, diagnosticsRecord]);
 
-  async function handleExport() {
-    if (!props.authenticated || !detail) return;
-    try {
-      const exported = await exportSessions(props.authHeader, [detail.session.id]);
-      downloadText(`manuscript-${detail.session.id}.md`, exported.markdown, "text/markdown");
-      downloadText(`manuscript-${detail.session.id}.json`, exported.json, "application/json");
-      toast.success("Manuscript exported");
-    } catch (error) {
-      if (props.onAuthorityDenial?.(error)) {
-        setDetail(null);
-        setDiagnosticsRecord(null);
-        return;
-      }
-      toast.error(error instanceof Error ? error.message : "Export failed");
-    }
-  }
-
-  function openProceedings() {
-    setProceedingsOpen(true);
+  function openHowItWorked() {
+    setActiveMode("how");
     requestAnimationFrame(() => {
       proceedingsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
   function openEvidenceTarget(targetId: string, fallbackId?: string) {
-    scrollEvidenceTarget({ targetId, fallbackId, openProceedings: () => setProceedingsOpen(true) });
+    scrollEvidenceTarget({ targetId, fallbackId, openProceedings: () => setActiveMode("how") });
   }
 
   async function refreshActiveSession() {
@@ -343,7 +338,43 @@ export function SessionInspector(props: {
   }
 
   function scrollToMemberEvidence(position: MemberPosition) {
-    scrollMemberEvidence({ position, openProceedings: () => setProceedingsOpen(true) });
+    if (position === 7) {
+      setActiveMode("answer");
+      requestAnimationFrame(() => {
+        window.document
+          .getElementById("verdict-G")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      return;
+    }
+    scrollMemberEvidence({ position, openProceedings: () => setActiveMode("how") });
+  }
+
+  function selectInspectorMode(mode: InspectorMode) {
+    setActiveMode(mode);
+    if (mode === "details") {
+      void handleLoadDiagnostics();
+    }
+    if (mode === "how") {
+      requestAnimationFrame(() => {
+        proceedingsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+    if (mode === "rerun") {
+      requestAnimationFrame(() => {
+        rerunRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }
+
+  function focusAskComposer() {
+    const field = window.document.getElementById("matter-question");
+    if (field instanceof HTMLElement) {
+      field.scrollIntoView({ behavior: "smooth", block: "center" });
+      field.focus();
+      return;
+    }
+    window.location.assign("/");
   }
 
   function renderStateMessage(input: {
@@ -388,15 +419,34 @@ export function SessionInspector(props: {
 
   const diagnostics =
     diagnosticsRecord?.sessionId === detail.session.id ? diagnosticsRecord.diagnostics : null;
+  const {
+    handleCopyAnswer,
+    handleCopyAnswerWithNotes,
+    handleCopyLink,
+    handleDownloadAnswer,
+    handleDownloadFullRecord,
+  } = createSessionExportHandlers({
+    authenticated: props.authenticated,
+    authHeader: props.authHeader,
+    detail,
+    exportAction,
+    onAuthorityDenial: props.onAuthorityDenial,
+    onAuthorityDenied: () => {
+      setDetail(null);
+      setDiagnosticsRecord(null);
+    },
+    setExportAction,
+  });
+
   return (
     <SessionInspectorLoaded
       detail={detail}
       diagnostics={diagnostics}
       lastRefreshedAt={lastRefreshedAt}
       pendingAction={pendingAction}
+      exportAction={exportAction}
       loadingDiagnostics={loadingDiagnostics}
-      proceedingsOpen={proceedingsOpen}
-      rerunOpen={rerunOpen}
+      activeMode={activeMode}
       rerunQuery={rerunQuery}
       rerunCouncil={rerunCouncil}
       fieldPrefix={fieldPrefix}
@@ -411,10 +461,15 @@ export function SessionInspector(props: {
       onRefreshActiveSession={refreshActiveSession}
       onScrollToMemberEvidence={scrollToMemberEvidence}
       onOpenEvidenceTarget={openEvidenceTarget}
-      onOpenProceedings={openProceedings}
+      onOpenProceedings={openHowItWorked}
       onContinue={handleContinue}
-      onToggleRerun={() => setRerunOpen((value) => !value)}
-      onExport={handleExport}
+      onSelectMode={selectInspectorMode}
+      onAskAnother={focusAskComposer}
+      onCopyAnswer={handleCopyAnswer}
+      onCopyAnswerWithNotes={handleCopyAnswerWithNotes}
+      onCopyLink={handleCopyLink}
+      onDownloadAnswer={handleDownloadAnswer}
+      onDownloadFullRecord={handleDownloadFullRecord}
       onLoadDiagnostics={handleLoadDiagnostics}
       onRerunQueryChange={setRerunQuery}
       onRerunCouncilChange={setRerunCouncil}

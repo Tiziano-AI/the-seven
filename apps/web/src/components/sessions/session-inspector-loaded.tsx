@@ -3,14 +3,19 @@
 import type { MemberPosition } from "@the-seven/contracts";
 import type { RefObject } from "react";
 import { CouncilTrack } from "@/components/inspector/council-track";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import type { fetchCouncils, fetchSession, fetchSessionDiagnostics } from "@/lib/api";
 import { readableModelLabel } from "@/lib/model-labels";
 import { SessionDiagnosticsTable } from "./session-diagnostics-table";
 import { SessionDocket } from "./session-docket";
+import { type SessionExportAction, SessionExportPanel } from "./session-export-panel";
 import { buildInspectorArtifacts } from "./session-inspector-artifacts";
 import {
-  ManuscriptActionBar,
+  AnswerRepeatActions,
+  type InspectorMode,
   type SessionAction,
+  SessionModeRail,
   SessionProgressRibbon,
   SessionRefreshIssuePanel,
 } from "./session-inspector-chrome";
@@ -29,15 +34,15 @@ type SessionDetail = Awaited<ReturnType<typeof fetchSession>>;
 type SessionDiagnostics = Awaited<ReturnType<typeof fetchSessionDiagnostics>>;
 type AvailableCouncils = Awaited<ReturnType<typeof fetchCouncils>>["councils"];
 
-/** Renders the loaded manuscript surface after session data has passed admission. */
+/** Renders the loaded run surface after session data has passed admission. */
 export function SessionInspectorLoaded(props: {
   detail: SessionDetail;
   diagnostics: SessionDiagnostics | null;
   lastRefreshedAt: number | null;
   pendingAction: SessionAction;
+  exportAction: SessionExportAction;
   loadingDiagnostics: boolean;
-  proceedingsOpen: boolean;
-  rerunOpen: boolean;
+  activeMode: InspectorMode;
   rerunQuery: string;
   rerunCouncil: string;
   fieldPrefix: string;
@@ -48,14 +53,19 @@ export function SessionInspectorLoaded(props: {
   refreshIssue: string | null;
   recoveryRef: RefObject<HTMLDivElement | null>;
   rerunRef: RefObject<HTMLDivElement | null>;
-  proceedingsRef: RefObject<HTMLDivElement | null>;
+  proceedingsRef: RefObject<HTMLElement | null>;
   onRefreshActiveSession: () => void;
   onScrollToMemberEvidence: (position: MemberPosition) => void;
   onOpenEvidenceTarget: (targetId: string, fallbackId?: string) => void;
   onOpenProceedings: () => void;
   onContinue: () => void;
-  onToggleRerun: () => void;
-  onExport: () => void;
+  onSelectMode: (mode: InspectorMode) => void;
+  onAskAnother: () => void;
+  onCopyAnswer: () => void;
+  onCopyAnswerWithNotes: () => void;
+  onCopyLink: () => void;
+  onDownloadAnswer: () => void;
+  onDownloadFullRecord: () => void;
   onLoadDiagnostics: () => void;
   onRerunQueryChange: (value: string) => void;
   onRerunCouncilChange: (value: string) => void;
@@ -75,6 +85,8 @@ export function SessionInspectorLoaded(props: {
     (member) => member.memberPosition >= 1 && member.memberPosition <= 6,
   ).length;
   const inspectorArtifacts = buildInspectorArtifacts(detail.artifacts);
+  const hasAnswer = Boolean(phase3Artifact?.content?.trim());
+  const runAgainVisible = props.activeMode === "rerun";
 
   return (
     <div className="space-y-6">
@@ -103,13 +115,6 @@ export function SessionInspectorLoaded(props: {
         />
       ) : null}
 
-      <CouncilTrack
-        members={detail.session.snapshot.council.members}
-        artifacts={inspectorArtifacts}
-        status={detail.session.status}
-        onCellSelect={props.onScrollToMemberEvidence}
-      />
-
       {props.refreshIssue ? (
         <SessionRefreshIssuePanel
           issue={props.refreshIssue}
@@ -117,41 +122,104 @@ export function SessionInspectorLoaded(props: {
         />
       ) : null}
 
-      <SessionInspectorVerdictSection
+      <SessionModeRail
         status={detail.session.status}
-        phase3Content={phase3Artifact?.content ?? null}
-        synthesizerModelId={synthesizerModelId}
-        synthesizerLabel={synthesizerLabel}
-        latencyLabel={latencyLabel}
-        artifactCount={detail.artifacts.length}
-        reviewCount={detail.artifacts.filter((artifact) => artifact.phase === 2).length}
-        failureKind={detail.session.failureKind}
-        terminalError={detail.terminalError ?? null}
-        councilName={detail.session.councilNameAtRun}
-        rerunOpen={props.rerunOpen}
-        continuing={props.pendingAction === "continue"}
-        actionPending={props.pendingAction !== null}
-        recoveryRef={props.recoveryRef}
-        onOpenEvidenceTarget={props.onOpenEvidenceTarget}
-        onOpenProceedings={props.onOpenProceedings}
-        onContinue={props.onContinue}
-        onToggleRerun={props.onToggleRerun}
-      />
-
-      <ManuscriptActionBar
-        status={detail.session.status}
-        rerunOpen={props.rerunOpen}
         pendingAction={props.pendingAction}
         loadingDiagnostics={props.loadingDiagnostics}
         hasDiagnostics={Boolean(props.diagnostics)}
-        proceedingsOpen={props.proceedingsOpen}
-        onToggleRerun={props.onToggleRerun}
-        onExport={props.onExport}
-        onLoadDiagnostics={props.onLoadDiagnostics}
-        onOpenProceedings={props.onOpenProceedings}
+        activeMode={props.activeMode}
+        onSelectMode={props.onSelectMode}
       />
 
-      {props.rerunOpen ? (
+      {props.activeMode === "answer" ? (
+        <section id="answer-panel" className="inspector-panel-stack" aria-label="Answer">
+          <SessionInspectorVerdictSection
+            status={detail.session.status}
+            phase3Content={phase3Artifact?.content ?? null}
+            synthesizerModelId={synthesizerModelId}
+            synthesizerLabel={synthesizerLabel}
+            latencyLabel={latencyLabel}
+            artifactCount={detail.artifacts.length}
+            reviewCount={reviewerArtifactCount}
+            failureKind={detail.session.failureKind}
+            terminalError={detail.terminalError ?? null}
+            councilName={detail.session.councilNameAtRun}
+            rerunOpen={runAgainVisible}
+            continuing={props.pendingAction === "continue"}
+            actionPending={props.pendingAction !== null}
+            recoveryRef={props.recoveryRef}
+            onOpenEvidenceTarget={props.onOpenEvidenceTarget}
+            onOpenProceedings={props.onOpenProceedings}
+            onContinue={props.onContinue}
+            onRunAgain={() => props.onSelectMode("rerun")}
+          />
+          {detail.session.status === "failed" ? null : (
+            <AnswerRepeatActions
+              status={detail.session.status}
+              pendingAction={props.pendingAction}
+              onAskAnother={props.onAskAnother}
+              onRunAgain={() => props.onSelectMode("rerun")}
+            />
+          )}
+        </section>
+      ) : null}
+
+      {props.activeMode === "how" ? (
+        <SessionProceedings
+          artifacts={detail.artifacts}
+          proceedingsRef={props.proceedingsRef}
+          formatCost={formatCost}
+        />
+      ) : null}
+
+      {props.activeMode === "council" ? (
+        <CouncilTrack
+          members={detail.session.snapshot.council.members}
+          artifacts={inspectorArtifacts}
+          status={detail.session.status}
+          onCellSelect={props.onScrollToMemberEvidence}
+        />
+      ) : null}
+
+      {props.activeMode === "details" ? (
+        props.diagnostics ? (
+          <SessionDiagnosticsTable
+            providerCalls={props.diagnostics.providerCalls}
+            formatCost={formatCost}
+          />
+        ) : (
+          <Card id="run-details-panel" className="p-6" tabIndex={-1}>
+            <h2 className="surface-title">Run details</h2>
+            <p className="m-0 mt-2 text-sm text-[var(--text-muted)]">
+              Model calls and billing details load only when you ask for them.
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="mt-4"
+              disabled={props.loadingDiagnostics}
+              onClick={props.onLoadDiagnostics}
+            >
+              {props.loadingDiagnostics ? "Loading details…" : "Load run details"}
+            </Button>
+          </Card>
+        )
+      ) : null}
+
+      {props.activeMode === "exports" ? (
+        <SessionExportPanel
+          hasAnswer={hasAnswer}
+          busyAction={props.exportAction}
+          onCopyAnswer={props.onCopyAnswer}
+          onCopyAnswerWithNotes={props.onCopyAnswerWithNotes}
+          onCopyLink={props.onCopyLink}
+          onDownloadAnswer={props.onDownloadAnswer}
+          onDownloadFullRecord={props.onDownloadFullRecord}
+        />
+      ) : null}
+
+      {props.activeMode === "rerun" ? (
         <div ref={props.rerunRef} id="rerun-docket">
           <SessionRerunPanel
             fieldPrefix={props.fieldPrefix}
@@ -164,28 +232,12 @@ export function SessionInspectorLoaded(props: {
             rerunning={props.pendingAction === "rerun"}
             actionPending={props.pendingAction !== null}
             actionMessage={props.rerunActionMessage}
-            originalCouncilName={detail.session.councilNameAtRun}
             onQueryChange={props.onRerunQueryChange}
             onCouncilChange={props.onRerunCouncilChange}
             onRetryCouncils={props.onRetryCouncils}
             onRerun={props.onRerun}
           />
         </div>
-      ) : null}
-
-      {props.proceedingsOpen ? (
-        <SessionProceedings
-          artifacts={detail.artifacts}
-          proceedingsRef={props.proceedingsRef}
-          formatCost={formatCost}
-        />
-      ) : null}
-
-      {props.diagnostics ? (
-        <SessionDiagnosticsTable
-          providerCalls={props.diagnostics.providerCalls}
-          formatCost={formatCost}
-        />
       ) : null}
     </div>
   );

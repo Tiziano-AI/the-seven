@@ -85,7 +85,9 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
   const resetTimeout = useCallback(() => {
     clearByokTimers();
     warningTimeoutRef.current = setTimeout(() => {
-      toast.message("BYOK key locks in two minutes unless workbench activity continues.");
+      toast.message(
+        "Your OpenRouter key locks in two minutes unless workbench activity continues.",
+      );
     }, INACTIVITY_TIMEOUT_MS - INACTIVITY_WARNING_MS);
     timeoutRef.current = setTimeout(() => {
       clearByokKey();
@@ -126,7 +128,7 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
 
   const resetExpiredDemoSession = useCallback(() => {
     clearLocalDemoSession();
-    toast.message("Demo seal expired. Request a fresh magic link or unlock BYOK.");
+    toast.message("Demo session expired. Request a fresh magic link or use your OpenRouter key.");
   }, [clearLocalDemoSession]);
 
   const resetEncryptedKey = useCallback(() => {
@@ -152,12 +154,12 @@ export function AuthProvider(props: Readonly<{ children: React.ReactNode }>) {
       }
       if (byokKey) {
         clearByokKey();
-        toast.error("OpenRouter authority was lost. The workbench is locked.");
+        toast.error("OpenRouter access was lost. The workbench is locked.");
         return true;
       }
       if (demoSession) {
         clearLocalDemoSession();
-        toast.error("Demo authority was lost. The workbench is locked.");
+        toast.error("Demo access was lost. The workbench is locked.");
         return true;
       }
       return false;

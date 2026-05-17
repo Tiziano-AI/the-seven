@@ -10,8 +10,7 @@ import { useAuth } from "./auth-provider";
 import { DemoEndConfirmation } from "./demo-end-confirmation";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Petition Desk" },
-  { href: "/councils", label: "Council Library" },
+  { href: "/", label: "Ask" },
   { href: "/sessions", label: "Archive" },
 ] as const;
 
@@ -44,7 +43,7 @@ export function AppShell(props: Readonly<{ children: React.ReactNode }>) {
                 The Seven
               </div>
               <div className="mt-2 text-sm text-[var(--text-dim)]">
-                Petition desk · proceedings · verdict · archive
+                Ask · answer · inspect · archive
               </div>
             </div>
             <div className="flex flex-col items-start gap-2 md:items-end">
@@ -76,12 +75,12 @@ export function AppShell(props: Readonly<{ children: React.ReactNode }>) {
                   )}
                 >
                   {auth.mode === "byok"
-                    ? "BYOK key admitted"
+                    ? "OpenRouter key ready"
                     : auth.mode === "demo"
                       ? auth.demoSession
-                        ? `Demo seal · expires ${formatDemoExpiry(auth.demoSession.expiresAt)}`
-                        : "Demo seal"
-                      : "Workbench locked"}
+                        ? `Demo active · expires ${formatDemoExpiry(auth.demoSession.expiresAt)}`
+                        : "Demo active"
+                      : "Demo or key needed"}
                 </Badge>
                 {auth.mode === "byok" ? (
                   <Button
@@ -92,7 +91,7 @@ export function AppShell(props: Readonly<{ children: React.ReactNode }>) {
                       setPendingAction("lock");
                     }}
                   >
-                    Lock
+                    Lock key
                   </Button>
                 ) : null}
                 {auth.mode === "demo" ? (
@@ -104,7 +103,7 @@ export function AppShell(props: Readonly<{ children: React.ReactNode }>) {
                       setPendingAction("demo");
                     }}
                   >
-                    End Demo
+                    End demo
                   </Button>
                 ) : null}
               </div>
@@ -130,7 +129,7 @@ export function AppShell(props: Readonly<{ children: React.ReactNode }>) {
                   })
                   .catch(() => {
                     setActionError(
-                      "Demo seal was not ended. Check the connection and retry; the session remains active until the server closes it.",
+                      "Demo session was not ended. Check the connection and retry; it remains active until the server closes it.",
                     );
                   })
                   .finally(() => setEndingDemo(false));
@@ -140,7 +139,7 @@ export function AppShell(props: Readonly<{ children: React.ReactNode }>) {
         ) : pendingAction === "lock" ? (
           <div className="mb-6 panel confirm-panel">
             <div>
-              <p className="m-0 font-semibold">Lock BYOK key?</p>
+              <p className="m-0 font-semibold">Lock OpenRouter key?</p>
               <p className="m-0 mt-1 text-sm text-[var(--text-dim)]">
                 The encrypted key remains local; this only clears the active unlock.
               </p>

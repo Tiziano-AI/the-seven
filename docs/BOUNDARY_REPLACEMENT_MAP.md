@@ -23,7 +23,7 @@ This document records the canonical owner for each surviving behavior in the rew
 | `/council` | `/councils` |
 | `/journal` | `/sessions` |
 | `/session/:id` | `/sessions/[sessionId]` |
-| duplicated run-sheet render paths | one run inspector composed into the Petition Desk (`/`) and Archive (`/sessions`) routes |
+| duplicated run-sheet render paths | one run inspector composed into the Ask (`/`) and Archive (`/sessions`) routes |
 | unused shadcn wrappers | deleted; only rendered primitives survive |
 
 ## Contract Boundaries

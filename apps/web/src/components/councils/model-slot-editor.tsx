@@ -205,7 +205,7 @@ export function ModelSlotEditor(props: {
           <div className="role-card-id">{alias}</div>
           <div className="text-xs text-[var(--text-dim)]">
             {role === "synthesizer"
-              ? "Synthesizer · final verdict"
+              ? "Synthesizer · final answer"
               : "Reviewer · drafts and critiques"}
           </div>
         </div>

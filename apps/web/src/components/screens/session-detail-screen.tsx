@@ -12,10 +12,10 @@ export function SessionDetailScreen(props: { sessionId: number }) {
   if (!auth.isAuthenticated) {
     return (
       <div>
-        <h1 className="sr-only">Manuscript</h1>
+        <h1 className="sr-only">Saved run</h1>
         <Card className="p-6">
           <p className="text-sm text-[var(--text-muted)]">
-            Unlock BYOK or start a demo session to inspect this run.
+            Use your OpenRouter key or start a demo session to inspect this run.
           </p>
         </Card>
       </div>
@@ -24,7 +24,7 @@ export function SessionDetailScreen(props: { sessionId: number }) {
 
   return (
     <div>
-      <h1 className="sr-only">Manuscript</h1>
+      <h1 className="sr-only">Saved run</h1>
       <SessionInspector
         authenticated={auth.isAuthenticated}
         authHeader={auth.authHeader}

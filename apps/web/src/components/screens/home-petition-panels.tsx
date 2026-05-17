@@ -7,6 +7,7 @@ import {
   MAX_ATTACHMENT_DECODED_BYTES,
   MAX_ATTACHMENT_EXTRACTED_CHARS,
 } from "@the-seven/contracts";
+import Link from "next/link";
 import { type DragEvent, useRef, useState } from "react";
 import {
   type EvidenceSelectionIssue,
@@ -25,14 +26,14 @@ function councilOptionValue(council: CouncilListItem): string {
 }
 
 function councilTierLine(council: CouncilListItem): string {
-  if (council.ref.kind !== "built_in") return "Custom council · saved BYOK roster";
+  if (council.ref.kind !== "built_in") return "Custom council";
   if (council.ref.slug === "founding") {
-    return "Founding · xhigh requested reasoning · best-of-best roster";
+    return "Strongest built-in council for serious questions";
   }
   if (council.ref.slug === "lantern") {
-    return "Lantern · medium requested reasoning · mid-tier intelligence bridge";
+    return "Balanced council for everyday questions";
   }
-  return "Commons · low requested reasoning · paid low-cost roster";
+  return "Low-cost council used by the demo";
 }
 
 /** Renders the durable receipt after a demo-link request leaves the browser. */
@@ -41,7 +42,7 @@ export function DemoRequestReceipt(props: { email: string }) {
     <div id="demo-request-receipt" className="panel demo-receipt" role="status">
       <p className="m-0 font-semibold">Check your inbox</p>
       <p className="m-0 mt-1 text-sm leading-6 text-[var(--text-muted)]">
-        The demo link was sent to {props.email}. It opens a 24-hour Commons seal in the browser
+        The demo link was sent to {props.email}. It opens a 24-hour Commons demo in the browser
         where you open the email link. If it does not arrive, resend the link or bring your own
         OpenRouter key.
       </p>
@@ -49,7 +50,7 @@ export function DemoRequestReceipt(props: { email: string }) {
   );
 }
 
-/** Explains the single Commons-only demo council boundary before petition submit. */
+/** Explains the single Commons-only demo council boundary before asking. */
 export function DemoCouncilPanel(props: { onUnlockByok: () => void }) {
   return (
     <div className="space-y-2">
@@ -57,11 +58,10 @@ export function DemoCouncilPanel(props: { onUnlockByok: () => void }) {
       <div className="panel py-3">
         <span className="seal">Commons Council</span>
         <p className="m-0 mt-2 text-sm text-[var(--text-dim)]">
-          Demo petitions are locked to Commons. End the demo seal to bring your own key and choose
-          or edit other councils.
+          Demo questions use Commons. Use your OpenRouter key to choose or edit other councils.
         </p>
         <Button variant="secondary" size="sm" className="mt-3" onClick={props.onUnlockByok}>
-          End demo and unlock BYOK
+          End demo and use your key
         </Button>
       </div>
     </div>
@@ -115,16 +115,21 @@ export function CouncilChoicePanel(props: {
           {selectedCouncil.description ? (
             <p className="m-0 mt-1 text-sm text-[var(--text-dim)]">{selectedCouncil.description}</p>
           ) : null}
-          <p className="m-0 mt-1 text-xs text-[var(--text-dim)]">
-            7 seats · six reviewers plus seventh-seat synthesizer
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <p className="m-0 text-xs text-[var(--text-dim)]">
+              Seven seats: six reviewers and one final-answer writer.
+            </p>
+            <Link className="text-link text-sm" href="/councils">
+              Manage councils
+            </Link>
+          </div>
         </div>
       ) : null}
     </div>
   );
 }
 
-/** Owns the petition evidence picker and exhibit list presentation. */
+/** Owns the optional file picker and selected-file presentation. */
 export function EvidencePicker(props: {
   selectedFiles: File[];
   onFilesSelected: (files: File[]) => void;
@@ -173,7 +178,7 @@ export function EvidencePicker(props: {
         }}
         onDrop={selectDroppedFiles}
       >
-        <legend className="docket-question-label">Evidence</legend>
+        <legend className="docket-question-label">Optional files</legend>
         <input
           ref={inputRef}
           id="matter-attachments"
@@ -191,10 +196,10 @@ export function EvidencePicker(props: {
           aria-describedby="evidence-helper evidence-limits"
           onClick={() => inputRef.current?.click()}
         >
-          Choose or drop exhibits
+          Choose or drop files
         </button>
         <p id="evidence-helper" className="m-0 text-sm text-[var(--text-dim)]">
-          Attach source files for the council to read. Selected exhibits appear in the docket below.
+          Attach source files for the council to read.
         </p>
         <p id="evidence-limits" className="m-0 text-xs text-[var(--text-dim)]">
           Up to {MAX_ATTACHMENT_COUNT} exhibits · {formatFileSize(MAX_ATTACHMENT_DECODED_BYTES)}{" "}
@@ -218,7 +223,7 @@ export function EvidencePicker(props: {
         <div className="evidence-ledger">
           <div className="evidence-ledger-head">
             <p className="m-0 text-xs text-[var(--text-dim)]">
-              {props.selectedFiles.length} selected exhibit
+              {props.selectedFiles.length} selected file
               {props.selectedFiles.length === 1 ? "" : "s"}
             </p>
             <button
@@ -229,14 +234,14 @@ export function EvidencePicker(props: {
                 props.onClearFiles();
               }}
             >
-              Clear exhibits
+              Clear files
             </button>
           </div>
           <ul className="evidence-list" aria-label="Selected evidence">
             {props.selectedFiles.map((file, index) => (
               <li key={`${file.name}-${file.size}-${file.lastModified}`} className="evidence-item">
                 <span className="evidence-name">
-                  Exhibit {index + 1}: {file.name}
+                  File {index + 1}: {file.name}
                 </span>
                 <span>{formatFileSize(file.size)}</span>
                 <button
@@ -259,24 +264,24 @@ export function EvidencePicker(props: {
   );
 }
 
-/** Marks the composer as a fresh docket surface after a matter is submitted. */
-export function FileAnotherMatterPanel(props: {
-  canReuseLastMatter: boolean;
-  onReuseLastMatter: () => void;
+/** Marks the composer as ready for another question after one is submitted. */
+export function AskAnotherQuestionPanel(props: {
+  canReuseLastQuestion: boolean;
+  onReuseLastQuestion: () => void;
   onDismiss: () => void;
 }) {
   return (
     <div className="panel confirm-panel">
       <div>
-        <p className="m-0 font-semibold">File another matter</p>
+        <p className="m-0 font-semibold">Ready for another question</p>
         <p className="m-0 mt-1 text-sm text-[var(--text-dim)]">
-          The submitted run stays above. This desk is ready for a new docket entry.
+          The submitted run stays above. The box below is ready for a new question.
         </p>
       </div>
-      {props.canReuseLastMatter ? (
+      {props.canReuseLastQuestion ? (
         <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" size="sm" onClick={props.onReuseLastMatter}>
-            Reuse last matter
+          <Button variant="ghost" size="sm" onClick={props.onReuseLastQuestion}>
+            Reuse last question
           </Button>
           <Button variant="ghost" size="sm" onClick={props.onDismiss}>
             Hide for now

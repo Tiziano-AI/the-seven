@@ -8,6 +8,58 @@ export function downloadText(filename: string, text: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+export function buildAnswerMarkdown(input: {
+  sessionId: number;
+  question: string;
+  councilName: string;
+  status: string;
+  answer: string | null;
+  link: string;
+}) {
+  const answer = input.answer?.trim() || "No answer text is available for this run.";
+  return [
+    `# Answer ${input.sessionId}`,
+    "",
+    `Question: ${input.question}`,
+    "",
+    `Council: ${input.councilName}`,
+    `Status: ${input.status}`,
+    `Link: ${input.link}`,
+    "",
+    "## Answer",
+    "",
+    answer,
+    "",
+  ].join("\n");
+}
+
+export function buildAnswerWithNotes(input: {
+  question: string;
+  councilName: string;
+  status: string;
+  answer: string | null;
+  artifactCount: number;
+  reviewCount: number;
+  link: string;
+}) {
+  const answer = input.answer?.trim() || "No answer text is available for this run.";
+  const reviewLabel = input.reviewCount === 1 ? "1 critique" : `${input.reviewCount} critiques`;
+  const artifactLabel =
+    input.artifactCount === 1 ? "1 saved work item" : `${input.artifactCount} saved work items`;
+  return [
+    `Question: ${input.question}`,
+    "",
+    answer,
+    "",
+    "Notes:",
+    `- Council: ${input.councilName}`,
+    `- Status: ${input.status}`,
+    `- Saved work: ${artifactLabel}, including ${reviewLabel}`,
+    `- Link: ${input.link}`,
+    "",
+  ].join("\n");
+}
+
 export function formatCost(micros: number | null) {
   if (micros === null) return "n/a";
   return `$${(micros / 1_000_000).toFixed(6)}`;
@@ -18,7 +70,7 @@ export function formatLatencySeconds(detail: {
 }) {
   const total = detail.providerCalls.reduce((sum, call) => sum + (call.latencyMs ?? 0), 0);
   if (!total) return null;
-  return `${(total / 1000).toFixed(1)}s provider-call time`;
+  return `${(total / 1000).toFixed(1)}s model-call time`;
 }
 
 export function formatExhibitLabel(exhibits: readonly unknown[]) {
@@ -60,7 +112,7 @@ export function formatFailureKind(failureKind: string | null) {
   if (failureKind === "server_restart") return "Interrupted after server restart";
   if (failureKind === "phase1_inference_failed") return "Draft phase failed";
   if (failureKind === "phase2_inference_failed") return "Critique phase failed";
-  if (failureKind === "phase3_inference_failed") return "Verdict phase failed";
+  if (failureKind === "phase3_inference_failed") return "Final answer phase failed";
   if (failureKind === "invalid_run_spec") return "Run specification needs repair";
   if (failureKind === "concurrent_execution") return "Another worker already owns this run";
   if (failureKind === "openrouter_rate_limited") return "OpenRouter rate limited this run";
@@ -68,8 +120,8 @@ export function formatFailureKind(failureKind: string | null) {
   return failureKind.replaceAll("_", " ");
 }
 
-export function manuscriptLoadIssue(error: unknown) {
+export function runLoadIssue(error: unknown) {
   return error instanceof Error && /not found/iu.test(error.message)
-    ? "Manuscript not found."
-    : "Failed to load manuscript.";
+    ? "Run not found."
+    : "Failed to load run.";
 }

@@ -11,7 +11,7 @@ function isDemoEmailReady(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value.trim());
 }
 
-/** Owns the locked-workbench demo and BYOK admission surface. */
+/** Owns the locked-workbench demo and personal-key admission surface. */
 export function HomeAuthGate(props: {
   demoLinkState: string | null;
   bannerMessage: string;
@@ -72,7 +72,7 @@ export function HomeAuthGate(props: {
   const demoPanel = (
     <form className="space-y-3" onSubmit={handleDemoSubmit}>
       <div className="space-y-2">
-        <Label htmlFor="demo-email">Email for a 24-hour demo seal</Label>
+        <Label htmlFor="demo-email">Email for a 24-hour demo</Label>
         <Input
           id="demo-email"
           type="email"
@@ -106,7 +106,7 @@ export function HomeAuthGate(props: {
   const byokPanel =
     !props.byokOpen && !props.hasStoredByok ? (
       <button type="button" className="gate-secondary-link" onClick={props.onOpenByok}>
-        Bring Your Own Key — unlock every built-in council
+        Use your OpenRouter key — unlock every built-in council
       </button>
     ) : (
       <div className="space-y-3">
@@ -118,7 +118,7 @@ export function HomeAuthGate(props: {
         {props.byokAdmissionBlocked ? (
           <div role="alert" className="alert-danger confirm-panel">
             <p className="m-0 text-sm">
-              Demo seal status is unavailable. Refresh the seal check before unlocking BYOK.
+              Demo status is unavailable. Retry the check before using your OpenRouter key.
             </p>
             <Button
               type="button"
@@ -134,7 +134,7 @@ export function HomeAuthGate(props: {
         {!props.hasStoredByok ? (
           <form className="space-y-3" onSubmit={handleByokSetupSubmit}>
             <div className="space-y-2">
-              <Label htmlFor="byok-api-key">OpenRouter API Key</Label>
+              <Label htmlFor="byok-api-key">OpenRouter API key</Label>
               <Input
                 id="byok-api-key"
                 type="password"
@@ -167,10 +167,10 @@ export function HomeAuthGate(props: {
               }
             >
               {props.byokValidationPending
-                ? "Validating key…"
+                ? "Checking key…"
                 : props.byokAdmissionPending
-                  ? "Checking demo seal…"
-                  : "Validate and Unlock"}
+                  ? "Checking demo…"
+                  : "Save and unlock key"}
             </Button>
           </form>
         ) : (
@@ -199,16 +199,16 @@ export function HomeAuthGate(props: {
               {props.byokUnlockPending
                 ? "Unlocking stored key…"
                 : props.byokAdmissionPending
-                  ? "Checking demo seal…"
-                  : "Unlock Stored Key"}
+                  ? "Checking demo…"
+                  : "Unlock stored key"}
             </Button>
             {props.resetKeyConfirmOpen ? (
               <div className="panel confirm-panel">
                 <div>
                   <p className="m-0 font-semibold">Remove this browser&apos;s stored key?</p>
                   <p className="m-0 mt-1 text-sm text-[var(--text-dim)]">
-                    Archives stay intact and OpenRouter is unaffected, but this browser cannot
-                    recover the encrypted key after it is removed.
+                    Archive entries stay intact and OpenRouter is unaffected, but this browser
+                    cannot recover the encrypted key after it is removed.
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -242,20 +242,20 @@ export function HomeAuthGate(props: {
       ) : null}
 
       <div>
-        <p className="gate-eyebrow">Petition the council</p>
-        <h1 className="sr-only">Petition Desk</h1>
-        <h2 className="gate-headline mt-2">Seven independent readings, one inspectable verdict.</h2>
+        <p className="gate-eyebrow">Ask the council</p>
+        <h1 className="sr-only">Ask</h1>
+        <h2 className="gate-headline mt-2">Ask once. Get one answer you can inspect.</h2>
         <p className="gate-lede mt-4">
-          The Seven runs your matter past six independent reviewers, has them critique each
-          other&rsquo;s answers, and asks a seventh to deliver the verdict. Every draft, every
-          disagreement, and every provider record stays inspectable.
+          The Seven sends your question to six independent reviewers, compares their work, and
+          returns one final answer. You can copy the answer, inspect how it was made, save it, and
+          run the question again.
         </p>
       </div>
 
       {props.hasStoredByok ? (
         <>
           {byokPanel}
-          <div className="gate-divider">or request a fresh demo seal</div>
+          <div className="gate-divider">or request a fresh demo</div>
           {demoPanel}
         </>
       ) : (

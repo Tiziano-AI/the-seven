@@ -2,6 +2,7 @@ import { z } from "zod";
 import { attachmentTextSchema } from "./attachments";
 import { councilMembersSchema } from "./councilDefinition";
 import { councilMemberTuningSchema } from "./councilMemberTuning";
+import { councilRefSchema } from "./councilRef";
 import { outputFormatsSchema, phasePromptsSchema } from "./phasePrompts";
 import { providerModelRefSchema } from "./providerModels";
 import { memberPositionSchema } from "./sevenMembers";
@@ -17,6 +18,7 @@ export const sessionMemberSnapshotSchema = z
 export const sessionCouncilSnapshotSchema = z
   .object({
     nameAtRun: z.string().min(1).max(120),
+    refAtRun: councilRefSchema.optional(),
     phasePrompts: phasePromptsSchema,
     members: councilMembersSchema,
   })

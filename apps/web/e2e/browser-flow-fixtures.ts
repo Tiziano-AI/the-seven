@@ -8,7 +8,11 @@ import {
 } from "./browser-flow-api-state";
 import { admitDemoCookieRead } from "./browser-flow-http";
 
-export { builtInCommonsRef } from "./browser-flow-council-fixtures";
+export {
+  builtInCommonsRef,
+  builtInLanternRef,
+  userCouncilRef,
+} from "./browser-flow-council-fixtures";
 export { phasePrompts } from "./browser-flow-session-fixtures";
 
 /** Installs the contract-faithful `/api/v1` browser fixtures used by UI acceptance flows. */

@@ -97,22 +97,22 @@ function providerRecordSummary(calls: readonly SessionDiagnosticProviderCall[]):
   const issueCount = calls.filter(hasExecutionIssue).length;
   const unsettledBillingCount = calls.filter(hasUnsettledBilling).length;
   if (calls.length === 0) {
-    return "No provider calls were recorded for this run.";
+    return "No model calls were recorded for this run.";
   }
   if (issueCount === 0 && unsettledBillingCount === 0) {
-    return `${acceptedCount} accepted provider output${acceptedCount === 1 ? "" : "s"} recorded for this run; no failed, denied, or unsettled attempts are present.`;
+    return `${acceptedCount} accepted model output${acceptedCount === 1 ? "" : "s"} recorded for this run; no failed, denied, or unsettled attempts are present.`;
   }
   const issueText =
     issueCount === 0
       ? ""
-      : ` ${issueCount} failed or denied attempt${issueCount === 1 ? "" : "s"} need attention and are receipts, not accepted verdict evidence.`;
+      : ` ${issueCount} failed or denied attempt${issueCount === 1 ? "" : "s"} need attention and are receipts, not accepted answer evidence.`;
   const unsettledText =
     unsettledBillingCount === 0
       ? ""
       : ` ${unsettledBillingCount} billing settlement${unsettledBillingCount === 1 ? "" : "s"} ${
           unsettledBillingCount === 1 ? "remains" : "remain"
         } unsettled; cost evidence is not final.`;
-  return `${acceptedCount} accepted provider output${acceptedCount === 1 ? "" : "s"} recorded.${issueText}${unsettledText}`;
+  return `${acceptedCount} accepted model output${acceptedCount === 1 ? "" : "s"} recorded.${issueText}${unsettledText}`;
 }
 
 /** Renders provider-call diagnostics without owning session orchestration state. */
@@ -122,17 +122,17 @@ export function SessionDiagnosticsTable(props: {
 }) {
   return (
     <Card
-      id="provider-record-panel"
+      id="run-details-panel"
       className="p-6"
       tabIndex={-1}
       role="region"
-      aria-labelledby="provider-record-heading"
+      aria-labelledby="run-details-heading"
     >
-      <h3 id="provider-record-heading" className="surface-title mb-4">
-        Provider Record
+      <h3 id="run-details-heading" className="surface-title mb-4">
+        Run details
       </h3>
       <p className="diagnostic-summary">{providerRecordSummary(props.providerCalls)}</p>
-      <ul className="diagnostic-ledger" aria-label="Provider diagnostics">
+      <ul className="diagnostic-ledger" aria-label="Run details">
         {props.providerCalls.map((call) => {
           const state = recordState(call);
           return (
@@ -178,7 +178,7 @@ export function SessionDiagnosticsTable(props: {
                   </dd>
                 </div>
                 <div>
-                  <dt>Provider route</dt>
+                  <dt>Model route</dt>
                   <dd>
                     <span>require params {call.sentProviderRequireParameters ? "yes" : "no"}</span>
                     <span>ignored {formatList(call.sentProviderIgnoredProviders)}</span>

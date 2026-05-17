@@ -15,7 +15,7 @@ export function SessionRecoveryLedger(props: {
   continuing: boolean;
   actionPending: boolean;
   onContinue: () => void;
-  onToggleRerun: () => void;
+  onRunAgain: () => void;
 }) {
   const artifactLabel = `${props.artifactCount} artifact${props.artifactCount === 1 ? "" : "s"}`;
   const critiqueLabel = `${props.reviewCount} critique${props.reviewCount === 1 ? "" : "s"}`;
@@ -34,7 +34,7 @@ export function SessionRecoveryLedger(props: {
       <div>
         <h2 className="docket-question-label">Recovery record</h2>
         <p className="m-0 mt-2 text-sm leading-6 text-[var(--text-muted)]">
-          The council did not enter a verdict. {preservedSummary}
+          The council did not produce an answer. {preservedSummary}
         </p>
       </div>
       <dl className="recovery-grid">
@@ -47,7 +47,7 @@ export function SessionRecoveryLedger(props: {
             <dt>Terminal note</dt>
             <dd>
               <span>
-                Server terminal note from the failed job. Open Provider Record for matching provider
+                Final server note from the failed job. Open Run details for matching model-call
                 receipts and diagnostics.
               </span>
               <span className="terminal-evidence-line">{props.terminalError}</span>
@@ -63,9 +63,10 @@ export function SessionRecoveryLedger(props: {
           <dd>{continueSummary}</dd>
         </div>
         <div>
-          <dt>Rerun</dt>
+          <dt>Run again</dt>
           <dd>
-            Create a new seven-seat deliberation with a freshly chosen council and matter text.
+            Create a new run with the original council selected when available, then edit the
+            question or choose another council before starting it.
           </dd>
         </div>
       </dl>
@@ -73,13 +74,8 @@ export function SessionRecoveryLedger(props: {
         <Button size="sm" onClick={props.onContinue} disabled={props.actionPending}>
           {props.continuing ? "Continuing…" : "Continue this run"}
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={props.onToggleRerun}
-          disabled={props.actionPending}
-        >
-          {props.rerunOpen ? "Hide rerun docket" : "Prepare rerun"}
+        <Button variant="ghost" size="sm" onClick={props.onRunAgain} disabled={props.actionPending}>
+          {props.rerunOpen ? "Run again is open" : "Edit and run again"}
         </Button>
       </div>
     </Card>

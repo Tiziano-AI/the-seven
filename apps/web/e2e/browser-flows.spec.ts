@@ -6,8 +6,8 @@ import { builtInCommonsRef, installApiMocks, phasePrompts } from "./browser-flow
 test("council duplicate, edit, save, and delete are browser-proven", async ({ page }) => {
   const state = installApiMocks(page);
   await unlockByok(page);
-  await page.getByRole("link", { name: "Council Library" }).click();
-  await expect(page.getByRole("heading", { name: "Council Library" })).toBeVisible();
+  await page.getByRole("link", { name: "Manage councils" }).click();
+  await expect(page.getByRole("heading", { name: "Manage councils" })).toBeVisible();
   await page.getByRole("button", { name: /The Commons Council/ }).click();
 
   await page.getByRole("button", { name: "Duplicate" }).click();
@@ -17,8 +17,8 @@ test("council duplicate, edit, save, and delete are browser-proven", async ({ pa
     name: "The Commons Council Copy",
   });
 
-  await expect(page.getByLabel("Name")).toHaveValue("Commons Copy");
-  await page.getByLabel("Name").fill("Launch Council");
+  await expect(page.getByLabel("Council name")).toHaveValue("Commons Copy");
+  await page.getByLabel("Council name").fill("Launch Council");
   await expect(page.locator("datalist")).toHaveCount(0);
   const firstSeat = page.locator(".role-card").first();
   await expect(firstSeat.locator(".model-selection-name")).toContainText("Qwen3.6 35B A3B");
@@ -78,28 +78,32 @@ test("council duplicate, edit, save, and delete are browser-proven", async ({ pa
   await expect.poll(() => state.deleteCount).toBe(1);
 });
 
-test("session detail deep link renders the full archived verdict", async ({ context, page }) => {
+test("session detail deep link renders the full archived answer", async ({ context, page }) => {
   installApiMocks(page);
   await installDemoSessionMock(context, page);
 
   await page.goto("/sessions/102");
   await expect(
-    page.locator(".docket-question").getByText("Completed petition on guild tolls"),
+    page.locator(".docket-question").getByText("Completed vendor selection question"),
   ).toBeVisible();
-  const track = page.getByRole("region", { name: "Council proceedings" });
+  await page
+    .locator(".manuscript-action-bar")
+    .getByRole("button", { name: "Council", exact: true })
+    .click();
+  const track = page.getByRole("region", { name: "Council" });
   await expect(track.locator(".cell")).toHaveCount(7);
   await expect(track).toContainText("All 6 reviewer rankings point to F");
 
-  await page.getByRole("button", { name: "Open Proceedings", exact: true }).click();
+  await page.getByRole("button", { name: "How it worked", exact: true }).click();
   await expect(page.locator("#proceedings-phase2-A")).toContainText("Major disagreements");
-  await page.getByRole("button", { name: "Provider Record" }).click();
-  const providerLedger = page.locator("#provider-record-panel");
+  await page.getByRole("button", { name: "Run details" }).click();
+  const providerLedger = page.locator("#run-details-panel");
   await expect(
     providerLedger.locator(".diagnostic-card").filter({ hasText: "A · Reviewer" }),
   ).toContainText("max output 8192");
   await expect(
     providerLedger.locator(".diagnostic-card").filter({ hasText: "C · Reviewer" }),
   ).toContainText("denied response_format, structured_outputs");
-  await page.getByRole("button", { name: "Prepare rerun" }).click();
-  await expect(page.getByText("Rerun Matter")).toBeVisible();
+  await page.getByRole("button", { name: "Run again" }).click();
+  await expect(page.getByLabel("Question for this run")).toBeVisible();
 });

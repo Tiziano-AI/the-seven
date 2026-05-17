@@ -20,6 +20,7 @@ import { EdgeError } from "../http/errors";
 
 export type CouncilSnapshot = Readonly<{
   nameAtRun: string;
+  refAtRun: CouncilRef;
   phasePrompts: PhasePrompts;
   members: ReadonlyArray<CouncilMemberAssignment>;
 }>;
@@ -70,6 +71,7 @@ export async function resolveCouncilSnapshot(input: {
     const council = BUILT_IN_COUNCILS[input.ref.slug];
     return {
       nameAtRun: council.name,
+      refAtRun: input.ref,
       phasePrompts: council.phasePrompts,
       members: council.members,
     };
@@ -82,6 +84,7 @@ export async function resolveCouncilSnapshot(input: {
 
   return {
     nameAtRun: stored.definition.name,
+    refAtRun: input.ref,
     phasePrompts: stored.definition.phasePrompts,
     members: stored.definition.members,
   };

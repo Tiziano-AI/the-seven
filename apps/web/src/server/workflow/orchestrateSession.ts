@@ -84,7 +84,7 @@ export async function orchestrateClaimedJob(input: {
     await markJobFailed({
       jobId: input.jobId,
       leaseOwner: input.leaseOwner,
-      lastError: "Manuscript backing row not found",
+      lastError: "Run backing row not found",
     });
     return;
   }

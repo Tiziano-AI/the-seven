@@ -4,6 +4,12 @@ import {
   memberForPosition,
 } from "@the-seven/contracts";
 
+function openDetailsElement(element: HTMLElement | null) {
+  if (element instanceof HTMLDetailsElement) {
+    element.open = true;
+  }
+}
+
 /** Opens an evidence anchor after the proceedings panel has been made visible. */
 export function scrollEvidenceTarget(input: {
   targetId: string;
@@ -18,6 +24,7 @@ export function scrollEvidenceTarget(input: {
       const target =
         window.document.getElementById(input.targetId) ??
         (input.fallbackId ? window.document.getElementById(input.fallbackId) : null);
+      openDetailsElement(target);
       target?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   });
@@ -39,6 +46,7 @@ export function scrollMemberEvidence(input: {
     const fallbackId = `proceedings-phase1-${alias}`;
     const target =
       window.document.getElementById(targetId) ?? window.document.getElementById(fallbackId);
+    openDetailsElement(target);
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 }

@@ -366,8 +366,8 @@ describe("sessionViews service", () => {
     const { exportSessions } = await loadSessionViews();
     const exported = await exportSessions(3, [9]);
 
-    expect(exported.markdown).toContain("# Manuscript 9");
-    expect(exported.markdown).toContain("## Query");
+    expect(exported.markdown).toContain("# Run 9");
+    expect(exported.markdown).toContain("## Question");
     expect(exported.markdown).toContain("### Phase 1 · Member A · response");
     expect(exported.markdown).toContain("Answer A");
     expect(exported.json).toContain('"id": 9');

@@ -17,8 +17,11 @@ const proofStates = [
   "submitted-workbench",
   "archive",
   "processing-run",
-  "completed-verdict",
-  "provider-record",
+  "completed-answer",
+  "how-it-worked",
+  "run-details",
+  "exports",
+  "run-again",
   "failed-recovery",
   "council-editor",
 ] as const;
@@ -26,8 +29,11 @@ const focusedMobileStates = [
   "demo-receipt",
   "submitted-workbench",
   "processing-run",
-  "completed-verdict",
-  "provider-record",
+  "completed-answer",
+  "how-it-worked",
+  "run-details",
+  "exports",
+  "run-again",
   "failed-recovery",
 ] as const;
 

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-/** Orders the petition desk and active manuscript without owning their state. */
+/** Orders the ask composer and active run without owning their state. */
 export function HomeSessionWorkbench(props: {
   activeSessionId: number | null;
   inspector: ReactNode;
@@ -10,7 +10,7 @@ export function HomeSessionWorkbench(props: {
 }) {
   return (
     <div className="space-y-8">
-      <h1 className="sr-only">Petition Desk</h1>
+      <h1 className="sr-only">Ask</h1>
       {props.activeSessionId ? (
         <>
           {props.inspector}

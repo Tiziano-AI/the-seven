@@ -15,28 +15,24 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { exportSessions, fetchSessions } from "@/lib/api";
-import { readActiveSessionId, writeActiveSessionId } from "@/lib/storage";
+import { writeActiveSessionId } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
-  { value: "completed", label: "Verdicts" },
-  { value: "processing", label: "Deliberating" },
-  { value: "pending", label: "Filed" },
-  { value: "failed", label: "Recovery" },
+  { value: "completed", label: "Answers" },
+  { value: "processing", label: "Working" },
+  { value: "pending", label: "Queued" },
+  { value: "failed", label: "Needs help" },
 ] as const;
-
-type ArchiveIntent = "recovery" | "rerun" | null;
 
 export function SessionsScreen() {
   const auth = useAuth();
   const [sessions, setSessions] = useState<Awaited<ReturnType<typeof fetchSessions>>>([]);
-  const restoredSessionIdRef = useRef<number | null>(readActiveSessionId());
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [archiveIntent, setArchiveIntent] = useState<ArchiveIntent>(null);
   const [archiveLoadIssue, setArchiveLoadIssue] = useState<string | null>(null);
   const [archiveLoadPending, setArchiveLoadPending] = useState(false);
   const detailRef = useRef<HTMLDivElement | null>(null);
@@ -56,11 +52,6 @@ export function SessionsScreen() {
       setSelectedSessionId((current) => {
         if (current && result.some((session) => session.id === current)) {
           return current;
-        }
-        const restoredSessionId = restoredSessionIdRef.current;
-        restoredSessionIdRef.current = null;
-        if (restoredSessionId && result.some((session) => session.id === restoredSessionId)) {
-          return restoredSessionId;
         }
         writeActiveSessionId(null);
         return null;
@@ -109,9 +100,9 @@ export function SessionsScreen() {
     if (!auth.isAuthenticated || selectedIds.length === 0) return;
     try {
       const result = await exportSessions(auth.authHeader, selectedIds);
-      downloadText("dossier.md", result.markdown, "text/markdown");
-      downloadText("dossier.json", result.json, "application/json");
-      toast.success("Dossier marks exported");
+      downloadText("selected-runs.md", result.markdown, "text/markdown");
+      downloadText("selected-runs.json", result.json, "application/json");
+      toast.success("Selected runs exported");
     } catch (error) {
       if (auth.handleAuthorityDenial(error)) {
         return;
@@ -120,9 +111,8 @@ export function SessionsScreen() {
     }
   }
 
-  function openSessionDetail(sessionId: number, intent: ArchiveIntent = null) {
+  function openSessionDetail(sessionId: number) {
     setSelectedSessionId(sessionId);
-    setArchiveIntent(intent);
     writeActiveSessionId(sessionId);
     requestAnimationFrame(() => {
       if (window.innerWidth <= 1080) {
@@ -137,7 +127,7 @@ export function SessionsScreen() {
         <h1 className="sr-only">Archive</h1>
         <Card className="p-8 text-center">
           <p className="text-sm text-[var(--text-muted)]">
-            Unlock BYOK or start a demo session to view the archive.
+            Use your OpenRouter key or start a demo session to view the archive.
           </p>
         </Card>
       </div>
@@ -155,7 +145,9 @@ export function SessionsScreen() {
             onClick={handleExportSelected}
             disabled={selectedIds.length === 0}
           >
-            Export Dossier
+            {selectedIds.length === 0
+              ? "Select runs to export"
+              : `Export selected (${selectedIds.length})`}
           </Button>
         </div>
 
@@ -164,7 +156,7 @@ export function SessionsScreen() {
             value={search}
             aria-label="Search archive"
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search matter or council"
+            placeholder="Search question or council"
           />
           <fieldset className="choice-grid">
             <legend className="docket-question-label">Archive status</legend>
@@ -218,8 +210,6 @@ export function SessionsScreen() {
           ) : null}
           {filteredSessions.map((session) => {
             const isSelected = selectedSessionId === session.id;
-            const canContinue = session.status === "failed";
-            const canRerun = session.status === "failed" || session.status === "completed";
             return (
               <div
                 key={session.id}
@@ -233,7 +223,7 @@ export function SessionsScreen() {
                     <button
                       type="button"
                       className="archive-row-title line-clamp-2"
-                      aria-label={`Open manuscript for matter ${session.id}: ${session.query}`}
+                      aria-label={`Open saved run ${session.id}: ${session.query}`}
                       onClick={() => openSessionDetail(session.id)}
                     >
                       {session.query}
@@ -252,8 +242,8 @@ export function SessionsScreen() {
                     aria-pressed={selectedIds.includes(session.id)}
                     aria-label={
                       selectedIds.includes(session.id)
-                        ? `Remove matter ${session.id} from dossier: ${session.query}`
-                        : `Add matter ${session.id} to dossier: ${session.query}`
+                        ? `Remove run ${session.id} from export: ${session.query}`
+                        : `Add run ${session.id} to export: ${session.query}`
                     }
                     onClick={(event) => {
                       event.stopPropagation();
@@ -264,7 +254,7 @@ export function SessionsScreen() {
                       );
                     }}
                   >
-                    {selectedIds.includes(session.id) ? "In dossier" : "Add to dossier"}
+                    {selectedIds.includes(session.id) ? "Remove from export" : "Add to export"}
                   </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -274,47 +264,15 @@ export function SessionsScreen() {
                   </span>
                   <span className="meta-chip">{formatCostEvidence(session)}</span>
                 </div>
-                {(canContinue || canRerun) && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {canContinue ? (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        aria-label={`Open recovery for matter ${session.id}: ${session.query}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openSessionDetail(session.id, "recovery");
-                        }}
-                      >
-                        Open Recovery
-                      </Button>
-                    ) : null}
-                    {canRerun ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        aria-label={`Open rerun docket for matter ${session.id}: ${session.query}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openSessionDetail(session.id, "rerun");
-                        }}
-                      >
-                        Open rerun docket
-                      </Button>
-                    ) : null}
-                  </div>
-                )}
               </div>
             );
           })}
           {!archiveLoadIssue && filteredSessions.length === 0 ? (
             sessions.length === 0 ? (
               <div className="panel archive-empty-state">
-                <p className="m-0 text-sm text-[var(--text-muted)]">
-                  No matters have entered the archive yet.
-                </p>
+                <p className="m-0 text-sm text-[var(--text-muted)]">No saved runs yet.</p>
                 <Link className="text-link" href="/">
-                  File a matter at the Petition Desk
+                  Ask a question
                 </Link>
               </div>
             ) : (
@@ -332,11 +290,9 @@ export function SessionsScreen() {
           authHeader={auth.authHeader}
           sessionId={selectedSessionId}
           emptyState="archive"
-          initialAction={archiveIntent}
           onAuthorityDenial={auth.handleAuthorityDenial}
           onSpawnedSession={(sessionId) => {
             setSelectedSessionId(sessionId);
-            setArchiveIntent(null);
             writeActiveSessionId(sessionId);
           }}
         />

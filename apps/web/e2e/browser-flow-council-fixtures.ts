@@ -10,22 +10,26 @@ const builtInCouncilFixtures: Readonly<
   founding: {
     ref: { kind: "built_in", slug: "founding" },
     name: "The Founding Council",
-    description: "The BYOK best-of-best roster. GPT-5.5 Pro delivers the verdict.",
+    description: "Strongest built-in council. GPT-5.5 Pro writes the final answer.",
   },
   lantern: {
     ref: { kind: "built_in", slug: "lantern" },
     name: "The Lantern Council",
-    description: "Deliberate mid-tier bridge voices. Qwen3.6 Max Preview delivers the verdict.",
+    description: "Balanced mid-tier council. Qwen3.6 Max Preview writes the final answer.",
   },
   commons: {
     ref: { kind: "built_in", slug: "commons" },
     name: "The Commons Council",
-    description: "Paid low-cost demo voices. MiniMax M2.7 delivers the verdict.",
+    description: "Low-cost demo council. MiniMax M2.7 writes the final answer.",
   },
 };
 
 export function builtInCommonsRef(): CouncilRef {
   return builtInCouncilFixtures.commons.ref;
+}
+
+export function builtInLanternRef(): CouncilRef {
+  return builtInCouncilFixtures.lantern.ref;
 }
 
 export function userCouncilRef(): CouncilRef {
