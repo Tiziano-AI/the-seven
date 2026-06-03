@@ -48,7 +48,9 @@ Read the governing surfaces in this order:
 5. `docs/VALIDATION_MATRIX.md` - proof requirements by behavior class.
 6. `docs/PACKAGE_POLICY.md` - package/workspace admission rules.
 7. `docs/BOUNDARY_REPLACEMENT_MAP.md` - retired-to-current boundary map.
-8. `PLAN.md`, `HANDOFF.md`, `CONTINUE.md` - workflow state only. These are
+8. `package.json`, `pnpm-workspace.yaml`, and workspace package manifests -
+   command, dependency, engine, and package-manager boundaries.
+9. `PLAN.md`, `HANDOFF.md`, `CONTINUE.md` - workflow state only. These are
    tentative unless current git/source/runtime evidence confirms them.
 
 ## Canonical architecture and owners
@@ -56,6 +58,8 @@ Read the governing surfaces in this order:
 - Workspace: one `pnpm` workspace with `apps/*` and `packages/*`.
 - Web app: `apps/web`, Next App Router on Node runtime.
   - API handlers live under `apps/web/src/app/api/v1/**/route.ts`.
+  - Route handlers adapt registry rows to Next responses; they do not own the
+    public HTTP contract independently.
   - Server-only auth/workflow/adapter/store code lives under
     `apps/web/src/server/**`.
   - UI components live under `apps/web/src/components/**`.
@@ -63,15 +67,21 @@ Read the governing surfaces in this order:
     scholarly workbench class vocabulary.
 - CLI: `apps/cli`, an HTTP-only batch client against `/api/v1`.
 - Contracts: `packages/contracts` owns route registry rows, Zod schemas,
-  envelopes, typed error details, and domain enums.
+  envelopes, typed error details, HTTP cache/trace contracts, and domain enums.
+  Public route rows live in `packages/contracts/src/http/registryRoutes.ts`.
 - Config: `packages/config` owns env profiles, built-in councils, prompts,
   limits, and OpenRouter app-header materialization.
 - Database: `packages/db` owns Drizzle schema, query/transaction modules,
   test DB helpers, and the one squashed launch init SQL
   `packages/db/drizzle/0000_init.sql`.
+- Attachments: `packages/contracts/src/domain/attachments.ts` owns public
+  attachment limits and denials; `apps/web/src/server/domain/attachments.ts`
+  owns MIME sniffing, document text extraction, parser timeouts, and decoded
+  server payloads.
 - Local tools: `tools/local-dev.ts`, `tools/local-http.ts`,
-  `tools/next-dev.ts`, `tools/env-doctor.ts`, `tools/live-test.ts`, and
-  `devtools/gate.py` own local operator and validation flows.
+  `tools/local-http-projection.ts`, `tools/next-dev.ts`,
+  `tools/env-doctor.ts`, `tools/live-test.ts`, and `devtools/gate.py` own local
+  operator and validation flows.
 
 No runtime code should be reintroduced in retired `client/`, `server/`, or
 `shared/` roots. No second public API surface, tRPC surface, Express bootstrap,
@@ -81,6 +91,9 @@ Vite frontend build, or ad hoc local shell launcher should be added.
 
 - Repo source proves only source. It does not prove live provider support,
   production deployment, secret presence, local worker ownership, or rendered UI.
+- Public API truth is registry-first. Change the registry row, schemas, handler,
+  client, fixtures, and tests together instead of parsing route params, query,
+  or body ad hoc in a route file.
 - `.env.local` is the app's local runtime source of truth for unprefixed
   variables. Ambient shell values do not override reserved runtime/projection
   keys for `pnpm local:*`.
@@ -96,6 +109,9 @@ Vite frontend build, or ad hoc local shell launcher should be added.
 - Rendered UI claims require browser/rendered evidence. Unit/e2e green alone is
   insufficient for visual contract changes listed in `ARCH.md` and
   `docs/VALIDATION_MATRIX.md`.
+- Local generated proof under `tmp/`, `test-results/`, `.playwright-mcp/`,
+  `.next/`, or `.next-local/` is disposable runtime output unless a task
+  explicitly promotes a durable artifact.
 - Production claims require production readback, not local source. Use
   `pnpm public:smoke https://theseven.ai` after deployment reports success.
 
@@ -110,6 +126,7 @@ pnpm local:db:up
 pnpm local:db:down
 pnpm local:db:reset
 pnpm local:dev
+pnpm run db:bootstrap:check
 pnpm local:gate --full
 pnpm local:doctor --live
 pnpm local:live
@@ -123,6 +140,9 @@ Important command semantics:
   keys.
 - `pnpm local:doctor --live` adds live BYOK, demo OpenRouter, Resend sender,
   and demo test-inbox key checks.
+- `pnpm local:bootstrap -- --install` can install or repair local tool
+  dependencies such as Homebrew formulae/casks and Playwright Chromium. Treat it
+  as a package/tool mutation unless the task is local setup.
 - `pnpm local:db:up` starts the compose-managed Postgres on
   `127.0.0.1:5432`, accepts a blank DB, and fails closed on stale The Seven
   tables.
@@ -195,6 +215,9 @@ Validation expectations:
   `Cache-Control: no-store`, `X-Trace-Id`, denial rows, and transformed params.
 - Auth/security changes must prove BYOK, demo cookie, same-origin, rate-limit,
   redaction, and invalid-ingress paths.
+- Attachment changes must prove count, filename, byte-size, extension/MIME,
+  unsupported MIME, parser-timeout, extracted-character, and redaction/error
+  paths.
 - Provider/workflow changes must prove durable job lifecycle, phase artifacts,
   OpenRouter diagnostics, structured-output parsing, output caps, retries,
   timeouts, cancellation/lease behavior, and terminal-state closeout.
@@ -203,6 +226,9 @@ Validation expectations:
   surfaces.
 - DB changes must prove the squashed init SQL, schema compatibility, blank
   compose DB startup, stale local DB denial, and transaction/lease invariants.
+- Package or workspace changes must follow `docs/PACKAGE_POLICY.md`, preserve
+  pinned versions, keep package ownership boundaries intact, and use `pnpm`
+  rather than npm/yarn/bun.
 
 ## Safety rules
 
@@ -214,6 +240,8 @@ Validation expectations:
 - Do not mutate packages, lockfiles, Homebrew installs, Playwright browsers,
   Docker volumes, production, Railway, OpenRouter, Resend, or secret slices
   without explicit authorization for that mutation.
+- Do not start `@the-seven/web` directly unless you also project the local HTTP
+  environment that `pnpm local:dev`, `pnpm local:live`, and browser gates own.
 - Do not print `.env.local`, `~/.secrets/*`, API keys, cookies, email tokens,
   provider prompts with secrets, or live proof raw transcripts.
 - Do not commit generated/ignored runtime output such as `.next/`,
@@ -234,6 +262,10 @@ Validation expectations:
   `pnpm local:doctor`.
 - Legacy `.env` with runtime keys: move keys into `.env.local`; doctor rejects
   reserved runtime keys in `.env`.
+- Missing local tools or Playwright Chromium: run `pnpm local:doctor` first and
+  use its suggested fix. Only run `pnpm local:bootstrap -- --install` or
+  `pnpm exec playwright install chromium` when package/tool installation is
+  authorized.
 - Local Postgres unhealthy or stale schema: run `pnpm local:db:up` first. Use
   `pnpm local:db:reset` only when destroying the local compose volume is
   acceptable.
@@ -257,16 +289,17 @@ decision explicitly accepts the behavior.
   - Conflicting/current surfaces: `.gitignore` lists `AGENTS.md` under
     operating-state files, while this file is intended as durable repo-local
     guidance and may be tracked despite the ignore rule.
-  - Proven current behavior: `git check-ignore -v -- AGENTS.md` points at the
-    ignore rule; `git ls-files -- AGENTS.md` is the source-of-truth probe for
-    whether the guide is tracked in the current checkout.
+  - Proven current behavior: `git check-ignore -v --no-index -- AGENTS.md`
+    points at the ignore rule, while `git ls-files -- AGENTS.md` is the
+    source-of-truth probe for whether the guide is already tracked in the
+    current checkout.
   - Intended claim: future agents should treat this guide as durable repository
     guidance, not disposable private notes.
   - Impact: edits may require explicit force-add until `.gitignore` is
     reconciled; new agents may otherwise misclassify this file as local-only.
   - Nearest owner and next probe: `.gitignore` plus this file. Decide whether
     to remove the `AGENTS.md` ignore row or document the tracked-file override,
-    then rerun `git check-ignore -v -- AGENTS.md` and
+    then rerun `git check-ignore -v --no-index -- AGENTS.md` and
     `git ls-files -- AGENTS.md`.
 - `release-workflow-state-drift`
   - Conflicting/current surfaces: `PLAN.md`, `HANDOFF.md`, current git branch,
