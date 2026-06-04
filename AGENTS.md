@@ -50,8 +50,8 @@ Read the governing surfaces in this order:
 7. `docs/BOUNDARY_REPLACEMENT_MAP.md` - retired-to-current boundary map.
 8. `package.json`, `pnpm-workspace.yaml`, and workspace package manifests -
    command, dependency, engine, and package-manager boundaries.
-9. `PLAN.md`, `HANDOFF.md`, `CONTINUE.md` - workflow state only. These are
-   tentative unless current git/source/runtime evidence confirms them.
+9. `PLAN.md` and `HANDOFF.md` - workflow state only. These are tentative
+   unless current git/source/runtime evidence confirms them.
 
 ## Canonical architecture and owners
 
