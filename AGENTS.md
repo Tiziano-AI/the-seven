@@ -144,8 +144,9 @@ Important command semantics:
   dependencies such as Homebrew formulae/casks and Playwright Chromium. Treat it
   as a package/tool mutation unless the task is local setup.
 - `pnpm local:db:up` starts the compose-managed Postgres on
-  `127.0.0.1:5432`, accepts a blank DB, and fails closed on stale The Seven
-  tables.
+  `127.0.0.1:5432`, accepts a blank DB, and fails closed if that port is owned
+  by anything other than `the-seven-postgres` or if existing The Seven tables
+  are stale.
 - `pnpm local:db:reset` destroys the local compose volume before returning a
   blank current-schema database.
 - `pnpm local:dev`, `pnpm local:live`, and full browser gates allocate a free
@@ -266,7 +267,9 @@ Validation expectations:
   use its suggested fix. Only run `pnpm local:bootstrap -- --install` or
   `pnpm exec playwright install chromium` when package/tool installation is
   authorized.
-- Local Postgres unhealthy or stale schema: run `pnpm local:db:up` first. Use
+- Local Postgres unhealthy: run `pnpm local:db:up` first. If doctor says
+  `127.0.0.1:5432` is owned by another Docker container or process, stop or
+  reconfigure that owner before starting `the-seven-postgres`. Use
   `pnpm local:db:reset` only when destroying the local compose volume is
   acceptable.
 - Existing same-repo worker blocks live proof: stop the old `pnpm local:dev` or
