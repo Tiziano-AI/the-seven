@@ -78,10 +78,24 @@ Read the governing surfaces in this order:
   attachment limits and denials; `apps/web/src/server/domain/attachments.ts`
   owns MIME sniffing, document text extraction, parser timeouts, and decoded
   server payloads.
-- Local tools: `tools/local-dev.ts`, `tools/local-http.ts`,
-  `tools/local-http-projection.ts`, `tools/next-dev.ts`,
-  `tools/env-doctor.ts`, `tools/live-test.ts`, and `devtools/gate.py` own local
-  operator and validation flows.
+- Local operator tools:
+  - `tools/local-dev.ts` owns root `pnpm local:*` command dispatch.
+  - `tools/env-doctor.ts` owns `.env.local`, legacy `.env`, key-shape, and file
+    mode checks.
+  - `tools/local-postgres.ts` owns canonical compose Postgres target and port
+    ownership checks.
+  - `tools/local-operator-env.ts`, `tools/local-http.ts`,
+    `tools/local-http-projection.ts`, `tools/next-dev.ts`, and
+    `tools/next-dev-server.ts` own reserved-key scrubbing, free-port HTTP
+    projection, launch-owned Next dev isolation, and Next env restoration.
+  - `tools/gate-command.ts` and `devtools/gate.py` own the local full gate,
+    guardrails, route type generation, and rendered-proof artifact checks.
+- Live/public proof tools: `tools/live-test.ts`,
+  `tools/live-session-proof.ts`, `tools/live-demo-cookie.ts`,
+  `tools/resend-live-proof.ts`, `tools/playwright-config.ts`, and
+  `tools/public-smoke.ts` own live provider/demo email/cookie proof,
+  external-server browser proof, billing/diagnostics assertions, and public
+  unauthenticated smoke.
 
 No runtime code should be reintroduced in retired `client/`, `server/`, or
 `shared/` roots. No second public API surface, tRPC surface, Express bootstrap,
@@ -140,6 +154,10 @@ Important command semantics:
   keys.
 - `pnpm local:doctor --live` adds live BYOK, demo OpenRouter, Resend sender,
   and demo test-inbox key checks.
+- `pnpm local:gate --full` invokes `uv run --python 3.12 devtools/gate.py`
+  through `tools/gate-command.ts`, clears reserved runtime/projection keys,
+  proves owner guardrails before running checks, runs Next route type generation
+  before TypeScript, and materializes its own browser-proof HTTP projection.
 - `pnpm local:bootstrap -- --install` can install or repair local tool
   dependencies such as Homebrew formulae/casks and Playwright Chromium. Treat it
   as a package/tool mutation unless the task is local setup.
