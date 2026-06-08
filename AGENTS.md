@@ -91,11 +91,13 @@ Read the governing surfaces in this order:
   - `tools/gate-command.ts` and `devtools/gate.py` own the local full gate,
     guardrails, route type generation, and rendered-proof artifact checks.
 - Live/public proof tools: `tools/live-test.ts`,
-  `tools/live-session-proof.ts`, `tools/live-demo-cookie.ts`,
-  `tools/resend-live-proof.ts`, `tools/playwright-config.ts`, and
-  `tools/public-smoke.ts` own live provider/demo email/cookie proof,
-  external-server browser proof, billing/diagnostics assertions, and public
-  unauthenticated smoke.
+  `tools/live-session-proof.ts`, `tools/live-session-diagnostics.ts`,
+  `tools/live-demo-cookie.ts`, `tools/live-demo-api.ts`,
+  `tools/live-demo-origin.ts`, `tools/resend-live-proof.ts`,
+  `tools/playwright-config.ts`, and `tools/public-smoke.ts` own live
+  provider/demo email/cookie proof, registry-backed demo API envelopes,
+  public-origin/Host authority, external-server browser proof,
+  billing/diagnostics assertions, and public unauthenticated smoke.
 
 No runtime code should be reintroduced in retired `client/`, `server/`, or
 `shared/` roots. No second public API surface, tRPC surface, Express bootstrap,
@@ -240,6 +242,9 @@ Validation expectations:
 - Provider/workflow changes must prove durable job lifecycle, phase artifacts,
   OpenRouter diagnostics, structured-output parsing, output caps, retries,
   timeouts, cancellation/lease behavior, and terminal-state closeout.
+- Live/demo proof changes must prove Resend receiving-body authority, absolute
+  consume-link origin, public `Host` preservation over loopback transport,
+  registry envelope/no-store/trace checks, and finite billing diagnostics.
 - UI changes must include rendered desktop/tablet/mobile proof for the affected
   Workbench, Archive, inspector, recovery, copy/export, run-again, or council
   surfaces.
