@@ -66,6 +66,12 @@ Read the governing surfaces in this order:
   - `apps/web/src/app/theme.css` owns raw tokens; adjacent app CSS files own the
     scholarly workbench class vocabulary.
 - CLI: `apps/cli`, an HTTP-only batch client against `/api/v1`.
+  - Root `package.json` exposes it as `pnpm batch`.
+  - `apps/cli/src/batch.ts` owns JSONL parsing, CLI flags, concurrency, optional
+    wait behavior, and `SEVEN_BYOK_KEY` / `SEVEN_BASE_URL` admission.
+  - `apps/cli/src/batchHttp.ts` owns registry-backed submit/wait calls,
+    `Authorization: Bearer <BYOK key>`, `X-Seven-Ingress: cli`, no-store
+    validation, and `X-Trace-Id` / envelope trace matching.
 - Contracts: `packages/contracts` owns route registry rows, Zod schemas,
   envelopes, typed error details, HTTP cache/trace contracts, and domain enums.
   Public route rows live in `packages/contracts/src/http/registryRoutes.ts`.
@@ -146,6 +152,7 @@ pnpm run db:bootstrap:check
 pnpm local:gate --full
 pnpm local:doctor --live
 pnpm local:live
+pnpm batch -- --file <path> [--wait] [--base-url URL]
 pnpm public:smoke https://theseven.ai
 ```
 
@@ -175,6 +182,12 @@ Important command semantics:
 - `pnpm local:live` is live/cost-bearing. It starts a local app, uses real
   OpenRouter and Resend credentials, proves demo Commons before heavier BYOK
   runs, and refuses to run while another same-repo local worker can claim jobs.
+- `pnpm batch` is a BYOK HTTP client, not an in-process execution path. Each
+  JSONL line is shaped like
+  `{"query":"...","councils":["built_in:founding"]}`; it requires
+  `SEVEN_BYOK_KEY` and either `SEVEN_BASE_URL` or `--base-url`, then submits
+  through the public `/api/v1/sessions` contract. Use it only against the
+  intended local/public origin because it can create cost-bearing sessions.
 
 Minimal local setup:
 
@@ -242,6 +255,10 @@ Validation expectations:
 - Provider/workflow changes must prove durable job lifecycle, phase artifacts,
   OpenRouter diagnostics, structured-output parsing, output caps, retries,
   timeouts, cancellation/lease behavior, and terminal-state closeout.
+- CLI batch changes must prove argument parsing, JSONL query validation,
+  registry-backed submit/wait routes, BYOK authorization header, no-store
+  response validation, trace-header/envelope equality, and error-envelope
+  mapping.
 - Live/demo proof changes must prove Resend receiving-body authority, absolute
   consume-link origin, public `Host` preservation over loopback transport,
   registry envelope/no-store/trace checks, and finite billing diagnostics.
@@ -321,8 +338,10 @@ decision explicitly accepts the behavior.
     current checkout.
   - Intended claim: future agents should treat this guide as durable repository
     guidance, not disposable private notes.
-  - Impact: edits may require explicit force-add until `.gitignore` is
-    reconciled; new agents may otherwise misclassify this file as local-only.
+  - Impact: normal edits to the already tracked guide stay tracked, but the
+    ignore row can still make a missing or newly created guide look local-only;
+    new agents may otherwise misclassify this file as disposable operating
+    state.
   - Nearest owner and next probe: `.gitignore` plus this file. Decide whether
     to remove the `AGENTS.md` ignore row or document the tracked-file override,
     then rerun `git check-ignore -v --no-index -- AGENTS.md` and
