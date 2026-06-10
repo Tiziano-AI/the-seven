@@ -56,6 +56,9 @@ Read the governing surfaces in this order:
 ## Canonical architecture and owners
 
 - Workspace: one `pnpm` workspace with `apps/*` and `packages/*`.
+- Package/runtime toolchain: root `package.json` pins `pnpm@10.32.1`,
+  requires Node `>=22.0.0`, and owns root scripts. Workspace package versions
+  stay explicitly pinned; new dependencies follow `docs/PACKAGE_POLICY.md`.
 - Web app: `apps/web`, Next App Router on Node runtime.
   - API handlers live under `apps/web/src/app/api/v1/**/route.ts`.
   - Route handlers adapt registry rows to Next responses; they do not own the
@@ -182,12 +185,20 @@ Important command semantics:
 - `pnpm local:live` is live/cost-bearing. It starts a local app, uses real
   OpenRouter and Resend credentials, proves demo Commons before heavier BYOK
   runs, and refuses to run while another same-repo local worker can claim jobs.
+  Before requesting a demo magic link it deletes only proof-owned demo
+  rate-limit buckets for `SEVEN_DEMO_TEST_EMAIL`, loopback IP scopes, and demo
+  proof global scopes so repeated live proofs stay deterministic; route-level
+  rate limits remain product behavior and are tested separately.
 - `pnpm batch` is a BYOK HTTP client, not an in-process execution path. Each
   JSONL line is shaped like
   `{"query":"...","councils":["built_in:founding"]}`; it requires
   `SEVEN_BYOK_KEY` and either `SEVEN_BASE_URL` or `--base-url`, then submits
   through the public `/api/v1/sessions` contract. Use it only against the
   intended local/public origin because it can create cost-bearing sessions.
+- `pnpm public:smoke https://theseven.ai` is post-deploy public readback. It
+  has no provider, email, or authenticated side effects; it proves the public
+  home page renders and unauthenticated `GET /api/v1/demo/session` returns the
+  expected `401` no-store error envelope with a matching trace header.
 
 Minimal local setup:
 
