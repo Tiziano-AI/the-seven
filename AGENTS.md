@@ -124,10 +124,11 @@ Vite frontend build, or ad hoc local shell launcher should be added.
   keys for `pnpm local:*`.
 - Workstation secret managers may hand-author, materialize, or symlink
   `.env.local`, but tracked product docs do not require a private home path.
-  On this workstation, `THE_SEVEN__...` keys in `~/.secrets/ALL.env` can
+  On this workstation, the sectioned `~/.secrets/envs.envset` master can
   materialize `~/.secrets/the-seven.env`; use `tiz-home --json secrets status`,
-  `tiz-home --json secrets plan`, and only an explicitly authorized
-  `tiz-home --json secrets apply`. Never print secret values.
+  `tiz-home --json secrets plan`, `tiz-home --json secrets keys list --env
+  the-seven`, and only an explicitly authorized `tiz-home --json secrets apply`.
+  Never print secret values.
 - OpenRouter model rows, pricing, `supported_parameters`, and provider-routing
   behavior are volatile. Re-prove catalog and exact request compatibility before
   changing rosters or claiming current live launchability.
