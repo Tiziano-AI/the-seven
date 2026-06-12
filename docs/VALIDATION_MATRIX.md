@@ -309,7 +309,7 @@ denial against the running app.
     by it
   - effective `.env.local` presence
   - minimal development keys
-  - secret-slice mode no broader than `0600`
+  - secret env file mode no broader than `0600`
   - no placeholder credential values
 - `pnpm local:doctor --live` verifies the same local readiness plus live BYOK,
   demo OpenRouter, Resend, sender, and test-inbox key presence

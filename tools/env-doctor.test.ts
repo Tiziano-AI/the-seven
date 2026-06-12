@@ -114,7 +114,7 @@ SEVEN_DEMO_TEST_EMAIL=replace-with-demo-test-inbox
     expect(result.detail).toContain("SEVEN_BYOK_KEY");
   });
 
-  test("rejects secret slices broader than 0600", () => {
+  test("rejects secret env files broader than 0600", () => {
     const envLocalPath = writeEnv("SEVEN_APP_NAME=The Seven\n");
     chmodSync(envLocalPath, 0o644);
 

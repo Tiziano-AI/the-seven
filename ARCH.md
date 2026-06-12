@@ -992,7 +992,7 @@ sender, and demo test inbox.
 Doctor fails when:
 
 - `.env.local` is missing required development keys,
-- the secret-slice target is broader than `0600`,
+- the secret env file target is broader than `0600`,
 - `.env` contains any reserved runtime/proof key owned by `packages/config`,
 - credential-looking values are obvious placeholders,
 - Playwright Chromium is missing,
