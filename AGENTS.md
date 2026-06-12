@@ -212,9 +212,9 @@ pnpm local:db:up
 pnpm local:dev
 ```
 
-If using the workstation secret slice instead of a hand-authored file, keep the
-app-facing file as `.env.local` with unprefixed keys and mode no broader than
-`0600`:
+If using a workstation-specific secret env file instead of a hand-authored file,
+keep the app-facing file as `.env.local` with unprefixed keys and mode no
+broader than `0600`:
 
 ```bash
 ln -sfn ~/.secrets/the-seven.env .env.local
@@ -290,7 +290,7 @@ Validation expectations:
 - Do not run `pnpm format` casually; it is a broad write. Use Biome checks or
   targeted formatting only when formatting is the authorized task.
 - Do not mutate packages, lockfiles, Homebrew installs, Playwright browsers,
-  Docker volumes, production, Railway, OpenRouter, Resend, or secret slices
+  Docker volumes, production, Railway, OpenRouter, Resend, or secret env files
   without explicit authorization for that mutation.
 - Do not start `@the-seven/web` directly unless you also project the local HTTP
   environment that `pnpm local:dev`, `pnpm local:live`, and browser gates own.
@@ -310,7 +310,7 @@ Validation expectations:
 ## Recovery playbook
 
 - Missing or broad-mode `.env.local`: create it from `.env.local.example` or a
-  private materialized slice, then `chmod 600 .env.local` and rerun
+  private secret env file, then `chmod 600 .env.local` and rerun
   `pnpm local:doctor`.
 - Legacy `.env` with runtime keys: move keys into `.env.local`; doctor rejects
   reserved runtime keys in `.env`.
