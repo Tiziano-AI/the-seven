@@ -57,8 +57,9 @@ Read the governing surfaces in this order:
 
 - Workspace: one `pnpm` workspace with `apps/*` and `packages/*`.
 - Package/runtime toolchain: root `package.json` pins `pnpm@10.32.1`,
-  requires Node `>=22.0.0`, and owns root scripts. Workspace package versions
-  stay explicitly pinned; new dependencies follow `docs/PACKAGE_POLICY.md`.
+  requires Node `>=22.0.0`, and owns root scripts. Workspace dependency
+  versions stay explicitly pinned; new dependencies follow
+  `docs/PACKAGE_POLICY.md`.
 - Web app: `apps/web`, Next App Router on Node runtime.
   - API handlers live under `apps/web/src/app/api/v1/**/route.ts`.
   - Route handlers adapt registry rows to Next responses; they do not own the
