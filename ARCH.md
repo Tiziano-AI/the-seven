@@ -996,9 +996,9 @@ Doctor fails when:
 - `.env` contains any reserved runtime/proof key owned by `packages/config`,
 - credential-looking values are obvious placeholders,
 - Playwright Chromium is missing,
-- `DATABASE_URL` does not target the compose-owned local Postgres authority on
-  `127.0.0.1:5432` or `localhost:5432`,
-- `DATABASE_URL` targets the canonical local port and that port is not free for,
+- `DATABASE_URL` does not target the compose-owned local Postgres authority
+  `127.0.0.1:<local-port>/the_seven`, defaulting to `127.0.0.1:55432/the_seven`,
+- `DATABASE_URL` targets a configured local port and that port is not free for,
   or owned by, `the-seven-postgres`,
 - the healthy compose-managed database already contains The Seven tables that
   do not match the current squashed launch schema.

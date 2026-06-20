@@ -1,10 +1,13 @@
 import { describe, expect, test } from "vitest";
 import {
+  buildLocalPostgresComposeEnv,
   type CanonicalLocalPostgresStatus,
+  DEFAULT_LOCAL_POSTGRES_PORT,
   describeCanonicalLocalPostgresPort,
   formatCanonicalLocalPostgresBootstrapMessage,
   formatCanonicalLocalPostgresUnavailableMessage,
   isCanonicalLocalPostgresConnectionFailure,
+  isCanonicalLocalPostgresReady,
   toCanonicalLocalPostgresCheck,
 } from "./local-postgres";
 
@@ -14,7 +17,7 @@ function buildStatus(
   return {
     target: {
       host: "127.0.0.1",
-      port: "5432",
+      port: DEFAULT_LOCAL_POSTGRES_PORT,
       database: "the_seven",
     },
     composeHealth: "missing",
@@ -34,7 +37,7 @@ describe("local postgres diagnostics", () => {
 
     expect(detail).toEqual({
       ok: true,
-      detail: "the-seven-postgres owns 127.0.0.1:5432",
+      detail: "the-seven-postgres owns 127.0.0.1:55432",
       fix: null,
     });
   });
@@ -53,8 +56,8 @@ describe("local postgres diagnostics", () => {
     expect(detail).toEqual({
       ok: false,
       detail:
-        "DATABASE_URL points to db.internal:6543/the_seven, not canonical local Postgres 127.0.0.1:5432/the_seven",
-      fix: "Point DATABASE_URL at the compose-managed local Postgres target from `.env.local.example`.",
+        "DATABASE_URL points to db.internal:6543/the_seven, not supported local compose Postgres 127.0.0.1:55432/the_seven",
+      fix: "Point DATABASE_URL at `.env.local.example` or another free 127.0.0.1 port for the the_seven database.",
     });
   });
 
@@ -83,7 +86,8 @@ describe("local postgres diagnostics", () => {
 
     expect(check.ok).toBe(false);
     expect(check.detail).toContain("agents-postgres-1");
-    expect(check.fix).toContain("the-seven-postgres");
+    expect(check.fix).toContain("Change DATABASE_URL");
+    expect(check.fix).not.toContain("Stop");
   });
 
   test("fails clearly when another process owns the canonical port", () => {
@@ -94,7 +98,8 @@ describe("local postgres diagnostics", () => {
     );
 
     expect(message).toContain("Postgres.app (pid 100)");
-    expect(message).toContain("the-seven-postgres");
+    expect(message).toContain("Change DATABASE_URL");
+    expect(message).not.toContain("Stop");
   });
 
   test("explains bootstrap database-missing errors through the port owner", () => {
@@ -106,7 +111,7 @@ describe("local postgres diagnostics", () => {
     });
 
     expect(message).toContain("agents-postgres-1");
-    expect(message).toContain("the-seven-postgres");
+    expect(message).toContain("Change DATABASE_URL");
   });
 
   test("explains database-missing errors on healthy local Postgres as reset work", () => {
@@ -131,7 +136,7 @@ describe("local postgres diagnostics", () => {
       error: { code: "3D000" },
     });
 
-    expect(message).toContain("is not the active Postgres owner");
+    expect(message).toContain("is not healthy on configured local target");
     expect(message).toContain("pnpm local:db:up");
   });
 
@@ -139,5 +144,35 @@ describe("local postgres diagnostics", () => {
     expect(isCanonicalLocalPostgresConnectionFailure({ code: "ECONNREFUSED" })).toBe(true);
     expect(isCanonicalLocalPostgresConnectionFailure({ code: "3D000" })).toBe(true);
     expect(isCanonicalLocalPostgresConnectionFailure(new Error("other failure"))).toBe(false);
+  });
+
+  test("requires the compose container to own the configured port before ready claims", () => {
+    expect(
+      isCanonicalLocalPostgresReady(
+        buildStatus({
+          composeHealth: "healthy",
+          portOwner: { kind: "docker", name: "the-seven-postgres" },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isCanonicalLocalPostgresReady(
+        buildStatus({
+          composeHealth: "healthy",
+          portOwner: null,
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  test("projects the configured DATABASE_URL port into Docker Compose", () => {
+    const env = buildLocalPostgresComposeEnv({
+      connectionString: "postgresql://postgres:postgres@127.0.0.1:56543/the_seven",
+      env: { NODE_ENV: "development", PATH: "/usr/bin" },
+    });
+
+    expect(env.SEVEN_LOCAL_POSTGRES_HOST).toBe("127.0.0.1");
+    expect(env.SEVEN_LOCAL_POSTGRES_PORT).toBe("56543");
+    expect(env.PATH).toBe("/usr/bin");
   });
 });

@@ -14,7 +14,7 @@ describe("local operator env", () => {
   test("local file assignments override ambient reserved runtime keys", () => {
     const env = buildLocalOperatorEnv({
       assignments: new Map([
-        ["DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5432/the_seven"],
+        ["DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:55432/the_seven"],
         ["SEVEN_PUBLIC_ORIGIN", "http://localhost"],
       ]),
       env: {
@@ -27,7 +27,7 @@ describe("local operator env", () => {
       },
     });
 
-    expect(env.DATABASE_URL).toBe("postgresql://postgres:postgres@127.0.0.1:5432/the_seven");
+    expect(env.DATABASE_URL).toBe("postgresql://postgres:postgres@127.0.0.1:55432/the_seven");
     expect(env.SEVEN_PUBLIC_ORIGIN).toBe("http://localhost");
     expect(env.SEVEN_BASE_URL).toBeUndefined();
     expect(env.SEVEN_NEXT_DIST_DIR).toBeUndefined();

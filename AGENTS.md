@@ -92,8 +92,8 @@ Read the governing surfaces in this order:
   - `tools/local-dev.ts` owns root `pnpm local:*` command dispatch.
   - `tools/env-doctor.ts` owns `.env.local`, legacy `.env`, key-shape, and file
     mode checks.
-  - `tools/local-postgres.ts` owns canonical compose Postgres target and port
-    ownership checks.
+  - `tools/local-postgres.ts` owns canonical compose Postgres target,
+    configured-port projection, and port ownership checks.
   - `tools/local-operator-env.ts`, `tools/local-http.ts`,
     `tools/local-http-projection.ts`, `tools/next-dev.ts`, and
     `tools/next-dev-server.ts` own reserved-key scrubbing, free-port HTTP
@@ -175,10 +175,10 @@ Important command semantics:
 - `pnpm local:bootstrap -- --install` can install or repair local tool
   dependencies such as Homebrew formulae/casks and Playwright Chromium. Treat it
   as a package/tool mutation unless the task is local setup.
-- `pnpm local:db:up` starts the compose-managed Postgres on
-  `127.0.0.1:5432`, accepts a blank DB, and fails closed if that port is owned
-  by anything other than `the-seven-postgres` or if existing The Seven tables
-  are stale.
+- `pnpm local:db:up` starts the compose-managed Postgres on the local
+  `DATABASE_URL` port, defaulting to `127.0.0.1:55432`, accepts a blank DB, and
+  fails closed if that configured port is owned by anything other than
+  `the-seven-postgres` or if existing The Seven tables are stale.
 - `pnpm local:db:reset` destroys the local compose volume before returning a
   blank current-schema database.
 - `pnpm local:dev`, `pnpm local:live`, and full browser gates allocate a free
@@ -320,11 +320,12 @@ Validation expectations:
   use its suggested fix. Only run `pnpm local:bootstrap -- --install` or
   `pnpm exec playwright install chromium` when package/tool installation is
   authorized.
-- Local Postgres unhealthy: run `pnpm local:db:up` first. If doctor says
-  `127.0.0.1:5432` is owned by another Docker container or process, stop or
-  reconfigure that owner before starting `the-seven-postgres`. Use
-  `pnpm local:db:reset` only when destroying the local compose volume is
-  acceptable.
+- Local Postgres unhealthy: run `pnpm local:db:up` first. If doctor says the
+  configured local `DATABASE_URL` port is owned by another Docker container or
+  process, change The Seven's local `DATABASE_URL` to another free
+  `127.0.0.1` port and rerun `pnpm local:db:up`; do not stop unrelated services
+  just so The Seven can bind their port. Use `pnpm local:db:reset` only when
+  destroying the local compose volume is acceptable.
 - Existing same-repo worker blocks live proof: stop the old `pnpm local:dev` or
   `next dev` process before `pnpm local:live`.
 - Clean checkout lacks Next route types: run the canonical gate path; it runs

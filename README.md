@@ -106,6 +106,8 @@ low-cost demo flow is available behind an email magic link.
   - BYOK: `Authorization: Bearer <openrouter_api_key>`
   - Demo: `HttpOnly` cookie set by `GET /api/v1/demo/consume`
 - Edge semantics:
+  - JSON request bodies are capped at 16 MiB so the public attachment contract
+    can carry five 2 MiB decoded attachments plus base64 and envelope overhead
   - malformed JSON returns `400 invalid_input`
   - invalid ingress headers return `400 invalid_input`
   - invalid BYOK keys return `401 unauthorized`
@@ -130,7 +132,9 @@ pnpm local:dev   # `pnpm dev` is the same canonical local launcher
 Canonical local path:
 
 - Docker Desktop provides the only supported local Postgres runtime.
-- `compose.yaml` owns the local database on `127.0.0.1:5432`.
+- `compose.yaml` owns the local database on `127.0.0.1:55432` by default.
+- To avoid workstation port conflicts, change only the local `DATABASE_URL`
+  port; `pnpm local:db:up` projects that port into Docker Compose.
 - `pnpm local:*` rejects non-local `DATABASE_URL` targets instead of proving
   against staging or production by accident.
 - `.env.local` provides the app environment (see `.env.local.example`).
@@ -140,7 +144,7 @@ Minimal The Seven slice keys:
 
 ```bash
 NODE_ENV=development
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/the_seven
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55432/the_seven
 SEVEN_JOB_CREDENTIAL_SECRET=replace-with-a-long-random-secret
 SEVEN_PUBLIC_ORIGIN=http://localhost
 SEVEN_APP_NAME=The Seven
@@ -189,6 +193,36 @@ any existing `pnpm local:dev` / `next dev` process for this repo before live
 proof; otherwise an old worker can claim DB jobs even though HTTP uses a
 different free port.
 
+## First successful run
+
+The shortest answer-producing CLI path is:
+
+```bash
+SEVEN_BYOK_KEY=sk-or-... \
+  pnpm batch -- --file examples/batch/founding-question.jsonl \
+  --base-url http://127.0.0.1:3000 \
+  --wait \
+  --export markdown
+```
+
+`--base-url` takes precedence over `SEVEN_BASE_URL`, so a one-off local or
+public target does not require exporting `SEVEN_BASE_URL`. With `--wait`, each
+completed item includes the phase-3 synthesis at:
+
+```text
+items[].wait.finalAnswer.content
+```
+
+If `--export markdown`, `--export json`, or `--export both` is present, the
+same waited item also includes `items[].wait.export.markdown` and/or
+`items[].wait.export.json`. Failed waits include `failureKind` and
+`terminalError` instead. Completed sessions without exactly one phase-3
+synthesis fail the batch item as `missing_final_answer`; that is a broken run,
+not a successful empty answer.
+
+For raw HTTP examples, including submit/get/export/rerun envelopes, see
+[`examples/README.md`](examples/README.md).
+
 ## Operator Commands
 
 ```bash
@@ -216,6 +250,9 @@ CLI batch input is JSONL. Each line uses the canonical query shape:
 ```json
 {"query":"Your question","councils":["built_in:founding"]}
 ```
+
+Run it with `--wait` when the product payoff should be the final answer, not
+only the submitted `sessionId`.
 
 ## Demo Flow
 
@@ -251,9 +288,9 @@ built-in roster, six nonblank phase-1 response artifacts, six phase-2 review
 artifacts, one nonblank phase-3 synthesizer artifact, successful provider calls
 at every expected member position, sent tier-owned reasoning effort, sent
 compact phase-2 `response_format`, no denied provider parameters, and the
-expected 8192/16384/16384 `max_tokens` caps. Provider chat completions use OpenRouter
-streaming internally, while stored artifacts and public diagnostics remain
-complete-response records.
+expected 16_384/64_000/64_000 `max_tokens` caps. Provider chat completions use
+OpenRouter streaming internally, while stored artifacts and public diagnostics
+remain complete-response records.
 The command fails closed before starting live proof if another same-repo local
 dev worker can claim jobs from the same database.
 
@@ -278,5 +315,6 @@ If live keys are absent, live proof is blocked with the exact missing keys.
 - [`ARCH.md`](ARCH.md) — canonical architecture, contracts, citations, and owner maps
 - [`docs/BOUNDARY_REPLACEMENT_MAP.md`](docs/BOUNDARY_REPLACEMENT_MAP.md) — old-to-new surface map
 - [`docs/CANONICAL_SURFACES.md`](docs/CANONICAL_SURFACES.md) — launch surface owners and gate boundary
+- [`examples/README.md`](examples/README.md) — CLI and cURL golden-path examples
 - [`docs/PACKAGE_POLICY.md`](docs/PACKAGE_POLICY.md) — package and workspace rules
 - [`docs/VALIDATION_MATRIX.md`](docs/VALIDATION_MATRIX.md) — verification requirements

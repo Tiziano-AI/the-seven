@@ -49,7 +49,7 @@ This document records the canonical owner for each surviving behavior in the rew
 | Prettier | Biome |
 | ad hoc route/build aliases | workspace TS config + package exports |
 | repo-root `.env` runtime scripts | repo-root `.env.local` loaded through the canonical config/env loader |
-| manual local Postgres bootstrapping | `compose.yaml` Postgres service on `127.0.0.1:5432` |
+| manual local Postgres bootstrapping | `compose.yaml` Postgres service on the local `DATABASE_URL` port, defaulting to `127.0.0.1:55432` |
 | scattered local shell commands | `tools/local-dev.ts` subcommands surfaced as `pnpm local:*`; `pnpm dev` aliases `pnpm local:dev` |
 | self-contained Playwright dev-server startup only | Playwright self-start through the local HTTP projection, or explicit external-server mode from `pnpm local:live` |
 | dashboard-managed permanent Resend webhook for local testing | Resend Receiving API polling and retrieval owned by `pnpm test:live` |

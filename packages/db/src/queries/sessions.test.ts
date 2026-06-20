@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { getDb } from "../client";
 import { jobs, sessions } from "../schema";
 import { setupTestDatabase, teardownTestDatabase } from "../testDb";
-import type { ClaimedJobLease } from "./claimedLease";
+import { buildClaimedLease, type ClaimedJobLease } from "./claimedLease";
 import { claimRunnableJobs, verifyActiveClaimedJobLease } from "./jobs";
 import {
   createProviderCall,
@@ -18,6 +18,7 @@ import {
   markSessionPendingBillingFailed,
   startClaimedSessionProcessing,
 } from "./sessions";
+import { createProviderCallForTest } from "./sessionsTestHelpers";
 import { getOrCreateUser } from "./users";
 
 function buildSnapshot(
@@ -84,12 +85,12 @@ async function createProviderDiagnostic(input: {
   billingLookupStatus: "not_requested" | "pending" | "succeeded" | "failed";
   claimedLease?: ClaimedJobLease;
 }) {
-  await createProviderCall({
+  const diagnostic = {
     sessionId: input.sessionId,
     phase: 1,
     memberPosition: input.memberPosition,
     requestModelId: `provider/model-${input.memberPosition}`,
-    requestMaxOutputTokens: 8_192,
+    requestMaxOutputTokens: 16_384,
     requestSystemChars: 1,
     requestUserChars: 1,
     requestTotalChars: 2,
@@ -118,8 +119,12 @@ async function createProviderDiagnostic(input: {
     errorStatus: null,
     errorCode: null,
     billingLookupStatus: input.billingLookupStatus,
-    claimedLease: input.claimedLease,
-  });
+  };
+  if (input.claimedLease) {
+    await createProviderCall({ ...diagnostic, claimedLease: input.claimedLease });
+    return;
+  }
+  await createProviderCallForTest(diagnostic);
 }
 
 async function setSessionStatus(
@@ -152,7 +157,7 @@ async function claimSession(sessionId: number): Promise<ClaimedJobLease> {
   expect(rows[0]?.sessionId).toBe(sessionId);
   const row = rows[0];
   if (!row) throw new Error("Expected claimed job");
-  return { sessionId, jobId: row.id, leaseOwner: row.leaseOwner };
+  return buildClaimedLease({ sessionId, jobId: row.id, leaseOwner: row.leaseOwner });
 }
 
 describe("session provider diagnostics queries", () => {

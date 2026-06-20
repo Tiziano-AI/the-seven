@@ -30,19 +30,6 @@ export type EvaluationArtifact = Readonly<{
   evaluation: PhaseTwoEvaluation;
 }>;
 
-/** Builds the immutable lease identity every workflow side effect must present. */
-export function buildClaimedLease(input: {
-  jobId: number;
-  leaseOwner: string;
-  sessionId: number;
-}): ClaimedJobLease {
-  return {
-    sessionId: input.sessionId,
-    jobId: input.jobId,
-    leaseOwner: input.leaseOwner,
-  };
-}
-
 function throwIfLeaseAborted(input: { signal?: AbortSignal; claimedLease: ClaimedJobLease }) {
   if (!input.signal?.aborted) {
     return;

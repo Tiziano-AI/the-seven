@@ -18,7 +18,7 @@ vi.mock("./auth", () => ({
 }));
 vi.mock("../services/ingressLimits", () => limiterMocks);
 vi.mock("@the-seven/config", () => ({
-  MAX_REQUEST_BODY_BYTES: 512_000,
+  MAX_REQUEST_BODY_BYTES: 16 * 1024 * 1024,
   serverRuntime: configMocks.serverRuntime,
 }));
 

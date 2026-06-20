@@ -8,7 +8,7 @@ vi.mock("server-only", () => ({}));
 const baseEnv = {
   nodeEnv: "development",
   port: 3000,
-  databaseUrl: "postgresql://postgres:postgres@127.0.0.1:5432/the_seven",
+  databaseUrl: "postgresql://postgres:postgres@127.0.0.1:55432/the_seven",
   jobCredentialSecret: "0123456789abcdef",
   publicOrigin: "http://localhost:3000",
   appName: "The Seven",

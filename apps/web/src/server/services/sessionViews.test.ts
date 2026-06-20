@@ -218,7 +218,7 @@ describe("sessionViews service", () => {
         phase: 3,
         memberPosition: 7,
         requestModelId: "model-7",
-        requestMaxOutputTokens: 8192,
+        requestMaxOutputTokens: 64_000,
         catalogRefreshedAt: new Date("2026-04-02T10:03:00.000Z"),
         supportedParametersJson: ["temperature", "reasoning"],
         sentParametersJson: ["temperature", "reasoning"],
@@ -279,7 +279,7 @@ describe("sessionViews service", () => {
     });
     expect(detail.providerCalls[0]).toMatchObject({
       requestModelName: "Model Seven",
-      requestMaxOutputTokens: 8192,
+      requestMaxOutputTokens: 64_000,
       catalogRefreshedAt: "2026-04-02T10:03:00.000Z",
       supportedParameters: ["temperature", "reasoning"],
       sentParameters: ["temperature", "reasoning"],

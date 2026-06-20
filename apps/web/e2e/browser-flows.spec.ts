@@ -100,7 +100,7 @@ test("session detail deep link renders the full archived answer", async ({ conte
   const providerLedger = page.locator("#run-details-panel");
   await expect(
     providerLedger.locator(".diagnostic-card").filter({ hasText: "A · Reviewer" }),
-  ).toContainText("max output 8192");
+  ).toContainText("max output 16384");
   await expect(
     providerLedger.locator(".diagnostic-card").filter({ hasText: "C · Reviewer" }),
   ).toContainText("denied response_format, structured_outputs");

@@ -154,7 +154,7 @@ export async function listSessionArtifacts(sessionId: number) {
     .orderBy(asc(sessionArtifacts.phase), asc(sessionArtifacts.memberPosition));
 }
 
-export async function createSessionArtifact(input: {
+export type SessionArtifactWriteInput = Readonly<{
   sessionId: number;
   phase: number;
   artifactKind: "response" | "review" | "synthesis";
@@ -163,10 +163,15 @@ export async function createSessionArtifact(input: {
   content: string;
   tokensUsed?: number | null;
   costUsdMicros?: number | null;
-  claimedLease?: ClaimedJobLease;
-}) {
-  const db = await getDb();
-  const values = {
+}>;
+
+export type CreateSessionArtifactInput = SessionArtifactWriteInput &
+  Readonly<{
+    claimedLease: ClaimedJobLease;
+  }>;
+
+function sessionArtifactValues(input: SessionArtifactWriteInput) {
+  return {
     sessionId: input.sessionId,
     phase: input.phase,
     artifactKind: input.artifactKind,
@@ -176,11 +181,11 @@ export async function createSessionArtifact(input: {
     tokensUsed: input.tokensUsed ?? null,
     costUsdMicros: input.costUsdMicros ?? null,
   };
-  if (!input.claimedLease) {
-    await db.insert(sessionArtifacts).values(values).onConflictDoNothing();
-    return;
-  }
+}
 
+export async function createSessionArtifact(input: CreateSessionArtifactInput) {
+  const db = await getDb();
+  const values = sessionArtifactValues(input);
   const claimedLease = input.claimedLease;
   requireLeaseSessionMatch({ sessionId: input.sessionId, claimedLease });
   await db.transaction(async (tx) => {
@@ -224,7 +229,7 @@ export async function getSessionArtifact(input: {
   return rows[0] ?? null;
 }
 
-export async function createProviderCall(input: {
+export type ProviderCallWriteInput = Readonly<{
   sessionId: number;
   phase: number;
   memberPosition: number;
@@ -258,15 +263,16 @@ export async function createProviderCall(input: {
   errorStatus: number | null;
   errorCode: string | null;
   billingLookupStatus: BillingLookupStatus;
-  claimedLease?: ClaimedJobLease;
-}) {
+}>;
+
+export type CreateProviderCallInput = ProviderCallWriteInput &
+  Readonly<{
+    claimedLease: ClaimedJobLease;
+  }>;
+
+export async function createProviderCall(input: CreateProviderCallInput) {
   const db = await getDb();
   const { claimedLease, ...values } = input;
-  if (!claimedLease) {
-    await db.insert(providerCalls).values(values);
-    return;
-  }
-
   requireLeaseSessionMatch({ sessionId: input.sessionId, claimedLease });
   await db.transaction(async (tx) => {
     const leaseRows = await tx.execute(sql`

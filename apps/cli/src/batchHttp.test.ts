@@ -1,164 +1,17 @@
-import { decodeCouncilRef, jsonApiCacheControl } from "@the-seven/contracts";
+import { jsonApiCacheControl } from "@the-seven/contracts";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { submitSession, waitForSession } from "./batchHttp";
-
-type FetchCall = Readonly<{
-  url: string;
-  init: RequestInit;
-}>;
-
-const timestamp = "2026-05-12T08:00:00.000Z";
-
-function successEnvelope(resource: string, payload: unknown) {
-  return {
-    schema_version: 1,
-    trace_id: "trace-success",
-    ts: timestamp,
-    result: {
-      resource,
-      payload,
-    },
-  };
-}
-
-function errorEnvelope() {
-  return {
-    schema_version: 1,
-    trace_id: "trace-error",
-    ts: timestamp,
-    kind: "unauthorized",
-    message: "Missing auth",
-    details: {
-      reason: "missing_auth",
-    },
-  };
-}
-
-function undeclaredUpstreamErrorEnvelope() {
-  return {
-    schema_version: 1,
-    trace_id: "trace-error",
-    ts: timestamp,
-    kind: "upstream_error",
-    message: "Resend request failed",
-    details: {
-      service: "resend",
-    },
-  };
-}
-
-function internalErrorEnvelope() {
-  return {
-    schema_version: 1,
-    trace_id: "trace-internal",
-    ts: timestamp,
-    kind: "internal_error",
-    message: "Internal server error",
-    details: {
-      errorId: "opaque-error-id",
-    },
-  };
-}
-
-function sessionPayload(status: "pending" | "completed" | "failed") {
-  return {
-    session: {
-      id: 33,
-      query: "Question?",
-      questionHash: "hash",
-      ingressSource: "cli",
-      ingressVersion: "cli@1.0.0",
-      councilNameAtRun: "Commons",
-      status,
-      failureKind: status === "failed" ? "provider_error" : null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      totalTokens: 0,
-      totalCostUsdMicros: 0,
-      totalCostIsPartial: false,
-      totalCost: "$0.000000",
-      snapshot: {
-        version: 1,
-        createdAt: timestamp,
-        query: "Question?",
-        userMessage: "Question?",
-        attachments: [],
-        outputFormats: {
-          phase1: "Answer clearly.",
-          phase2: "Evaluate clearly.",
-          phase3: "Synthesize clearly.",
-        },
-        council: {
-          nameAtRun: "Commons",
-          phasePrompts: {
-            phase1: "Answer clearly.",
-            phase2: "Evaluate clearly.",
-            phase3: "Synthesize clearly.",
-          },
-          members: [1, 2, 3, 4, 5, 6, 7].map((memberPosition) => ({
-            memberPosition,
-            model: {
-              provider: "openrouter",
-              modelId: `provider/model-${memberPosition}`,
-            },
-            tuning: null,
-          })),
-        },
-      },
-    },
-    artifacts: [],
-    providerCalls: [],
-    terminalError: status === "failed" ? "provider failed" : null,
-  };
-}
-
-function commonsRef() {
-  const ref = decodeCouncilRef("built_in:commons");
-  if (!ref) {
-    throw new Error("Failed to decode built-in council ref.");
-  }
-  return ref;
-}
-
-function installFetch(responses: ReadonlyArray<Response>) {
-  const calls: FetchCall[] = [];
-  const queue = [...responses];
-  vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
-    calls.push({
-      url: String(url),
-      init: init ?? {},
-    });
-    const response = queue.shift();
-    if (!response) {
-      throw new Error("Unexpected fetch call.");
-    }
-    return response;
-  });
-  return calls;
-}
-
-function jsonResponse(
-  payload: unknown,
-  status: number,
-  cacheControl: string | null = jsonApiCacheControl,
-  traceHeader?: string,
-) {
-  const headers = new Headers();
-  if (cacheControl !== null) {
-    headers.set("Cache-Control", cacheControl);
-  }
-  if (traceHeader !== undefined) {
-    headers.set("X-Trace-Id", traceHeader);
-  } else if (
-    payload &&
-    typeof payload === "object" &&
-    "trace_id" in payload &&
-    typeof payload.trace_id === "string"
-  ) {
-    headers.set("X-Trace-Id", payload.trace_id);
-  }
-  return new Response(JSON.stringify(payload), { headers, status });
-}
+import {
+  commonsRef,
+  errorEnvelope,
+  finalAnswerArtifact,
+  installFetch,
+  internalErrorEnvelope,
+  jsonResponse,
+  sessionPayload,
+  successEnvelope,
+  undeclaredUpstreamErrorEnvelope,
+} from "./batchHttp.testSupport";
 
 describe("batch HTTP client", () => {
   afterEach(() => {
@@ -205,13 +58,105 @@ describe("batch HTTP client", () => {
       apiKey: "sk-or-test-key",
       ingressVersion: null,
       sessionId: 33,
+      exportFormat: "none",
       intervalMs: 0,
       timeoutMs: 1_000,
     });
 
-    expect(result).toEqual({ ok: true, status: "completed", failureKind: null });
+    expect(result).toEqual({
+      ok: true,
+      status: "completed",
+      failureKind: null,
+      terminalError: null,
+      finalAnswer: finalAnswerArtifact(),
+      export: null,
+    });
     expect(calls[0]?.url).toBe("http://127.0.0.1:43217/api/v1/sessions/33");
     expect(calls[0]?.init.method).toBe("GET");
+  });
+
+  test("returns requested exports after a completed wait", async () => {
+    const calls = installFetch([
+      jsonResponse(successEnvelope("sessions.get", sessionPayload("completed")), 200),
+      jsonResponse(
+        successEnvelope("sessions.export", {
+          markdown: "# Run 33\n\nFinal answer from the council.",
+          json: '{"id":33}',
+        }),
+        200,
+      ),
+    ]);
+
+    const result = await waitForSession({
+      baseUrl: "http://127.0.0.1:43217",
+      apiKey: "sk-or-test-key",
+      ingressVersion: null,
+      sessionId: 33,
+      exportFormat: "markdown",
+      intervalMs: 0,
+      timeoutMs: 1_000,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: "completed",
+      export: {
+        markdown: "# Run 33\n\nFinal answer from the council.",
+        json: null,
+      },
+    });
+    expect(calls[1]?.url).toBe("http://127.0.0.1:43217/api/v1/sessions/export");
+    expect(calls[1]?.init.method).toBe("POST");
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ sessionIds: [33] });
+  });
+
+  test("rejects completed waits without exactly one phase-three synthesis", async () => {
+    installFetch([
+      jsonResponse(successEnvelope("sessions.get", sessionPayload("completed", [])), 200),
+    ]);
+
+    const result = await waitForSession({
+      baseUrl: "http://127.0.0.1:43217",
+      apiKey: "sk-or-test-key",
+      ingressVersion: null,
+      sessionId: 33,
+      exportFormat: "none",
+      intervalMs: 0,
+      timeoutMs: 1_000,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: "missing_final_answer",
+        message: "Completed session did not expose exactly one phase-3 synthesis artifact",
+        status: 200,
+        traceId: null,
+      },
+    });
+  });
+
+  test("includes terminal errors for failed waits", async () => {
+    installFetch([jsonResponse(successEnvelope("sessions.get", sessionPayload("failed")), 200)]);
+
+    const result = await waitForSession({
+      baseUrl: "http://127.0.0.1:43217",
+      apiKey: "sk-or-test-key",
+      ingressVersion: null,
+      sessionId: 33,
+      exportFormat: "none",
+      intervalMs: 0,
+      timeoutMs: 1_000,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      status: "failed",
+      failureKind: "provider_error",
+      terminalError: "provider failed",
+      finalAnswer: null,
+      export: null,
+    });
   });
 
   test("maps error envelopes and resource mismatches to CLI errors", async () => {
@@ -440,6 +385,7 @@ describe("batch HTTP client", () => {
       apiKey: "sk-or-test-key",
       ingressVersion: null,
       sessionId: 33,
+      exportFormat: "none",
       intervalMs: 0,
       timeoutMs: 0,
     });

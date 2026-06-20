@@ -92,7 +92,7 @@ const liveProofSchema = z.object({
 });
 
 const cliRuntimeSchema = z.object({
-  SEVEN_BASE_URL: z.string().url(),
+  SEVEN_BASE_URL: z.string().trim().optional(),
   SEVEN_BYOK_KEY: z.string().trim().optional(),
 });
 
@@ -163,7 +163,7 @@ export type ServerRuntime = Readonly<{
 }>;
 
 export type CliRuntime = Readonly<{
-  baseUrl: string;
+  baseUrl: string | null;
   byokKey: string | null;
 }>;
 
@@ -266,7 +266,8 @@ export function cliRuntime(input: NodeJS.ProcessEnv = process.env): CliRuntime {
   loadCanonicalEnvFile();
   const parsed = cliRuntimeSchema.parse(input);
   return {
-    baseUrl: parsed.SEVEN_BASE_URL,
+    baseUrl:
+      parsed.SEVEN_BASE_URL && parsed.SEVEN_BASE_URL.length > 0 ? parsed.SEVEN_BASE_URL : null,
     byokKey: parsed.SEVEN_BYOK_KEY ?? null,
   };
 }

@@ -9,6 +9,9 @@ const dbMocks = vi.hoisted(() => {
   }
 
   return {
+    buildClaimedLease: vi.fn(
+      (input: { sessionId: number; jobId: number; leaseOwner: string }) => input,
+    ),
     ClaimedJobLeaseLostError: MockClaimedJobLeaseLostError,
     createSessionArtifact: vi.fn(),
     getSessionArtifact: vi.fn(),

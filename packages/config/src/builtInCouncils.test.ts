@@ -260,7 +260,7 @@ const OPENROUTER_CATALOG_2026_05_16: Readonly<Record<string, CatalogFixture>> = 
     completionUsdPerMillion: 3,
     expirationDate: null,
     contextLength: 1_048_576,
-    maxCompletionTokens: 16_384,
+    maxCompletionTokens: 65_536,
     supportedParameters: SUPPORTS_FULL_NO_LOGPROBS,
   },
   "z-ai/glm-5.1": {
@@ -402,7 +402,7 @@ describe("built-in council rosters", () => {
         expect(catalogRow.contextLength).toBeGreaterThanOrEqual(131_072);
         expect(catalogRow.expirationDate).toBeNull();
         if (typeof catalogRow.maxCompletionTokens === "number") {
-          expect(catalogRow.maxCompletionTokens).toBeGreaterThanOrEqual(16_384);
+          expect(catalogRow.maxCompletionTokens).toBeGreaterThanOrEqual(64_000);
         }
       }
     }

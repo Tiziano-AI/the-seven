@@ -7,6 +7,7 @@ import {
   sessionSnapshotSchema,
 } from "@the-seven/contracts";
 import {
+  buildClaimedLease,
   ClaimedJobLeaseLostError,
   createSessionArtifact,
   getSessionArtifact,
@@ -25,7 +26,6 @@ import { buildSystemPromptForPhase, getSnapshotMember } from "../domain/sessionS
 import { scheduleSessionCostBackfill } from "./openrouterBilling";
 import { OpenRouterPhaseRateLimitError, runOpenRouterPhaseCall } from "./openrouterRun";
 import {
-  buildClaimedLease,
   type EvaluationArtifact,
   runParallel,
   toEvaluationArtifacts,

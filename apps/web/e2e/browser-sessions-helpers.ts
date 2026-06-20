@@ -50,7 +50,7 @@ export async function expectRunDetailsLedger(page: Page) {
   await expect(successfulCall).toContainText("Phase 1");
   await expect(successfulCall).toContainText("Qwen3.6 35B A3B");
   await expect(successfulCall).toContainText("qwen/qwen3.6-35b-a3b");
-  await expect(successfulCall).toContainText("max output 8192");
+  await expect(successfulCall).toContainText("max output 16384");
   await expect(successfulCall).toContainText("reasoning effort low");
   await expect(successfulCall).toContainText("sent max_tokens, reasoning");
   await expect(successfulCall).toContainText(
@@ -78,7 +78,7 @@ export async function expectRunDetailsLedger(page: Page) {
     .filter({ hasText: "B · Reviewer" });
   await expect(phaseTwoCall).toContainText("Phase 2");
   await expect(phaseTwoCall).toContainText("Settlement pending");
-  await expect(phaseTwoCall).toContainText("max output 16384");
+  await expect(phaseTwoCall).toContainText("max output 64000");
   await expect(phaseTwoCall).toContainText("reasoning effort low");
   await expect(phaseTwoCall).toContainText("sent max_tokens, reasoning, response_format");
   await expect(phaseTwoCall).toContainText(
@@ -105,7 +105,7 @@ export async function expectRunDetailsLedger(page: Page) {
     .locator(".diagnostic-card")
     .filter({ hasText: "D · Reviewer" });
   await expect(upstreamCall).toContainText("Phase 1 · Needs attention");
-  await expect(upstreamCall).toContainText("max output 8192");
+  await expect(upstreamCall).toContainText("max output 16384");
   await expect(upstreamCall).toContainText("reasoning effort low");
   await expect(upstreamCall).toContainText("sent max_tokens, reasoning");
   await expect(upstreamCall).toContainText("denied none");

@@ -222,12 +222,10 @@ function throwLeaseAbort(input: { signal?: AbortSignal }) {
 
 async function verifyProviderEgressLease(input: {
   signal?: AbortSignal;
-  claimedLease?: ClaimedJobLease;
+  claimedLease: ClaimedJobLease;
 }) {
   throwLeaseAbort(input);
-  if (input.claimedLease) {
-    await verifyActiveClaimedJobLease({ ...input.claimedLease, now: new Date() });
-  }
+  await verifyActiveClaimedJobLease({ ...input.claimedLease, now: new Date() });
   throwLeaseAbort(input);
 }
 
@@ -240,7 +238,7 @@ export async function runOpenRouterPhaseCall(input: {
   messages: ReadonlyArray<OpenRouterMessage>;
   tuning: CouncilMemberTuning | null;
   signal?: AbortSignal;
-  claimedLease?: ClaimedJobLease;
+  claimedLease: ClaimedJobLease;
 }) {
   await verifyProviderEgressLease(input);
   const capability = await getModelCapability(input.modelId);

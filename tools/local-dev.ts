@@ -16,7 +16,9 @@ import { readLocalDatabaseSchemaState, toLocalDatabaseSchemaCheck } from "./loca
 import { materializeLocalHttpProjection } from "./local-http";
 import { buildLocalOperatorEnv } from "./local-operator-env";
 import {
+  buildLocalPostgresComposeEnv,
   ensureComposePostgresHealthy,
+  isCanonicalLocalPostgresReady,
   type OperatorCheckResult,
   readCanonicalLocalPostgresStatus,
   toCanonicalLocalPostgresCheck,
@@ -181,12 +183,13 @@ async function collectDoctorChecks(live: boolean) {
     typeof databaseStatus === "string" &&
     databaseStatus.trim().length > 0 &&
     localPostgresCheck.ok &&
-    localPostgresStatus?.composeHealth === "healthy"
+    localPostgresStatus !== null &&
+    isCanonicalLocalPostgresReady(localPostgresStatus)
       ? toLocalDatabaseSchemaCheck(await readLocalDatabaseSchemaState(databaseStatus))
       : ({
           label: "local postgres schema",
           ok: true,
-          detail: "not checked until compose Postgres is healthy",
+          detail: "not checked until compose Postgres is healthy on the configured local port",
           fix: null,
         } satisfies OperatorCheckResult);
 
@@ -328,18 +331,28 @@ async function installPrerequisites() {
 async function runDbUp() {
   await ensureDockerReady();
   const env = localOperatorEnv();
+  const databaseUrl = serverRuntime(env).databaseUrl;
   const diagnosis = await readCanonicalLocalPostgresStatus({
     composeFilePath,
-    connectionString: serverRuntime(env).databaseUrl,
+    connectionString: databaseUrl,
   });
   const portCheck = toCanonicalLocalPostgresCheck(diagnosis);
   if (!portCheck.ok) {
     throw new Error(`${portCheck.detail}; ${portCheck.fix}`);
   }
-  await runCommandOrThrow("docker", buildComposeArgs(["up", "-d", "postgres"]));
+  await runCommandOrThrow("docker", buildComposeArgs(["up", "-d", "postgres"]), {
+    env: buildLocalPostgresComposeEnv({
+      connectionString: databaseUrl,
+      env: process.env,
+    }),
+  });
   await waitForComposeHealth();
-  await ensureLocalDatabaseSchemaCompatible(serverRuntime(env).databaseUrl);
-  console.log("Postgres is healthy on 127.0.0.1:5432.");
+  await ensureLocalDatabaseSchemaCompatible(databaseUrl);
+  const ready = await readCanonicalLocalPostgresStatus({
+    composeFilePath,
+    connectionString: databaseUrl,
+  });
+  console.log(`Postgres is healthy on ${ready.target.host}:${ready.target.port}.`);
 }
 
 async function runDbDown() {

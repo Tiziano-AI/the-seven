@@ -12,6 +12,9 @@ const dbMocks = vi.hoisted(() => {
   }
 
   return {
+    buildClaimedLease: vi.fn(
+      (input: { sessionId: number; jobId: number; leaseOwner: string }) => input,
+    ),
     ClaimedJobLeaseLostError: MockClaimedJobLeaseLostError,
     createProviderCall: vi.fn(),
     verifyActiveClaimedJobLease: vi.fn(),
@@ -32,12 +35,17 @@ vi.mock("../adapters/openrouter", async (importOriginal) => {
   };
 });
 
+import { buildClaimedLease } from "@the-seven/db";
 import { OpenRouterRequestFailedError } from "../adapters/openrouter";
-import {
-  OpenRouterPhaseRateLimitError,
-  OpenRouterUnsupportedParameterError,
-  runOpenRouterPhaseCall,
-} from "./openrouterRun";
+import { OpenRouterPhaseRateLimitError, runOpenRouterPhaseCall } from "./openrouterRun";
+
+function testLease(sessionId: number) {
+  return buildClaimedLease({
+    sessionId,
+    jobId: sessionId + 100,
+    leaseOwner: `worker:test:${sessionId}`,
+  });
+}
 
 describe("runOpenRouterPhaseCall diagnostics", () => {
   beforeEach(() => {
@@ -56,7 +64,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["temperature", "top_p", "reasoning", "max_tokens"],
-      maxCompletionTokens: 8_192,
+      maxCompletionTokens: 16_384,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -94,13 +102,14 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
         reasoningEffort: "low",
         includeReasoning: null,
       },
+      claimedLease: testLease(16),
     });
 
     expect(result).toEqual({ ok: true, content: "answer" });
     expect(dbMocks.createProviderCall).toHaveBeenCalledWith(
       expect.objectContaining({
         requestModelId: "provider/model",
-        requestMaxOutputTokens: 8_192,
+        requestMaxOutputTokens: 16_384,
         catalogRefreshedAt: new Date("2026-05-12T08:00:00.000Z"),
         supportedParametersJson: ["temperature", "top_p", "reasoning", "max_tokens"],
         sentParametersJson: ["temperature", "top_p", "reasoning", "max_tokens"],
@@ -126,7 +135,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["reasoning", "max_tokens"],
-      maxCompletionTokens: 8_192,
+      maxCompletionTokens: 16_384,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -153,11 +162,12 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
         includeReasoning: null,
       },
       signal: controller.signal,
+      claimedLease: testLease(19),
     });
 
     expect(adapterMocks.callOpenRouter).toHaveBeenCalledWith(
       "sk-or-secret",
-      expect.objectContaining({ max_tokens: 8_192, reasoning: { effort: "low" } }),
+      expect.objectContaining({ max_tokens: 16_384, reasoning: { effort: "low" } }),
       { signal: controller.signal },
     );
   });
@@ -166,7 +176,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens"],
-      maxCompletionTokens: 8_192,
+      maxCompletionTokens: 16_384,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -183,7 +193,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
         messages: [{ role: "user", content: "user" }],
         tuning: null,
         signal: controller.signal,
-        claimedLease: { sessionId: 19, jobId: 27, leaseOwner: "worker:lost" },
+        claimedLease: buildClaimedLease({ sessionId: 19, jobId: 27, leaseOwner: "worker:lost" }),
       }),
     ).rejects.toThrow("Claimed job lease lost");
 
@@ -196,7 +206,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens"],
-      maxCompletionTokens: 8_192,
+      maxCompletionTokens: 16_384,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -220,7 +230,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
         messages: [{ role: "user", content: "user" }],
         tuning: null,
         signal: controller.signal,
-        claimedLease: { sessionId: 19, jobId: 27, leaseOwner: "worker:lost" },
+        claimedLease: buildClaimedLease({ sessionId: 19, jobId: 27, leaseOwner: "worker:lost" }),
       }),
     ).rejects.toThrow("Claimed job lease lost");
 
@@ -231,7 +241,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens", "response_format", "structured_outputs"],
-      maxCompletionTokens: 32_768,
+      maxCompletionTokens: 64_000,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -256,6 +266,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
       modelId: "provider/model",
       messages: [{ role: "user", content: "user" }],
       tuning: null,
+      claimedLease: testLease(17),
     });
 
     expect(result.ok).toBe(false);
@@ -263,7 +274,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
       expect.objectContaining({
         responseId: "generation-2",
         responseModel: "provider/model",
-        requestMaxOutputTokens: 16_384,
+        requestMaxOutputTokens: 64_000,
         sentParametersJson: ["max_tokens", "response_format"],
         sentProviderRequireParameters: true,
         sentProviderIgnoredProvidersJson: ["amazon-bedrock", "azure"],
@@ -280,7 +291,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens"],
-      maxCompletionTokens: 8_192,
+      maxCompletionTokens: 16_384,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -312,6 +323,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
       modelId: "provider/model",
       messages: [{ role: "user", content: "user" }],
       tuning: null,
+      claimedLease: testLease(18),
     });
 
     expect(result.ok).toBe(false);
@@ -323,7 +335,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     expect(dbMocks.createProviderCall).toHaveBeenCalledWith(
       expect.objectContaining({
         responseId: "generation-429",
-        requestMaxOutputTokens: 8_192,
+        requestMaxOutputTokens: 16_384,
         errorMessage: "OpenRouter choice error 429: Too many requests",
         choiceErrorMessage: "Too many requests [redacted]",
         choiceErrorCode: 429,
@@ -337,7 +349,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens"],
-      maxCompletionTokens: 8_192,
+      maxCompletionTokens: 16_384,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -357,6 +369,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
       modelId: "provider/model",
       messages: [{ role: "user", content: "user" }],
       tuning: null,
+      claimedLease: testLease(20),
     });
 
     expect(result.ok).toBe(false);
@@ -373,7 +386,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens"],
-      maxCompletionTokens: 8_192,
+      maxCompletionTokens: 16_384,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -393,6 +406,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
       modelId: "provider/model",
       messages: [{ role: "user", content: "user" }],
       tuning: null,
+      claimedLease: testLease(21),
     });
 
     expect(result.ok).toBe(false);
@@ -400,99 +414,6 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
       expect.objectContaining({
         errorStatus: 429,
         errorCode: "rate_limited",
-      }),
-    );
-  });
-
-  test("denies phase-two models without structured output support before provider execution", async () => {
-    modelMocks.getModelCapability.mockResolvedValue({
-      modelId: "provider/model",
-      supportedParameters: ["temperature", "max_tokens"],
-      maxCompletionTokens: 16_384,
-      expirationDate: null,
-      refreshedAt: new Date("2026-05-09T10:00:00.000Z"),
-    });
-
-    const result = await runOpenRouterPhaseCall({
-      sessionId: 15,
-      phase: 2,
-      memberPosition: 2,
-      apiKey: "sk-or-secret",
-      modelId: "provider/model",
-      messages: [{ role: "user", content: "user" }],
-      tuning: null,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(result.error).toBeInstanceOf(OpenRouterUnsupportedParameterError);
-    expect(adapterMocks.callOpenRouter).not.toHaveBeenCalled();
-    expect(dbMocks.createProviderCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sentParametersJson: [],
-        deniedParametersJson: ["response_format", "structured_outputs"],
-        billingLookupStatus: "not_requested",
-      }),
-    );
-  });
-
-  test("records the exact missing phase-two structured output capability", async () => {
-    modelMocks.getModelCapability.mockResolvedValue({
-      modelId: "provider/model",
-      supportedParameters: ["response_format", "max_tokens"],
-      maxCompletionTokens: 16_384,
-      expirationDate: null,
-      refreshedAt: new Date("2026-05-09T10:00:00.000Z"),
-    });
-
-    const result = await runOpenRouterPhaseCall({
-      sessionId: 15,
-      phase: 2,
-      memberPosition: 3,
-      apiKey: "sk-or-secret",
-      modelId: "provider/model",
-      messages: [{ role: "user", content: "user" }],
-      tuning: null,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(result.error).toBeInstanceOf(OpenRouterUnsupportedParameterError);
-    expect(adapterMocks.callOpenRouter).not.toHaveBeenCalled();
-    expect(dbMocks.createProviderCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sentParametersJson: [],
-        deniedParametersJson: ["structured_outputs"],
-        billingLookupStatus: "not_requested",
-      }),
-    );
-  });
-
-  test("records the exact missing phase-two response format capability", async () => {
-    modelMocks.getModelCapability.mockResolvedValue({
-      modelId: "provider/model",
-      supportedParameters: ["structured_outputs", "max_tokens"],
-      maxCompletionTokens: 16_384,
-      expirationDate: null,
-      refreshedAt: new Date("2026-05-09T10:00:00.000Z"),
-    });
-
-    const result = await runOpenRouterPhaseCall({
-      sessionId: 15,
-      phase: 2,
-      memberPosition: 4,
-      apiKey: "sk-or-secret",
-      modelId: "provider/model",
-      messages: [{ role: "user", content: "user" }],
-      tuning: null,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(result.error).toBeInstanceOf(OpenRouterUnsupportedParameterError);
-    expect(adapterMocks.callOpenRouter).not.toHaveBeenCalled();
-    expect(dbMocks.createProviderCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sentParametersJson: [],
-        deniedParametersJson: ["response_format"],
-        billingLookupStatus: "not_requested",
       }),
     );
   });

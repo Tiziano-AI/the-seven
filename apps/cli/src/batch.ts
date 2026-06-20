@@ -2,8 +2,9 @@ import fs from "node:fs";
 import readline from "node:readline";
 import { cliRuntime } from "@the-seven/config";
 import { type CouncilRef, decodeCouncilRef } from "@the-seven/contracts";
-import { z } from "zod";
+import { type BatchOptions, parseArgs, parseBatchLine, usage } from "./batchArgs";
 import {
+  type BatchExportFormat,
   resolveCliIngressVersion,
   type SubmitResult,
   submitSession,
@@ -11,28 +12,8 @@ import {
   waitForSession,
 } from "./batchHttp";
 
-const DEFAULT_CONCURRENCY = 3;
-const DEFAULT_WAIT_INTERVAL_MS = 2_000;
-const DEFAULT_WAIT_TIMEOUT_MS = 30 * 60 * 1_000;
-const MAX_CONCURRENCY = 20;
-const MAX_WAIT_INTERVAL_MS = 60_000;
-const MAX_WAIT_TIMEOUT_MS = 6 * 60 * 60 * 1_000;
-
-const batchLineSchema = z.object({
-  query: z.string().trim().min(1),
-  councils: z.array(z.string().trim().min(1)).min(1),
-});
-
-type BatchLine = z.infer<typeof batchLineSchema>;
-
-export type BatchOptions = Readonly<{
-  filePath: string;
-  baseUrl: string;
-  concurrency: number;
-  wait: boolean;
-  waitIntervalMs: number;
-  waitTimeoutMs: number;
-}>;
+export type { BatchOptions } from "./batchArgs";
+export { parseArgs, parseBatchLine, usage } from "./batchArgs";
 
 type BatchTask = Readonly<{
   line: number;
@@ -57,6 +38,7 @@ export type BatchOutput = Readonly<{
   baseUrl: string;
   concurrency: number;
   wait: boolean;
+  exportFormat: BatchExportFormat;
   waitIntervalMs: number;
   waitTimeoutMs: number;
   summary: Readonly<{
@@ -69,135 +51,6 @@ export type BatchOutput = Readonly<{
   }>;
   items: ReadonlyArray<BatchItemResult>;
 }>;
-
-type ParseArgsResult =
-  | Readonly<{ ok: true; options: BatchOptions }>
-  | Readonly<{ ok: false; error: string }>;
-
-type ParseBatchLineResult =
-  | Readonly<{ ok: true; value: BatchLine }>
-  | Readonly<{ ok: false; error: string }>;
-
-function parsePositiveInt(
-  raw: string | undefined,
-  label: string,
-  bounds: Readonly<{ min: number; max: number }>,
-) {
-  if (!raw) {
-    return { ok: false as const, error: `Missing ${label}` };
-  }
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isInteger(parsed) || parsed < bounds.min || parsed > bounds.max) {
-    return { ok: false as const, error: `Invalid ${label} (${bounds.min}-${bounds.max})` };
-  }
-  return { ok: true as const, value: parsed };
-}
-
-function normalizeBaseUrl(value: string) {
-  return value.replace(/\/+$/, "");
-}
-
-export function usage() {
-  return [
-    "Usage:",
-    "  pnpm batch -- --file <path> [--concurrency N] [--wait] [--base-url URL] [--wait-interval-ms N] [--wait-timeout-ms N]",
-    "",
-    "JSONL input:",
-    '  {"query":"Your question","councils":["built_in:founding"]}',
-    "",
-    "Environment:",
-    "  SEVEN_BYOK_KEY=... (required)",
-    "  SEVEN_BASE_URL=... or --base-url URL (required)",
-  ].join("\n");
-}
-
-export function parseArgs(args: ReadonlyArray<string>, env = cliRuntime()): ParseArgsResult {
-  let filePath: string | null = null;
-  let baseUrl = env.baseUrl;
-  let concurrency = DEFAULT_CONCURRENCY;
-  let wait = false;
-  let waitIntervalMs = DEFAULT_WAIT_INTERVAL_MS;
-  let waitTimeoutMs = DEFAULT_WAIT_TIMEOUT_MS;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === "--file" || arg === "-f") {
-      filePath = args[index + 1] ?? null;
-      index += 1;
-      continue;
-    }
-    if (arg === "--base-url") {
-      baseUrl = args[index + 1] ?? baseUrl;
-      index += 1;
-      continue;
-    }
-    if (arg === "--concurrency" || arg === "-c") {
-      const parsed = parsePositiveInt(args[index + 1], "concurrency", {
-        min: 1,
-        max: MAX_CONCURRENCY,
-      });
-      if (!parsed.ok) {
-        return parsed;
-      }
-      concurrency = parsed.value;
-      index += 1;
-      continue;
-    }
-    if (arg === "--wait") {
-      wait = true;
-      continue;
-    }
-    if (arg === "--wait-interval-ms") {
-      const parsed = parsePositiveInt(args[index + 1], "wait interval", {
-        min: 1,
-        max: MAX_WAIT_INTERVAL_MS,
-      });
-      if (!parsed.ok) {
-        return parsed;
-      }
-      waitIntervalMs = parsed.value;
-      index += 1;
-      continue;
-    }
-    if (arg === "--wait-timeout-ms") {
-      const parsed = parsePositiveInt(args[index + 1], "wait timeout", {
-        min: 1,
-        max: MAX_WAIT_TIMEOUT_MS,
-      });
-      if (!parsed.ok) {
-        return parsed;
-      }
-      waitTimeoutMs = parsed.value;
-      index += 1;
-      continue;
-    }
-    return { ok: false, error: `Unknown argument: ${arg}` };
-  }
-
-  if (!filePath || filePath.trim().length === 0) {
-    return { ok: false, error: "Missing --file" };
-  }
-
-  return {
-    ok: true,
-    options: {
-      filePath,
-      baseUrl: normalizeBaseUrl(baseUrl),
-      concurrency,
-      wait,
-      waitIntervalMs,
-      waitTimeoutMs,
-    },
-  };
-}
-
-export function parseBatchLine(value: unknown): ParseBatchLineResult {
-  const parsed = batchLineSchema.safeParse(value);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid batch line" };
-  }
-  return { ok: true, value: parsed.data };
-}
 
 async function runPool<T>(
   items: ReadonlyArray<T>,
@@ -240,6 +93,7 @@ function summarizeResults(
     baseUrl: options.baseUrl,
     concurrency: options.concurrency,
     wait: options.wait,
+    exportFormat: options.exportFormat,
     waitIntervalMs: options.waitIntervalMs,
     waitTimeoutMs: options.waitTimeoutMs,
     summary: {
@@ -382,6 +236,7 @@ export async function runBatch(input: {
           apiKey: input.apiKey,
           ingressVersion,
           sessionId: submit.sessionId,
+          exportFormat: input.options.exportFormat,
           intervalMs: input.options.waitIntervalMs,
           timeoutMs: input.options.waitTimeoutMs,
         })

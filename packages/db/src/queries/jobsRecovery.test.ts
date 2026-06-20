@@ -5,7 +5,8 @@ import { jobs, sessions } from "../schema";
 import { setupTestDatabase, teardownTestDatabase } from "../testDb";
 import { claimRunnableJobs } from "./jobs";
 import { createQueuedSession } from "./jobsTestHelpers";
-import { createProviderCall, getSessionById } from "./sessions";
+import { getSessionById } from "./sessions";
+import { createProviderCallForTest } from "./sessionsTestHelpers";
 
 async function claimOne(sessionId: number) {
   const rows = await claimRunnableJobs({
@@ -27,12 +28,12 @@ async function createProviderDiagnostic(input: {
   usageTotalTokens: number;
   billingLookupStatus: "pending" | "succeeded";
 }) {
-  await createProviderCall({
+  await createProviderCallForTest({
     sessionId: input.sessionId,
     phase: 1,
     memberPosition: input.memberPosition,
     requestModelId: `provider/model-${input.memberPosition}`,
-    requestMaxOutputTokens: 8192,
+    requestMaxOutputTokens: 16_384,
     requestSystemChars: 1,
     requestUserChars: 2,
     requestTotalChars: 3,

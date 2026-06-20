@@ -32,7 +32,7 @@ type OpenRouterProviderCallRecordInput = Readonly<{
   error: Error | null;
   errorStatus: number | null;
   errorCode: string | null;
-  claimedLease?: ClaimedJobLease;
+  claimedLease: ClaimedJobLease;
 }>;
 
 function getMessageCharCounts(messages: ReadonlyArray<OpenRouterMessage>): MessageCharCounts {

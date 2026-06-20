@@ -25,6 +25,8 @@ This is the required verification pyramid for the launch-candidate milestone.
   `X-Trace-Id` matches envelope `trace_id`
 - invalid path params, invalid query, invalid body, invalid ingress, and missing
   auth denials include a server trace header
+- JSON request-body admission allows the advertised attachment budget under the
+  16 MiB body cap and denies bodies above that cap
 - public request body schemas reject extra keys instead of stripping them
 - transformed path params such as council `locator` reach handlers as parsed
   contract values and are not parsed a second time
@@ -87,7 +89,7 @@ This is the required verification pyramid for the launch-candidate milestone.
   provider diagnostics expose the sent effort value: Commons `low`, Lantern
   `medium`, Founding `xhigh`
 - every OpenRouter call sends the phase-owned server `max_tokens` cap
-  (8192/16384/16384) and denies models that do not support that required request
+  (16_384/64_000/64_000) and denies models that do not support that required request
   parameter or publish a lower maximum completion-token cap
 - chat completions use the OpenRouter streaming transport internally while
   preserving the stored complete-response artifact contract
@@ -305,7 +307,8 @@ denial against the running app.
   - `psql` and `pg_isready`
   - Playwright browser availability
   - `DATABASE_URL` targets the canonical local Postgres authority
-  - `127.0.0.1:5432` is either free for `the-seven-postgres` or already owned
+  - the configured local `DATABASE_URL` port, defaulting to
+    `127.0.0.1:55432`, is either free for `the-seven-postgres` or already owned
     by it
   - effective `.env.local` presence
   - minimal development keys
@@ -319,10 +322,11 @@ denial against the running app.
 - `pnpm local:bootstrap -- --install` installs missing Homebrew-managed
   prerequisites and Playwright browsers
 - `pnpm local:db:up` fails fast if `DATABASE_URL` points outside local compose
-  Postgres or if another service owns `127.0.0.1:5432`, otherwise waits for a
-  healthy compose-managed Postgres instance. A blank database is accepted. A
-  database with stale The Seven tables fails closed and instructs the operator
-  to run `pnpm local:db:reset`.
+  Postgres or if another service owns the configured local port, otherwise
+  projects that port into Docker Compose and waits for a healthy
+  compose-managed Postgres instance. A blank database is accepted. A database
+  with stale The Seven tables fails closed and instructs the operator to run
+  `pnpm local:db:reset`.
 - `pnpm local:db:reset` destroys the named volume and returns a blank database
 - `pnpm run db:bootstrap:check` verifies the squashed init migration against an
   isolated schema and fails fast if the canonical compose-managed database is
@@ -350,7 +354,7 @@ denial against the running app.
     tier-owned sent reasoning effort, sent `provider.require_parameters`, sent
     `provider.ignore` for `amazon-bedrock` and `azure`, no denied parameters,
     response IDs/models, no provider or choice errors, and exact
-    8192/16384/16384 provider output caps across expected phase calls
+    16_384/64_000/64_000 provider output caps across expected phase calls
   - phase-2 provider-call diagnostics include supported `response_format` and
     `structured_outputs`, sent `response_format`, and provider parameter
     enforcement

@@ -304,7 +304,7 @@ describe("live session proof helper", () => {
 
   it("rejects provider calls with the wrong phase output cap", () => {
     const calls = completeProviderCalls();
-    calls[8] = { ...calls[8], requestMaxOutputTokens: 8192 };
+    calls[8] = { ...calls[8], requestMaxOutputTokens: 16_384 };
 
     expect(() =>
       assertLiveSessionProof({
@@ -314,7 +314,7 @@ describe("live session proof helper", () => {
         expectedMembers: completeMembers(),
         label: "session 10",
       }),
-    ).toThrow("provider/model-3 requested 8192 output tokens in phase 2; expected 16384");
+    ).toThrow("provider/model-3 requested 16384 output tokens in phase 2; expected 64000");
   });
 
   it("rejects missing phase-1 provider calls", () => {

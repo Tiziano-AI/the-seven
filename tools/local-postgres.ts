@@ -27,8 +27,12 @@ export type CanonicalLocalPostgresStatus = Readonly<{
 
 const CANONICAL_COMPOSE_SERVICE = "postgres";
 const CANONICAL_CONTAINER_NAME = "the-seven-postgres";
-const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
-const CANONICAL_TARGET_DETAIL = "127.0.0.1:5432/the_seven";
+const CANONICAL_LOCAL_HOST = "127.0.0.1";
+const CANONICAL_DATABASE = "the_seven";
+export const DEFAULT_LOCAL_POSTGRES_PORT = "55432";
+export const LOCAL_POSTGRES_COMPOSE_HOST_ENV = "SEVEN_LOCAL_POSTGRES_HOST";
+export const LOCAL_POSTGRES_COMPOSE_PORT_ENV = "SEVEN_LOCAL_POSTGRES_PORT";
+const CANONICAL_TARGET_DETAIL = `${CANONICAL_LOCAL_HOST}:${DEFAULT_LOCAL_POSTGRES_PORT}/${CANONICAL_DATABASE}`;
 
 function parsePostgresTarget(connectionString: string): PostgresTarget {
   const url = new URL(connectionString);
@@ -40,7 +44,7 @@ function parsePostgresTarget(connectionString: string): PostgresTarget {
 }
 
 function isCanonicalLocalTarget(target: PostgresTarget): boolean {
-  return LOCAL_HOSTS.has(target.host) && target.port === "5432";
+  return target.host === CANONICAL_LOCAL_HOST && target.database === CANONICAL_DATABASE;
 }
 
 function formatTarget(target: PostgresTarget): string {
@@ -150,6 +154,30 @@ async function readPortOwner(port: string): Promise<PortOwner | null> {
   return parseListeningProcess(lsofResult);
 }
 
+function portIsOwnedByCanonicalContainer(status: CanonicalLocalPostgresStatus): boolean {
+  return status.portOwner?.kind === "docker" && status.portOwner.name === CANONICAL_CONTAINER_NAME;
+}
+
+export function isCanonicalLocalPostgresReady(status: CanonicalLocalPostgresStatus): boolean {
+  return (
+    isCanonicalLocalTarget(status.target) &&
+    status.composeHealth === "healthy" &&
+    portIsOwnedByCanonicalContainer(status)
+  );
+}
+
+export function buildLocalPostgresComposeEnv(input: {
+  connectionString: string;
+  env: NodeJS.ProcessEnv;
+}): NodeJS.ProcessEnv {
+  const target = parsePostgresTarget(input.connectionString);
+  return {
+    ...input.env,
+    [LOCAL_POSTGRES_COMPOSE_HOST_ENV]: CANONICAL_LOCAL_HOST,
+    [LOCAL_POSTGRES_COMPOSE_PORT_ENV]: target.port,
+  };
+}
+
 export async function readCanonicalLocalPostgresStatus(input: {
   composeFilePath: string;
   connectionString: string;
@@ -178,16 +206,12 @@ export function describeCanonicalLocalPostgresPort(status: CanonicalLocalPostgre
   if (!isCanonicalLocalTarget(status.target)) {
     return {
       ok: false,
-      detail: `DATABASE_URL points to ${formatTarget(status.target)}, not canonical local Postgres ${CANONICAL_TARGET_DETAIL}`,
-      fix: "Point DATABASE_URL at the compose-managed local Postgres target from `.env.local.example`.",
+      detail: `DATABASE_URL points to ${formatTarget(status.target)}, not supported local compose Postgres ${CANONICAL_TARGET_DETAIL}`,
+      fix: "Point DATABASE_URL at `.env.local.example` or another free 127.0.0.1 port for the the_seven database.",
     };
   }
 
-  if (
-    status.composeHealth === "healthy" &&
-    status.portOwner?.kind === "docker" &&
-    status.portOwner.name === CANONICAL_CONTAINER_NAME
-  ) {
+  if (portIsOwnedByCanonicalContainer(status)) {
     return {
       ok: true,
       detail: `${CANONICAL_CONTAINER_NAME} owns ${status.target.host}:${status.target.port}`,
@@ -199,7 +223,7 @@ export function describeCanonicalLocalPostgresPort(status: CanonicalLocalPostgre
     return {
       ok: false,
       detail: `${status.target.host}:${status.target.port} is owned by Docker container ${status.portOwner.name}`,
-      fix: `Stop or reconfigure ${status.portOwner.name} so ${CANONICAL_CONTAINER_NAME} can bind ${status.target.host}:${status.target.port}.`,
+      fix: `Change DATABASE_URL to a free 127.0.0.1 port and rerun \`pnpm local:db:up\`; do not stop unrelated services for The Seven.`,
     };
   }
 
@@ -207,7 +231,7 @@ export function describeCanonicalLocalPostgresPort(status: CanonicalLocalPostgre
     return {
       ok: false,
       detail: `${status.target.host}:${status.target.port} is owned by ${status.portOwner.summary}`,
-      fix: `Stop ${status.portOwner.summary} so ${CANONICAL_CONTAINER_NAME} can bind ${status.target.host}:${status.target.port}.`,
+      fix: `Change DATABASE_URL to a free 127.0.0.1 port and rerun \`pnpm local:db:up\`; do not stop unrelated services for The Seven.`,
     };
   }
 
@@ -257,7 +281,7 @@ export function formatCanonicalLocalPostgresBootstrapMessage(input: {
     input.error.code === "3D000" &&
     input.status.composeHealth !== "healthy"
   ) {
-    return `Database ${input.status.target.database} is missing because ${CANONICAL_CONTAINER_NAME} is not the active Postgres owner on ${input.status.target.host}:${input.status.target.port}; run \`pnpm local:db:up\` after freeing the port.`;
+    return `Database ${input.status.target.database} is missing because ${CANONICAL_CONTAINER_NAME} is not healthy on configured local target ${input.status.target.host}:${input.status.target.port}; run \`pnpm local:db:up\`.`;
   }
 
   if (
@@ -293,8 +317,7 @@ export async function ensureComposePostgresHealthy(input: {
     throw new Error(`${portCheck.detail}; ${portCheck.fix}`);
   }
 
-  const status = await readComposeHealthStatus(input.composeFilePath);
-  if (status === "healthy") {
+  if (isCanonicalLocalPostgresReady(diagnosis)) {
     return;
   }
 
@@ -318,8 +341,11 @@ export async function waitForComposePostgresHealthy(input: {
 
   const deadline = Date.now() + input.healthcheckTimeoutMs;
   while (Date.now() < deadline) {
-    const status = await readComposeHealthStatus(input.composeFilePath);
-    if (status === "healthy") {
+    const status = await readCanonicalLocalPostgresStatus({
+      composeFilePath: input.composeFilePath,
+      connectionString: input.connectionString,
+    });
+    if (isCanonicalLocalPostgresReady(status)) {
       return;
     }
     await input.sleep(1_000);

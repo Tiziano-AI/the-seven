@@ -11,7 +11,7 @@ import {
 const baseServerEnv = {
   NODE_ENV: "development",
   PORT: "0",
-  DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/the_seven",
+  DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/the_seven",
   SEVEN_JOB_CREDENTIAL_SECRET: "0123456789abcdef",
   SEVEN_PUBLIC_ORIGIN: "http://localhost",
   SEVEN_APP_NAME: "The Seven",
@@ -95,13 +95,16 @@ describe("env materialization", () => {
     ).toThrow();
   });
 
-  test("requires explicit local transport URL for cli only", () => {
-    expect(() =>
+  test("lets the cli resolve transport URL from flags after env load", () => {
+    expect(
       cliRuntime({
         NODE_ENV: "test",
         SEVEN_BYOK_KEY: "sk-or",
       }),
-    ).toThrow();
+    ).toEqual({
+      baseUrl: null,
+      byokKey: "sk-or",
+    });
   });
 
   test("does not treat SEVEN_BASE_URL as a live credential", () => {

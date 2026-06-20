@@ -71,7 +71,7 @@ describe("parseJsonBody", () => {
         new Request("https://example.com", {
           method: "POST",
           headers: {
-            "content-length": String(1024 * 1024),
+            "content-length": String(17 * 1024 * 1024),
             "content-type": "application/json",
           },
           body: '{"name":"ok"}',
@@ -88,7 +88,7 @@ describe("parseJsonBody", () => {
   });
 
   test("rejects oversized body after reading", async () => {
-    const largeBody = `{"name":"${"x".repeat(600_000)}"}`;
+    const largeBody = `{"name":"${"x".repeat(16 * 1024 * 1024 + 1)}"}`;
     await expect(
       parseJsonBody(
         new Request("https://example.com", {

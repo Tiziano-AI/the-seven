@@ -204,6 +204,7 @@ async function main() {
   const liveEnv = liveProof();
   const cliEnv = cliRuntime();
   const serverEnv = serverRuntime();
+  assert(cliEnv.baseUrl !== null, "SEVEN_BASE_URL is required for `pnpm test:live`.");
   await assertAppReachable(cliEnv.baseUrl);
 
   assert(serverEnv.demo.enabled, "SEVEN_DEMO_ENABLED must be 1 for `pnpm test:live`.");

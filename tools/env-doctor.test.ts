@@ -37,7 +37,7 @@ describe("env doctor profiles", () => {
 
   test("live doctor does not require a fixed SEVEN_BASE_URL in .env.local", () => {
     const envLocalPath =
-      writeEnv(`DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/the_seven
+      writeEnv(`DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55432/the_seven
 SEVEN_JOB_CREDENTIAL_SECRET=0123456789abcdef
 SEVEN_PUBLIC_ORIGIN=https://theseven.ai
 SEVEN_APP_NAME=The Seven
@@ -56,7 +56,7 @@ SEVEN_DEMO_TEST_EMAIL=inbound@theseven.ai
 
   test("live doctor is additive over local readiness", () => {
     const envLocalPath =
-      writeEnv(`DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/the_seven
+      writeEnv(`DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55432/the_seven
 SEVEN_PUBLIC_ORIGIN=https://theseven.ai
 SEVEN_APP_NAME=The Seven
 SEVEN_BYOK_KEY=sk-or-byok
@@ -92,7 +92,7 @@ SEVEN_DEMO_TEST_EMAIL=inbound@theseven.ai
 
   test("live profile rejects placeholder live credential values", () => {
     const envLocalPath =
-      writeEnv(`DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/the_seven
+      writeEnv(`DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55432/the_seven
 SEVEN_JOB_CREDENTIAL_SECRET=0123456789abcdef
 SEVEN_PUBLIC_ORIGIN=https://theseven.ai
 SEVEN_APP_NAME=The Seven

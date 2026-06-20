@@ -35,7 +35,7 @@ const demoAuthMocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@the-seven/config", () => ({
-  MAX_REQUEST_BODY_BYTES: 512_000,
+  MAX_REQUEST_BODY_BYTES: 16 * 1024 * 1024,
   serverRuntime: configMocks.serverRuntime,
 }));
 vi.mock("@/server/http/demoCookie", () => cookieMocks);
