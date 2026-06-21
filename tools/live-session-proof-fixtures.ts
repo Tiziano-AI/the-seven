@@ -114,7 +114,7 @@ export function completeProviderCalls(): ProofProviderCall[] {
     phase: 1,
     memberPosition,
     requestModelId: `provider/model-${memberPosition}`,
-    requestMaxOutputTokens: 16_384,
+    requestMaxOutputTokens: 32_768,
     catalogRefreshedAt: "2026-05-13T10:00:00.000Z",
     supportedParameters: ["max_tokens", "reasoning"],
     sentParameters: ["max_tokens", "reasoning"],

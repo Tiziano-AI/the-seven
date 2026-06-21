@@ -69,7 +69,7 @@ current OpenRouter Anthropic routing accepts the portable schema but rejects
 richer JSON-schema grammar constraints.
 The OpenRouter
 adapter requests a bounded `max_tokens` output on every provider call: phase 1
-uses 16,384 tokens, and phases 2 and 3 use 64,000 tokens. Chat completions use
+uses 32,768 tokens, and phases 2 and 3 use 64,000 tokens. Chat completions use
 OpenRouter's streaming transport internally so long-running structured-output
 calls receive incremental server events instead of depending on one full
 non-streaming response body. The workflow still persists artifacts only after
@@ -639,11 +639,11 @@ provider generation handle.
 - Source: `vendor:openrouter:2026-05-13:https://openrouter.ai/docs/guides/features/structured-outputs`
 - Source: `vendor:openrouter:2026-05-16:https://openrouter.ai/docs/guides/best-practices/reasoning-tokens`
 - Source: `vendor:openrouter:2026-05-16:https://openrouter.ai/docs/api/reference/parameters`
-- Source: `vendor:openrouter:2026-05-16:https://openrouter.ai/api/v1/models?output_modalities=text`
+- Source: `vendor:openrouter:2026-06-21:https://openrouter.ai/api/v1/models?output_modalities=text`
 - Source: `vendor:MDN Fetch API:2025-09-17:https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#canceling_a_request`
 
-Fresh catalog probes on 2026-05-13, 2026-05-14, and 2026-05-16 returned status
-200 and current text model rows from `/api/v1/models`; the 2026-05-16 probe is
+Fresh catalog probes on 2026-05-13, 2026-05-14, 2026-05-16, and 2026-06-21 returned status
+200 and current text model rows from `/api/v1/models`; the 2026-06-21 probe is
 the active roster fixture source. The OpenRouter models documentation defines
 `supported_parameters`, pricing, context, maximum completion token, and
 expiration metadata as model-row fields, and the chat-completion documentation
@@ -660,21 +660,26 @@ also pass the app's exact structured-output request with the current compact pro
 synthesis-material request. The 2026-05-12 through 2026-05-14 probes proved that
 several catalog rows advertising structured output still fail this app's strict
 schema, so probe-backed execution owns launch selection.
-Built-in tier effort is app-owned and materialized as requested OpenRouter
-`reasoning.effort`: Commons sends `low`, Lantern sends `medium`, and Founding
-sends `xhigh`. OpenRouter documents `reasoning.effort` as a unified abstraction
-that maps across providers, so provider diagnostics prove the requested and sent
-value, not every upstream model's private realized thinking budget. Built-in defaults do not tailor
-temperature, top-p, seed, verbosity, or reasoning-return flags per model. Runtime
-capability checks still deny any unsupported non-null tuning before provider
-execution. Custom council tuning is also value-bounded before provider egress:
+Built-in reasoning effort is app-owned and materialized as requested OpenRouter
+`reasoning.effort`: Commons reviewers send `low`, Lantern reviewers send
+`medium`, Founding reviewers send `xhigh`, and every final synthesizer sends
+`xhigh`. OpenRouter documents `reasoning.effort` as a unified abstraction that
+maps across providers, so provider diagnostics prove the requested and sent
+value, not every upstream model's private realized thinking budget. Built-in
+verbosity defaults are low for reviewers and max for final synthesizers; runtime
+sends `verbosity` only when the current model capability row supports it because
+current OpenRouter GPT-5.5 catalog rows do not advertise that parameter.
+Temperature, top-p, seed, and reasoning-return flags remain null by default.
+Runtime capability checks still deny unsupported non-null hard tuning before
+provider execution; unsupported verbosity hints are omitted. Custom council
+tuning is also value-bounded before provider egress:
 `reasoning.effort` may only be `none`, `minimal`, `low`, `medium`, `high`, or
 `xhigh`; `verbosity` may only be `low`, `medium`, `high`, `xhigh`, or `max`.
 These enums are contract-owned so HTTP writes, UI controls, built-ins, session
 snapshots, and provider request materialization cannot drift into ad hoc string
 values.
 
-The server caps provider output at 16,384 tokens for phase 1 and 64,000 tokens for
+The server caps provider output at 32,768 tokens for phase 1 and 64,000 tokens for
 phases 2 and 3. A catalog row that cannot accept the phase-owned cap is denied
 before provider execution instead of silently lowering the request. Phase 1
 answers stay bounded for prompt fan-in. Phase 2 needs the larger finite cap for
@@ -710,20 +715,22 @@ The built-in roster policy is positive and tier-owned:
   The final-answer policy seat is the synthesizer because phase 3 produces the
   final answer with the other artifacts as reference material, not a mechanical
   summary. Direct benchmark scores prove the policy when the exact model row is
-  scored; when benchmark rows lag a product-tier model such as GPT-5.5 Pro, the
-  docs name the evidence gap instead of claiming a scored ranking. The seven
-  slots are distinct; provider diversity is a tie-breaker only and never
-  justifies omitting a stronger current model.
+  scored; when benchmark rows lag a product-tier model, the docs name the
+  evidence gap instead of claiming a scored ranking. Founding intentionally
+  repeats GPT-5.5 in the first reviewer and final synthesizer seats; provider
+  diversity is a tie-breaker only and never justifies omitting a stronger
+  current model.
 - Lantern is the deliberate mid-tier bridge. It uses strong current models that
   sit below the flagship set while preserving distinct model IDs and useful
   provider breadth. Its synthesizer is the final-answer policy seat, and it
-	  sends medium requested reasoning effort by default.
+  uses medium requested reasoning effort for reviewer seats by default and xhigh
+  for the final synthesizer.
 - Commons is the demo council. It is paid, cheap, reliable, and good enough to
   sell the product; it is not a free-model showcase and it does not use `:free`,
-	  `~latest`, or preview model aliases. Commons sends low requested reasoning effort by
-  default because the product already runs multi-phase deliberation; xhigh
-  per-member demo calls multiply latency and cost without being the demo
-  contract. Commons uses nonzero-priced rows from the paid-cheap
+  `~latest`, or preview model aliases. Commons sends low requested reasoning
+  effort for reviewer seats because the product already runs multi-phase
+  deliberation; the final synthesizer still requests xhigh because it writes the
+  answer users read. Commons uses nonzero-priced rows from the paid-cheap
   high-intelligence cluster and keeps the current 3:1 input/output blended row
   ceiling anchored by GPT-5 Mini.
 
@@ -731,19 +738,19 @@ Current built-in rosters:
 
 | Tier | Member 1 | Member 2 | Member 3 | Member 4 | Member 5 | Member 6 | Synthesizer |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Founding | `openai/gpt-5.5` | `anthropic/claude-opus-4.7` | `google/gemini-3.1-pro-preview` | `moonshotai/kimi-k2.6` | `xiaomi/mimo-v2.5-pro` | `x-ai/grok-4.3` | `openai/gpt-5.5-pro` |
+| Founding | `openai/gpt-5.5` | `anthropic/claude-opus-4.8` | `z-ai/glm-5.2` | `google/gemini-3.5-flash` | `qwen/qwen3.7-max` | `x-ai/grok-4.3` | `openai/gpt-5.5` |
 | Lantern | `anthropic/claude-sonnet-4.6` | `deepseek/deepseek-v4-pro` | `z-ai/glm-5.1` | `qwen/qwen3.6-plus` | `google/gemini-3-flash-preview` | `mistralai/mistral-medium-3-5` | `qwen/qwen3.6-max-preview` |
 | Commons | `qwen/qwen3.6-35b-a3b` | `google/gemini-3.1-flash-lite` | `openai/gpt-5-mini` | `deepseek/deepseek-v4-flash` | `openai/gpt-5-nano` | `mistralai/mistral-small-2603` | `minimax/minimax-m2.7` |
 
-The 2026-05-16 catalog rows for these IDs expose text output, nonzero prompt and
+The 2026-06-21 catalog rows for these IDs expose text output, nonzero prompt and
 completion pricing, no expiration date, current context windows, maximum
 completion token metadata when OpenRouter publishes it, and model-specific
-`supported_parameters`. The 21 built-in model IDs are distinct across the three
-tier clusters. Commons live execution uses the app-compatible low-effort tuning
-shape, Lantern uses medium requested effort, and Founding uses xhigh requested effort for the
-flagship council. Built-in defaults therefore send only `reasoning.effort`;
-the phase-owned `max_tokens` and phase-2 `response_format` are materialized by
-the workflow, not by the council template.
+`supported_parameters`. The 21 built-in seats use 20 distinct model IDs because
+Founding deliberately repeats GPT-5.5 as the first reviewer and final
+synthesizer. Built-in defaults send `reasoning.effort` for every phase call and
+send `verbosity` only for models whose current catalog row supports it; the
+phase-owned `max_tokens` and phase-2 `response_format` are materialized by the
+workflow, not by the council template.
 
 The roster ranking basis is current raw intelligence first, OpenRouter
 feasibility second, and price only where the tier defines it. Artificial
@@ -753,12 +760,11 @@ clusters. OpenRouter confirms the exact transport IDs, pricing, no catalog
 expiration date, and supported parameter rows for the surviving built-ins.
 LMArena is a secondary cross-check for top-tier relative strength when current
 benchmark rows lag exact product names. The current benchmark citation scores
-GPT-5.5 directly and does not publish the same scored metric row for GPT-5.5
-Pro; GPT-5.5 Pro remains the Founding final-answer policy seat and must be
-proven by live completion before release rather than represented as a
-benchmark-proven rank.
+GPT-5.5 directly. GPT-5.5 is therefore the Founding final-answer policy seat;
+live completion proof still remains required before release and cannot be
+inferred from catalog presence alone.
 
-- Source: `vendor:openrouter:2026-05-16:https://openrouter.ai/api/v1/models?output_modalities=text`
+- Source: `vendor:openrouter:2026-06-21:https://openrouter.ai/api/v1/models?output_modalities=text`
 - Source: `vendor:artificial-analysis:2026-05-13:https://artificialanalysis.ai/leaderboards/models`
 - Source: `vendor:artificial-analysis:2026-05-13:https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index`
 - Source: `vendor:lmarena:2026-05-13:https://lmarena.ai/leaderboard`

@@ -47,7 +47,7 @@ export function providerPhaseOneSuccessCallFor(input: {
   const call = baseProviderCallFor({ ...input, phase: 1 });
   return {
     ...call,
-    requestMaxOutputTokens: 16_384,
+    requestMaxOutputTokens: 32_768,
     sentReasoningEffort: "low",
     supportedParameters: ["max_tokens", "reasoning", "response_format", "structured_outputs"],
     sentParameters: ["max_tokens", "reasoning"],
@@ -117,7 +117,7 @@ export function providerUpstreamErrorCallFor(input: { sessionId: number; memberP
   return {
     ...call,
     id: call.id + 700,
-    requestMaxOutputTokens: 16_384,
+    requestMaxOutputTokens: 32_768,
     sentReasoningEffort: "low",
     supportedParameters: ["max_tokens", "reasoning"],
     sentParameters: ["max_tokens", "reasoning"],

@@ -49,7 +49,7 @@ the app.
     the final synthesizer model.
   - Prompts are editable only at the phase layer (Phase 1/2/3). There are no per-member prompt overrides.
   - Member model selection validates against the current catalog, shows readable model names before provider slugs, and exposes only the high-signal tuning controls the selected model supports.
-  - Three built-in councils ship as immutable templates: Founding is the BYOK best-of-best roster, Lantern is the deliberate mid-tier bridge, and Commons is the paid low-cost demo roster. The 21 built-in model IDs are distinct across those tier clusters; users Duplicate to edit their own.
+  - Three built-in councils ship as immutable templates: Founding is the BYOK best-of-best roster, Lantern is the deliberate mid-tier bridge, and Commons is the paid low-cost demo roster. The 21 built-in seats are fixed templates; Founding intentionally reuses GPT-5.5 as both first reviewer and final synthesizer. Users Duplicate to edit their own.
 - Demo constraints:
   - Demo runs use the Commons Council only; councils and models are not editable.
   - Prompts and attachments behave the same as BYOK runs.

@@ -12,10 +12,11 @@ server state stores a hashed BYOK principal plus envelope-encrypted short-lived
 worker credentials that are cleared when jobs reach terminal state. A paid
 low-cost demo flow is available behind an email magic link.
 
-- Three built-in councils: Founding (best-of-best with xhigh requested effort),
-  Lantern (mid-tier bridge with medium requested effort), Commons (low-cost demo
-  with low requested effort). All 21 built-in model ids are distinct across the
-  three tiers.
+- Three built-in councils: Founding (best-of-best), Lantern (mid-tier bridge),
+  Commons (low-cost demo). Reviewer seats request council-owned reasoning effort;
+  every final synthesizer requests xhigh effort. Verbosity defaults to low for
+  reviewers and max for synthesizers, and is sent only when the current
+  OpenRouter catalog row supports it.
 - User-defined councils persist as one aggregate definition with shared phase
   prompts and exactly seven member slots.
 - Default prompts are intentionally plain one-shot roles: phase 1 answers,
@@ -57,21 +58,22 @@ low-cost demo flow is available behind an email magic link.
   Manage councils.
 - API routes: `/api/v1/**`
 - Built-ins:
-  - Founding: current best-of-best BYOK roster with xhigh requested effort;
+  - Founding: current best-of-best BYOK roster with xhigh requested reviewer effort;
     the synthesizer is the final-answer policy seat, and provider diversity is
     a tie-breaker, not a substitute for stronger models
-  - Lantern: deliberate mid-tier bridge roster with medium requested effort;
+  - Lantern: deliberate mid-tier bridge roster with medium requested reviewer effort;
     the synthesizer is the final-answer policy seat
-  - Commons: paid low-cost demo roster with low requested effort and no
+  - Commons: paid low-cost demo roster with low requested reviewer effort and no
     `:free`, `~latest`, or preview aliases; Commons also excludes OpenRouter rows with a catalog
     expiration date and stays at or below the current selected GPT-5 Mini
     blended row ceiling
-  - all 21 built-in model IDs are distinct across the three tier clusters
+  - the 21 built-in seats are fixed templates; Founding intentionally uses
+    `openai/gpt-5.5` in both the first reviewer and final synthesizer seats
 - Current built-in roster:
 
 | Tier | Member 1 | Member 2 | Member 3 | Member 4 | Member 5 | Member 6 | Synthesizer |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Founding | `openai/gpt-5.5` | `anthropic/claude-opus-4.7` | `google/gemini-3.1-pro-preview` | `moonshotai/kimi-k2.6` | `xiaomi/mimo-v2.5-pro` | `x-ai/grok-4.3` | `openai/gpt-5.5-pro` |
+| Founding | `openai/gpt-5.5` | `anthropic/claude-opus-4.8` | `z-ai/glm-5.2` | `google/gemini-3.5-flash` | `qwen/qwen3.7-max` | `x-ai/grok-4.3` | `openai/gpt-5.5` |
 | Lantern | `anthropic/claude-sonnet-4.6` | `deepseek/deepseek-v4-pro` | `z-ai/glm-5.1` | `qwen/qwen3.6-plus` | `google/gemini-3-flash-preview` | `mistralai/mistral-medium-3-5` | `qwen/qwen3.6-max-preview` |
 | Commons | `qwen/qwen3.6-35b-a3b` | `google/gemini-3.1-flash-lite` | `openai/gpt-5-mini` | `deepseek/deepseek-v4-flash` | `openai/gpt-5-nano` | `mistralai/mistral-small-2603` | `minimax/minimax-m2.7` |
 - Prompt payloads:
@@ -286,9 +288,9 @@ runs one full BYOK session for each tier, and keeps all proof under the same
 local app projection. Completed sessions must contain the exact selected
 built-in roster, six nonblank phase-1 response artifacts, six phase-2 review
 artifacts, one nonblank phase-3 synthesizer artifact, successful provider calls
-at every expected member position, sent tier-owned reasoning effort, sent
-compact phase-2 `response_format`, no denied provider parameters, and the
-expected 16_384/64_000/64_000 `max_tokens` caps. Provider chat completions use
+at every expected member position, sent reviewer/final reasoning effort, sent
+catalog-supported verbosity hints, sent compact phase-2 `response_format`, no denied provider parameters, and the
+expected 32_768/64_000/64_000 `max_tokens` caps. Provider chat completions use
 OpenRouter streaming internally, while stored artifacts and public diagnostics
 remain complete-response records.
 The command fails closed before starting live proof if another same-repo local

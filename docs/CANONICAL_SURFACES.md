@@ -66,13 +66,14 @@ app is not.
 
 ## Provider Owners
 
-- Built-in councils use current OpenRouter model IDs and tier-owned reasoning
+- Built-in councils use current OpenRouter model IDs and position-owned reasoning
   defaults from `packages/config/src/builtInCouncils.ts`.
 - Founding is the BYOK best-of-best roster. Provider diversity is only a
   tie-breaker after current quality evidence; Lantern is the declared mid-tier
-  bridge, Commons is the paid low-cost demo roster, and all 21 built-in model
-  IDs are distinct across the three tier clusters. Position 7 is the
-  final-answer policy seat and owns synthesis.
+  bridge, and Commons is the paid low-cost demo roster. The 21 built-in seats
+  are fixed templates; Founding deliberately uses GPT-5.5 as both first
+  reviewer and final synthesizer. Position 7 is the final-answer policy seat
+  and owns synthesis.
 - Commons uses nonzero-priced model IDs and excludes `:free`, `~latest`,
   preview aliases, expiring catalog rows, and rows above the current selected
   GPT-5 Mini blended row ceiling.

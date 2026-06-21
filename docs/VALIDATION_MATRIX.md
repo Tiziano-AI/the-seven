@@ -72,7 +72,7 @@ This is the required verification pyramid for the launch-candidate milestone.
 
 ## Provider
 
-- built-in councils validate against a mocked 2026-05-16 OpenRouter catalog
+- built-in councils validate against a mocked 2026-06-21 OpenRouter catalog
 - Founding uses current best-of-best OpenRouter model IDs for BYOK and treats
   provider diversity as a tie-breaker only
 - each built-in tier uses position 7 as the final-answer policy seat
@@ -80,16 +80,21 @@ This is the required verification pyramid for the launch-candidate milestone.
 - Commons uses paid low-cost demo model IDs with nonzero pricing and no
   `:free`, `~latest`, preview aliases, catalog expiration date, or row above the
   current selected GPT-5 Mini blended row ceiling
-- all 21 built-in model IDs are distinct across tier clusters
+- all 21 built-in seats are fixed templates; Founding intentionally repeats
+  `openai/gpt-5.5` in the first reviewer and final synthesizer seats
 - OpenRouter catalog refresh persists catalog expiration dates and maximum
   completion-token metadata
-- unsupported built-in tuning defaults are `null`
-- unsupported non-null user tuning is denied before provider execution
-- built-in tier effort materializes through OpenRouter `reasoning.effort`, and
-  provider diagnostics expose the sent effort value: Commons `low`, Lantern
-  `medium`, Founding `xhigh`
+- built-in verbosity defaults are low for reviewers and max for final
+  synthesizers; runtime sends verbosity only when the current catalog row
+  supports it
+- unsupported non-null user hard tuning is denied before provider execution;
+  unsupported verbosity hints are omitted rather than making the run fail
+- built-in effort materializes through OpenRouter `reasoning.effort`, and
+  provider diagnostics expose the sent effort value: Commons reviewers `low`,
+  Lantern reviewers `medium`, Founding reviewers `xhigh`, and every final
+  synthesizer `xhigh`
 - every OpenRouter call sends the phase-owned server `max_tokens` cap
-  (16_384/64_000/64_000) and denies models that do not support that required request
+  (32_768/64_000/64_000) and denies models that do not support that required request
   parameter or publish a lower maximum completion-token cap
 - chat completions use the OpenRouter streaming transport internally while
   preserving the stored complete-response artifact contract
@@ -351,10 +356,10 @@ denial against the running app.
     phase-3 synthesizer call
   - provider-call diagnostics match the exact model ID for each expected roster
     position, include catalog freshness, supported `reasoning`/`max_tokens`, the
-    tier-owned sent reasoning effort, sent `provider.require_parameters`, sent
+    reviewer/final sent reasoning effort, sent `provider.require_parameters`, sent
     `provider.ignore` for `amazon-bedrock` and `azure`, no denied parameters,
     response IDs/models, no provider or choice errors, and exact
-    16_384/64_000/64_000 provider output caps across expected phase calls
+    32_768/64_000/64_000 provider output caps across expected phase calls
   - phase-2 provider-call diagnostics include supported `response_format` and
     `structured_outputs`, sent `response_format`, and provider parameter
     enforcement

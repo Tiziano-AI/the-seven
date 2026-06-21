@@ -211,9 +211,9 @@ test.describe("rendered scholarly workbench proof", () => {
       await firstSeat.getByRole("combobox", { name: "Search Seat A catalog" }).fill("claude");
       await expect(firstSeat.locator(".model-suggestion-ledger")).toHaveCount(1);
       await expect(page.locator(".model-suggestion-ledger")).toHaveCount(1);
-      await firstSeat.getByRole("option", { name: /Claude Opus 4.7/ }).click();
+      await firstSeat.getByRole("option", { name: /Claude Opus 4.8/ }).click();
       await expect(page.locator(".model-suggestion-ledger")).toHaveCount(0);
-      await expect(firstSeat.getByText("7 supported parameters")).toBeVisible();
+      await expect(firstSeat.getByText("8 supported parameters")).toBeVisible();
       await expect(page.getByText("Council duplicated")).toBeHidden();
       await captureRenderedProof(page, testInfo, `${viewport.label}-council-editor`);
     });

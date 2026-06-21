@@ -10,7 +10,7 @@ const builtInCouncilFixtures: Readonly<
   founding: {
     ref: { kind: "built_in", slug: "founding" },
     name: "The Founding Council",
-    description: "Strongest built-in council. GPT-5.5 Pro writes the final answer.",
+    description: "Strongest built-in council. GPT-5.5 writes the final answer.",
   },
   lantern: {
     ref: { kind: "built_in", slug: "lantern" },

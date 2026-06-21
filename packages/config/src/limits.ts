@@ -41,7 +41,7 @@ export const JOB_MAX_CONCURRENCY = 2;
 export const JOB_MAX_ATTEMPTS = 3;
 
 export const PROVIDER_OUTPUT_TOKEN_LIMITS = {
-  phase1: 16_384,
+  phase1: 32_768,
   phase2: 64_000,
   phase3: 64_000,
 } as const;

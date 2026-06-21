@@ -75,7 +75,7 @@ describe("runOpenRouterPhaseCall", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["temperature", "max_tokens"],
-      maxCompletionTokens: 16_384,
+      maxCompletionTokens: 32_768,
       expirationDate: null,
       refreshedAt: new Date("2026-05-09T10:00:00.000Z"),
     });
@@ -151,7 +151,7 @@ describe("runOpenRouterPhaseCall", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["temperature"],
-      maxCompletionTokens: 16_384,
+      maxCompletionTokens: 32_768,
       expirationDate: null,
       refreshedAt: new Date("2026-05-09T10:00:00.000Z"),
     });
@@ -182,7 +182,7 @@ describe("runOpenRouterPhaseCall", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens"],
-      maxCompletionTokens: 16_384,
+      maxCompletionTokens: 32_768,
       expirationDate: "2026-05-15",
       refreshedAt: new Date("2026-05-09T10:00:00.000Z"),
     });

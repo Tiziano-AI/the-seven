@@ -13,12 +13,12 @@ export type ProviderModelSeed = Readonly<{ modelId: string; modelName: string }>
 
 const FOUNDING_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
   1: "openai/gpt-5.5",
-  2: "anthropic/claude-opus-4.7",
-  3: "google/gemini-3.1-pro-preview",
-  4: "moonshotai/kimi-k2.6",
-  5: "xiaomi/mimo-v2.5-pro",
+  2: "anthropic/claude-opus-4.8",
+  3: "z-ai/glm-5.2",
+  4: "google/gemini-3.5-flash",
+  5: "qwen/qwen3.7-max",
   6: "x-ai/grok-4.3",
-  7: "openai/gpt-5.5-pro",
+  7: "openai/gpt-5.5",
 };
 
 const LANTERN_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
@@ -43,12 +43,11 @@ const COMMONS_COUNCIL_MODEL_IDS: Record<MemberPosition, string> = {
 
 const BUILT_IN_MODEL_NAMES: Readonly<Record<string, string>> = {
   "openai/gpt-5.5": "GPT-5.5",
-  "anthropic/claude-opus-4.7": "Claude Opus 4.7",
-  "google/gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
-  "moonshotai/kimi-k2.6": "Kimi K2.6",
-  "xiaomi/mimo-v2.5-pro": "MiMo V2.5 Pro",
+  "anthropic/claude-opus-4.8": "Claude Opus 4.8",
+  "z-ai/glm-5.2": "GLM 5.2",
+  "google/gemini-3.5-flash": "Gemini 3.5 Flash",
+  "qwen/qwen3.7-max": "Qwen3.7 Max",
   "x-ai/grok-4.3": "Grok 4.3",
-  "openai/gpt-5.5-pro": "GPT-5.5 Pro",
   "anthropic/claude-sonnet-4.6": "Claude Sonnet 4.6",
   "deepseek/deepseek-v4-pro": "DeepSeek V4 Pro",
   "z-ai/glm-5.1": "GLM 5.1",
@@ -73,34 +72,45 @@ export type BuiltInCouncilTemplate = Readonly<{
   members: CouncilMembers;
 }>;
 
-const FULL_DEFAULT_TUNING = {
+const BASE_TUNING = {
   temperature: null,
   topP: null,
   seed: null,
-  verbosity: null,
-  reasoningEffort: "xhigh",
+  verbosity: "low",
+  reasoningEffort: null,
   includeReasoning: null,
 } as const satisfies CouncilMemberTuning;
 
-const COMMONS_DEFAULT_TUNING = {
-  ...FULL_DEFAULT_TUNING,
+const SYNTHESIZER_TUNING = {
+  ...BASE_TUNING,
+  verbosity: "max",
+  reasoningEffort: "xhigh",
+} as const satisfies CouncilMemberTuning;
+
+const COMMONS_REVIEWER_TUNING = {
+  ...BASE_TUNING,
   reasoningEffort: "low",
 } as const satisfies CouncilMemberTuning;
 
-const LANTERN_DEFAULT_TUNING = {
-  ...FULL_DEFAULT_TUNING,
+const LANTERN_REVIEWER_TUNING = {
+  ...BASE_TUNING,
   reasoningEffort: "medium",
+} as const satisfies CouncilMemberTuning;
+
+const FOUNDING_REVIEWER_TUNING = {
+  ...BASE_TUNING,
+  reasoningEffort: "xhigh",
 } as const satisfies CouncilMemberTuning;
 
 function buildCouncilMembers(
   models: Record<MemberPosition, ProviderModelRef>,
-  baseTuning: CouncilMemberTuning,
+  reviewerTuning: CouncilMemberTuning,
 ): CouncilMembers {
   return parseCouncilMembers(
     MEMBER_POSITIONS.map((memberPosition) => ({
       memberPosition,
       model: models[memberPosition],
-      tuning: baseTuning,
+      tuning: memberPosition === 7 ? SYNTHESIZER_TUNING : reviewerTuning,
     })),
   );
 }
@@ -109,7 +119,7 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
   founding: {
     slug: "founding",
     name: "The Founding Council",
-    description: "Strongest built-in council. GPT-5.5 Pro writes the final answer.",
+    description: "Strongest built-in council. GPT-5.5 writes the final answer.",
     phasePrompts: DEFAULT_PHASE_PROMPTS,
     members: buildCouncilMembers(
       {
@@ -121,7 +131,7 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
         6: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[6] },
         7: { provider: "openrouter", modelId: FOUNDING_COUNCIL_MODEL_IDS[7] },
       },
-      FULL_DEFAULT_TUNING,
+      FOUNDING_REVIEWER_TUNING,
     ),
   },
   lantern: {
@@ -139,7 +149,7 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
         6: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[6] },
         7: { provider: "openrouter", modelId: LANTERN_COUNCIL_MODEL_IDS[7] },
       },
-      LANTERN_DEFAULT_TUNING,
+      LANTERN_REVIEWER_TUNING,
     ),
   },
   commons: {
@@ -157,7 +167,7 @@ export const BUILT_IN_COUNCILS: Readonly<Record<BuiltInCouncilSlug, BuiltInCounc
         6: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[6] },
         7: { provider: "openrouter", modelId: COMMONS_COUNCIL_MODEL_IDS[7] },
       },
-      COMMONS_DEFAULT_TUNING,
+      COMMONS_REVIEWER_TUNING,
     ),
   },
 };

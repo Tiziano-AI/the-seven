@@ -41,7 +41,6 @@ const SUPPORTS_OPENAI = supportedParameters([
   "tool_choice",
   "tools",
 ]);
-const SUPPORTS_OPENAI_PRO = supportedParameters(["seed", "tool_choice", "tools"]);
 const SUPPORTS_ANTHROPIC_OPUS = supportedParameters(["stop", "tool_choice", "tools", "verbosity"]);
 const SUPPORTS_ANTHROPIC_SONNET = supportedParameters([
   "max_completion_tokens",
@@ -102,8 +101,8 @@ const SUPPORTS_QWEN_MAX = supportedParameters([
   "top_p",
 ]);
 
-const OPENROUTER_CATALOG_2026_05_16: Readonly<Record<string, CatalogFixture>> = {
-  "anthropic/claude-opus-4.7": {
+const OPENROUTER_CATALOG_2026_06_21: Readonly<Record<string, CatalogFixture>> = {
+  "anthropic/claude-opus-4.8": {
     promptUsdPerMillion: 5,
     completionUsdPerMillion: 25,
     expirationDate: null,
@@ -151,9 +150,9 @@ const OPENROUTER_CATALOG_2026_05_16: Readonly<Record<string, CatalogFixture>> = 
     maxCompletionTokens: 65_536,
     supportedParameters: SUPPORTS_GOOGLE,
   },
-  "google/gemini-3.1-pro-preview": {
-    promptUsdPerMillion: 2,
-    completionUsdPerMillion: 12,
+  "google/gemini-3.5-flash": {
+    promptUsdPerMillion: 1.5,
+    completionUsdPerMillion: 9,
     expirationDate: null,
     contextLength: 1_048_576,
     maxCompletionTokens: 65_536,
@@ -183,14 +182,6 @@ const OPENROUTER_CATALOG_2026_05_16: Readonly<Record<string, CatalogFixture>> = 
     maxCompletionTokens: null,
     supportedParameters: SUPPORTS_MISTRAL_SMALL,
   },
-  "moonshotai/kimi-k2.6": {
-    promptUsdPerMillion: 0.73,
-    completionUsdPerMillion: 3.49,
-    expirationDate: null,
-    contextLength: 262_142,
-    maxCompletionTokens: 262_142,
-    supportedParameters: SUPPORTS_KIMI,
-  },
   "openai/gpt-5.5": {
     promptUsdPerMillion: 5,
     completionUsdPerMillion: 30,
@@ -198,14 +189,6 @@ const OPENROUTER_CATALOG_2026_05_16: Readonly<Record<string, CatalogFixture>> = 
     contextLength: 1_050_000,
     maxCompletionTokens: 128_000,
     supportedParameters: SUPPORTS_OPENAI,
-  },
-  "openai/gpt-5.5-pro": {
-    promptUsdPerMillion: 30,
-    completionUsdPerMillion: 180,
-    expirationDate: null,
-    contextLength: 1_050_000,
-    maxCompletionTokens: 128_000,
-    supportedParameters: SUPPORTS_OPENAI_PRO,
   },
   "openai/gpt-5-mini": {
     promptUsdPerMillion: 0.25,
@@ -239,14 +222,6 @@ const OPENROUTER_CATALOG_2026_05_16: Readonly<Record<string, CatalogFixture>> = 
     maxCompletionTokens: 65_536,
     supportedParameters: SUPPORTS_QWEN_MAX,
   },
-  "qwen/qwen3.6-plus": {
-    promptUsdPerMillion: 0.325,
-    completionUsdPerMillion: 1.95,
-    expirationDate: null,
-    contextLength: 1_000_000,
-    maxCompletionTokens: 65_536,
-    supportedParameters: SUPPORTS_QWEN,
-  },
   "x-ai/grok-4.3": {
     promptUsdPerMillion: 1.25,
     completionUsdPerMillion: 2.5,
@@ -255,13 +230,13 @@ const OPENROUTER_CATALOG_2026_05_16: Readonly<Record<string, CatalogFixture>> = 
     maxCompletionTokens: null,
     supportedParameters: SUPPORTS_GROK,
   },
-  "xiaomi/mimo-v2.5-pro": {
-    promptUsdPerMillion: 1,
-    completionUsdPerMillion: 3,
+  "qwen/qwen3.6-plus": {
+    promptUsdPerMillion: 0.325,
+    completionUsdPerMillion: 1.95,
     expirationDate: null,
-    contextLength: 1_048_576,
+    contextLength: 1_000_000,
     maxCompletionTokens: 65_536,
-    supportedParameters: SUPPORTS_FULL_NO_LOGPROBS,
+    supportedParameters: SUPPORTS_QWEN,
   },
   "z-ai/glm-5.1": {
     promptUsdPerMillion: 0.98,
@@ -270,6 +245,22 @@ const OPENROUTER_CATALOG_2026_05_16: Readonly<Record<string, CatalogFixture>> = 
     contextLength: 202_752,
     maxCompletionTokens: null,
     supportedParameters: SUPPORTS_KIMI,
+  },
+  "qwen/qwen3.7-max": {
+    promptUsdPerMillion: 1.25,
+    completionUsdPerMillion: 3.75,
+    expirationDate: null,
+    contextLength: 1_000_000,
+    maxCompletionTokens: 65_536,
+    supportedParameters: SUPPORTS_QWEN_MAX,
+  },
+  "z-ai/glm-5.2": {
+    promptUsdPerMillion: 1.2,
+    completionUsdPerMillion: 4.1,
+    expirationDate: null,
+    contextLength: 1_048_576,
+    maxCompletionTokens: 131_072,
+    supportedParameters: SUPPORTS_FULL,
   },
 };
 
@@ -285,12 +276,12 @@ const EXPECTED_ROSTERS = {
   ],
   founding: [
     "openai/gpt-5.5",
-    "anthropic/claude-opus-4.7",
-    "google/gemini-3.1-pro-preview",
-    "moonshotai/kimi-k2.6",
-    "xiaomi/mimo-v2.5-pro",
+    "anthropic/claude-opus-4.8",
+    "z-ai/glm-5.2",
+    "google/gemini-3.5-flash",
+    "qwen/qwen3.7-max",
     "x-ai/grok-4.3",
-    "openai/gpt-5.5-pro",
+    "openai/gpt-5.5",
   ],
   lantern: [
     "anthropic/claude-sonnet-4.6",
@@ -305,15 +296,17 @@ const EXPECTED_ROSTERS = {
 
 const SYNTHESIZERS = {
   commons: "minimax/minimax-m2.7",
-  founding: "openai/gpt-5.5-pro",
+  founding: "openai/gpt-5.5",
   lantern: "qwen/qwen3.6-max-preview",
 } satisfies Record<BuiltInCouncilSlug, string>;
 
-const EXPECTED_REASONING_EFFORTS = {
+const EXPECTED_REVIEWER_REASONING_EFFORTS = {
   commons: "low",
   founding: "xhigh",
   lantern: "medium",
 } satisfies Record<BuiltInCouncilSlug, NonNullable<CouncilMemberTuning["reasoningEffort"]>>;
+
+const EXPECTED_SYNTHESIZER_REASONING_EFFORT = "xhigh";
 
 const RETIRED_ACTIVE_MODEL_IDS = [
   "openai/gpt-5.4-mini",
@@ -336,12 +329,11 @@ function modelIds(slug: BuiltInCouncilSlug): string[] {
   return BUILT_IN_COUNCILS[slug].members.map((member) => member.model.modelId);
 }
 
-function sentDefaultParameters(tuning: CouncilMemberTuning): string[] {
+function strictDefaultParameters(tuning: CouncilMemberTuning): string[] {
   const parameters: string[] = [];
   if (typeof tuning.temperature === "number") parameters.push("temperature");
   if (typeof tuning.topP === "number") parameters.push("top_p");
   if (typeof tuning.seed === "number") parameters.push("seed");
-  if (tuning.verbosity) parameters.push("verbosity");
   if (typeof tuning.includeReasoning === "boolean") parameters.push("include_reasoning");
   if (tuning.reasoningEffort) parameters.push("reasoning");
   return parameters;
@@ -358,13 +350,14 @@ describe("built-in council rosters", () => {
     expect(modelIds("commons")).toEqual(EXPECTED_ROSTERS.commons);
   });
 
-  test("catalog fixture is the 21-model active OpenRouter built-in set", () => {
+  test("catalog fixture covers the active OpenRouter built-in set", () => {
     const activeIds = Object.values(BUILT_IN_COUNCILS).flatMap((council) =>
       council.members.map((member) => member.model.modelId),
     );
+    const uniqueActiveIds = new Set(activeIds);
 
-    expect(Object.keys(OPENROUTER_CATALOG_2026_05_16).sort()).toEqual([...activeIds].sort());
-    expect(new Set(activeIds).size).toBe(21);
+    expect(Object.keys(OPENROUTER_CATALOG_2026_06_21).sort()).toEqual([...uniqueActiveIds].sort());
+    expect(uniqueActiveIds.size).toBe(20);
     expect(activeIds).toHaveLength(21);
   });
 
@@ -379,10 +372,10 @@ describe("built-in council rosters", () => {
   });
 
   test("Commons is the paid low-cost demo roster", () => {
-    const ceiling = blendedUsdPerMillion(OPENROUTER_CATALOG_2026_05_16["openai/gpt-5-mini"]);
+    const ceiling = blendedUsdPerMillion(OPENROUTER_CATALOG_2026_06_21["openai/gpt-5-mini"]);
 
     for (const modelId of modelIds("commons")) {
-      const catalogRow = OPENROUTER_CATALOG_2026_05_16[modelId];
+      const catalogRow = OPENROUTER_CATALOG_2026_06_21[modelId];
 
       expect(catalogRow.promptUsdPerMillion).toBeGreaterThan(0);
       expect(catalogRow.completionUsdPerMillion).toBeGreaterThan(0);
@@ -397,7 +390,7 @@ describe("built-in council rosters", () => {
   test("catalog rows expose context and phase output metadata", () => {
     for (const council of Object.values(BUILT_IN_COUNCILS)) {
       for (const member of council.members) {
-        const catalogRow = OPENROUTER_CATALOG_2026_05_16[member.model.modelId];
+        const catalogRow = OPENROUTER_CATALOG_2026_06_21[member.model.modelId];
 
         expect(catalogRow.contextLength).toBeGreaterThanOrEqual(131_072);
         expect(catalogRow.expirationDate).toBeNull();
@@ -408,10 +401,10 @@ describe("built-in council rosters", () => {
     }
   });
 
-  test("built-in tuning defaults only send catalog-supported parameters", () => {
+  test("built-in hard tuning defaults only require catalog-supported parameters", () => {
     for (const council of Object.values(BUILT_IN_COUNCILS)) {
       for (const member of council.members) {
-        const catalogRow = OPENROUTER_CATALOG_2026_05_16[member.model.modelId];
+        const catalogRow = OPENROUTER_CATALOG_2026_06_21[member.model.modelId];
         const supported = new Set(catalogRow.supportedParameters);
 
         expect(member.tuning).not.toBeNull();
@@ -419,14 +412,14 @@ describe("built-in council rosters", () => {
           throw new Error(`Built-in member ${member.model.modelId} has no tuning defaults.`);
         }
 
-        for (const parameter of sentDefaultParameters(member.tuning)) {
+        for (const parameter of strictDefaultParameters(member.tuning)) {
           expect(supported.has(parameter)).toBe(true);
         }
       }
     }
   });
 
-  test("built-ins use only tier-owned reasoning defaults", () => {
+  test("built-ins use reviewer defaults plus high-effort final synthesizers", () => {
     for (const council of Object.values(BUILT_IN_COUNCILS)) {
       for (const member of council.members) {
         expect(member.tuning).not.toBeNull();
@@ -434,11 +427,16 @@ describe("built-in council rosters", () => {
           throw new Error(`Built-in member ${member.model.modelId} has no tuning defaults.`);
         }
 
-        expect(member.tuning.reasoningEffort).toBe(EXPECTED_REASONING_EFFORTS[council.slug]);
+        const isSynthesizer = member.memberPosition === 7;
+        expect(member.tuning.reasoningEffort).toBe(
+          isSynthesizer
+            ? EXPECTED_SYNTHESIZER_REASONING_EFFORT
+            : EXPECTED_REVIEWER_REASONING_EFFORTS[council.slug],
+        );
         expect(member.tuning.temperature).toBeNull();
         expect(member.tuning.topP).toBeNull();
         expect(member.tuning.seed).toBeNull();
-        expect(member.tuning.verbosity).toBeNull();
+        expect(member.tuning.verbosity).toBe(isSynthesizer ? "max" : "low");
         expect(member.tuning.includeReasoning).toBeNull();
       }
     }
@@ -457,7 +455,7 @@ describe("built-in council rosters", () => {
   test("phase rows expose required OpenRouter capability parameters", () => {
     for (const council of Object.values(BUILT_IN_COUNCILS)) {
       for (const member of council.members) {
-        const catalogRow = OPENROUTER_CATALOG_2026_05_16[member.model.modelId];
+        const catalogRow = OPENROUTER_CATALOG_2026_06_21[member.model.modelId];
 
         expect(catalogRow.supportedParameters).toContain("reasoning");
         expect(catalogRow.supportedParameters).toContain("max_tokens");

@@ -28,7 +28,7 @@ function buildCatalogRow(modelId: string) {
     modelName: `${modelId} name`,
     description: `${modelId} description`,
     contextLength: 128_000,
-    maxCompletionTokens: 8_192,
+    maxCompletionTokens: 65_536,
     expirationDate: null,
     supportedParametersJson: ["temperature"],
     inputModalitiesJson: ["text"],
@@ -53,7 +53,7 @@ function buildOpenRouterModel(modelId: string) {
       output_modalities: ["text"],
     },
     top_provider: {
-      max_completion_tokens: 8_192,
+      max_completion_tokens: 65_536,
     },
     pricing: {},
   };

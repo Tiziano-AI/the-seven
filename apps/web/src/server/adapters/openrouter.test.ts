@@ -65,12 +65,12 @@ describe("OpenRouter tuning materialization", () => {
     vi.unstubAllGlobals();
   });
 
-  test("denies unsupported non-null tuning without marking it sent", () => {
+  test("denies unsupported hard tuning and omits unsupported verbosity hints", () => {
     const tuning = {
       temperature: 0.7,
       topP: 0.9,
       seed: null,
-      verbosity: null,
+      verbosity: "max",
       reasoningEffort: null,
       includeReasoning: null,
     } satisfies CouncilMemberTuningInput;
@@ -80,6 +80,23 @@ describe("OpenRouter tuning materialization", () => {
     expect(materialized.options).toEqual({ temperature: 0.7 });
     expect(materialized.sentParameters).toEqual(["temperature"]);
     expect(materialized.deniedParameters).toEqual(["top_p"]);
+  });
+
+  test("sends verbosity when the catalog row supports it", () => {
+    const tuning = {
+      temperature: null,
+      topP: null,
+      seed: null,
+      verbosity: "low",
+      reasoningEffort: null,
+      includeReasoning: null,
+    } satisfies CouncilMemberTuningInput;
+
+    const materialized = materializeCouncilMemberTuningInput(tuning, ["verbosity"]);
+
+    expect(materialized.options).toEqual({ verbosity: "low" });
+    expect(materialized.sentParameters).toEqual(["verbosity"]);
+    expect(materialized.deniedParameters).toEqual([]);
   });
 
   test("maps transport failures to upstream provider errors", async () => {
@@ -160,13 +177,13 @@ describe("OpenRouter tuning materialization", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await callOpenRouter("sk-or-test", {
-      model: "openai/gpt-5.5-pro",
+      model: "openai/gpt-5.5",
       messages: [{ role: "user", content: "hello" }],
     });
 
     expect(response).toMatchObject({
       id: "gen-no-model",
-      model: "openai/gpt-5.5-pro",
+      model: "openai/gpt-5.5",
       choices: [{ message: { content: "done" } }],
     });
   });

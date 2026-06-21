@@ -64,7 +64,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["temperature", "top_p", "reasoning", "max_tokens"],
-      maxCompletionTokens: 16_384,
+      maxCompletionTokens: 32_768,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -109,7 +109,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     expect(dbMocks.createProviderCall).toHaveBeenCalledWith(
       expect.objectContaining({
         requestModelId: "provider/model",
-        requestMaxOutputTokens: 16_384,
+        requestMaxOutputTokens: 32_768,
         catalogRefreshedAt: new Date("2026-05-12T08:00:00.000Z"),
         supportedParametersJson: ["temperature", "top_p", "reasoning", "max_tokens"],
         sentParametersJson: ["temperature", "top_p", "reasoning", "max_tokens"],
@@ -135,7 +135,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["reasoning", "max_tokens"],
-      maxCompletionTokens: 16_384,
+      maxCompletionTokens: 32_768,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -157,7 +157,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
         temperature: null,
         topP: null,
         seed: null,
-        verbosity: null,
+        verbosity: "max",
         reasoningEffort: "low",
         includeReasoning: null,
       },
@@ -167,16 +167,17 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
 
     expect(adapterMocks.callOpenRouter).toHaveBeenCalledWith(
       "sk-or-secret",
-      expect.objectContaining({ max_tokens: 16_384, reasoning: { effort: "low" } }),
+      expect.objectContaining({ max_tokens: 32_768, reasoning: { effort: "low" } }),
       { signal: controller.signal },
     );
+    expect(adapterMocks.callOpenRouter.mock.calls[0]?.[1]).not.toHaveProperty("verbosity");
   });
 
   test("lease abort stops before provider execution and diagnostics persistence", async () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens"],
-      maxCompletionTokens: 16_384,
+      maxCompletionTokens: 32_768,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -206,7 +207,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens"],
-      maxCompletionTokens: 16_384,
+      maxCompletionTokens: 32_768,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -291,7 +292,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens"],
-      maxCompletionTokens: 16_384,
+      maxCompletionTokens: 32_768,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -335,7 +336,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     expect(dbMocks.createProviderCall).toHaveBeenCalledWith(
       expect.objectContaining({
         responseId: "generation-429",
-        requestMaxOutputTokens: 16_384,
+        requestMaxOutputTokens: 32_768,
         errorMessage: "OpenRouter choice error 429: Too many requests",
         choiceErrorMessage: "Too many requests [redacted]",
         choiceErrorCode: 429,
@@ -349,7 +350,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens"],
-      maxCompletionTokens: 16_384,
+      maxCompletionTokens: 32_768,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });
@@ -386,7 +387,7 @@ describe("runOpenRouterPhaseCall diagnostics", () => {
     modelMocks.getModelCapability.mockResolvedValue({
       modelId: "provider/model",
       supportedParameters: ["max_tokens"],
-      maxCompletionTokens: 16_384,
+      maxCompletionTokens: 32_768,
       expirationDate: null,
       refreshedAt: new Date("2026-05-12T08:00:00.000Z"),
     });

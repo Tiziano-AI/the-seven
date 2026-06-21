@@ -198,7 +198,7 @@ test("demo-to-key confirmation ends the server demo before unlock", async ({ con
   await expect(page.getByText("OpenRouter key unlocked", { exact: true })).toBeVisible();
   await expect(page.getByRole("radio", { name: "The Founding Council" })).toBeChecked();
   await expect(
-    page.getByText("Strongest built-in council. GPT-5.5 Pro writes the final answer."),
+    page.getByText("Strongest built-in council. GPT-5.5 writes the final answer."),
   ).toBeVisible();
   await expect
     .poll(async () => {

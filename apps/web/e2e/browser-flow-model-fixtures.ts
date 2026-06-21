@@ -8,7 +8,7 @@ const PROOF_MODEL_ROSTER: Readonly<Record<number, Readonly<{ id: string; name: s
   7: { id: "minimax/minimax-m2.7", name: "MiniMax M2.7" },
 };
 
-const CATALOG_TOKEN_CAP = 32_000;
+const CATALOG_TOKEN_CAP = 65_536;
 
 const NO_TUNING_MODEL_ROW = {
   modelId: "proof/no-tuning-model",
@@ -34,7 +34,7 @@ export function proofModelForPosition(memberPosition: number) {
 export function proofModelName(modelId: string) {
   return (
     Object.values(PROOF_MODEL_ROSTER).find((model) => model.id === modelId)?.name ??
-    (modelId === "anthropic/claude-opus-4.7" ? "Claude Opus 4.7" : "Catalog Model")
+    (modelId === "anthropic/claude-opus-4.8" ? "Claude Opus 4.8" : "Catalog Model")
   );
 }
 
@@ -55,8 +55,8 @@ export function modelAutocompletePayload() {
   return {
     suggestions: [
       {
-        modelId: "anthropic/claude-opus-4.7",
-        modelName: "Claude Opus 4.7",
+        modelId: "anthropic/claude-opus-4.8",
+        modelName: "Claude Opus 4.8",
         description: "Frontier reviewer model",
         contextLength: 200_000,
         maxCompletionTokens: CATALOG_TOKEN_CAP,
@@ -82,6 +82,7 @@ export function modelValidationPayload(modelId: string) {
       model: NO_TUNING_MODEL_ROW,
     };
   }
+  const supportsVerbosity = modelId === "anthropic/claude-opus-4.8";
   return {
     valid: true,
     model: {
@@ -97,6 +98,7 @@ export function modelValidationPayload(modelId: string) {
         "seed",
         "reasoning",
         "include_reasoning",
+        ...(supportsVerbosity ? ["verbosity"] : []),
         "max_tokens",
         "response_format",
       ],

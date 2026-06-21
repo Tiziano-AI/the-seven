@@ -25,14 +25,18 @@ test("council duplicate, edit, save, and delete are browser-proven", async ({ pa
   await expect(firstSeat.locator(".model-selection-id")).toContainText("qwen/qwen3.6-35b-a3b");
   await firstSeat.getByRole("button", { name: "Change Seat A model catalog" }).click();
   await firstSeat.getByRole("combobox", { name: "Search Seat A catalog" }).fill("claude");
-  await firstSeat.getByRole("option", { name: /Claude Opus 4.7/ }).click();
-  await expect(firstSeat.locator(".model-selection-name")).toContainText("Claude Opus 4.7");
-  await expect(firstSeat.locator(".model-selection-id")).toContainText("anthropic/claude-opus-4.7");
+  await firstSeat.getByRole("option", { name: /Claude Opus 4.8/ }).click();
+  await expect(firstSeat.locator(".model-selection-name")).toContainText("Claude Opus 4.8");
+  await expect(firstSeat.locator(".model-selection-id")).toContainText("anthropic/claude-opus-4.8");
   await firstSeat.getByRole("button", { name: /Tuning/ }).click();
   await expect(firstSeat.getByLabel("Temperature")).toHaveAttribute("inputmode", "decimal");
   await expect(firstSeat.getByLabel("Top P")).toHaveAttribute("inputmode", "decimal");
   await expect(firstSeat.getByLabel("Seed")).toHaveAttribute("inputmode", "numeric");
-  await expect(firstSeat.getByRole("radio", { name: "Extra high" })).toBeVisible();
+  await expect(
+    firstSeat
+      .getByRole("group", { name: "Reasoning effort" })
+      .getByRole("radio", { name: "Extra high" }),
+  ).toBeVisible();
   await firstSeat.getByRole("radio", { name: "Suppress" }).check();
   await firstSeat.getByRole("button", { name: "Change Seat A model catalog" }).click();
   await firstSeat
@@ -100,7 +104,7 @@ test("session detail deep link renders the full archived answer", async ({ conte
   const providerLedger = page.locator("#run-details-panel");
   await expect(
     providerLedger.locator(".diagnostic-card").filter({ hasText: "A · Reviewer" }),
-  ).toContainText("max output 16384");
+  ).toContainText("max output 32768");
   await expect(
     providerLedger.locator(".diagnostic-card").filter({ hasText: "C · Reviewer" }),
   ).toContainText("denied response_format, structured_outputs");

@@ -179,12 +179,16 @@ function materializeParam(input: {
   parameter: string;
   supported: ReadonlySet<string>;
   present: boolean;
+  unsupportedPolicy?: "deny" | "omit";
   apply: () => OpenRouterTuningOptions;
 }): MaterializedOpenRouterTuning {
   if (!input.present) {
     return { options: {}, sentParameters: [], deniedParameters: [] };
   }
   if (!input.supported.has(input.parameter)) {
+    if (input.unsupportedPolicy === "omit") {
+      return { options: {}, sentParameters: [], deniedParameters: [] };
+    }
     return {
       options: {},
       sentParameters: [],
@@ -226,6 +230,7 @@ export function materializeCouncilMemberTuningInput(
       parameter: "verbosity",
       supported,
       present: Boolean(tuning?.verbosity),
+      unsupportedPolicy: "omit",
       apply: () => ({ verbosity: tuning?.verbosity ?? undefined }),
     }),
     materializeParam({

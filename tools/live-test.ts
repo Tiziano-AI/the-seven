@@ -21,11 +21,12 @@ const LIVE_BILLING_TIMEOUT_MS = 150_000;
 const LIVE_API_POLL_TIMEOUT_MS = 60_000;
 const LIVE_APP_REACHABILITY_TIMEOUT_MS = 10_000;
 const LIVE_REACHABILITY_CHECK_AFTER_TRANSIENT_ERRORS = 3;
-const BUILT_IN_REASONING_EFFORTS = {
+const BUILT_IN_REVIEWER_REASONING_EFFORTS = {
   commons: "low",
   lantern: "medium",
   founding: "xhigh",
 } as const;
+const BUILT_IN_SYNTHESIZER_REASONING_EFFORT = "xhigh";
 
 type SessionDetail = Awaited<ReturnType<typeof fetchSession>>;
 type SessionDiagnostics = Awaited<ReturnType<typeof fetchSessionDiagnostics>>;
@@ -243,8 +244,12 @@ async function selectByokCouncils(authHeader: string) {
 
   for (const candidate of candidates) {
     const council = BUILT_IN_COUNCILS[candidate.slug];
-    const expectedReasoningEffort = BUILT_IN_REASONING_EFFORTS[candidate.slug];
     for (const member of council.members) {
+      const isSynthesizer = member.memberPosition === 7;
+      const expectedReasoningEffort = isSynthesizer
+        ? BUILT_IN_SYNTHESIZER_REASONING_EFFORT
+        : BUILT_IN_REVIEWER_REASONING_EFFORTS[candidate.slug];
+      const expectedVerbosity = isSynthesizer ? "max" : "low";
       assert(
         member.tuning?.reasoningEffort === expectedReasoningEffort,
         `${candidate.slug} ${member.model.modelId} is not using ${expectedReasoningEffort} built-in reasoning effort.`,
@@ -253,9 +258,9 @@ async function selectByokCouncils(authHeader: string) {
         member.tuning.temperature === null &&
           member.tuning.topP === null &&
           member.tuning.seed === null &&
-          member.tuning.verbosity === null &&
+          member.tuning.verbosity === expectedVerbosity &&
           member.tuning.includeReasoning === null,
-        `${candidate.slug} ${member.model.modelId} has non-tier built-in tuning defaults.`,
+        `${candidate.slug} ${member.model.modelId} has non-position built-in tuning defaults.`,
       );
     }
 
@@ -280,7 +285,7 @@ async function selectByokCouncils(authHeader: string) {
 function assertSessionArtifacts(
   detail: Awaited<ReturnType<typeof fetchSession>>,
   diagnostics: Awaited<ReturnType<typeof fetchSessionDiagnostics>>,
-  slug: keyof typeof BUILT_IN_REASONING_EFFORTS,
+  slug: keyof typeof BUILT_IN_REVIEWER_REASONING_EFFORTS,
 ) {
   assert(diagnostics.session.id === detail.session.id, "Diagnostics session id mismatch.");
   assert(diagnostics.providerCalls.length > 0, "Expected provider calls in session diagnostics.");

@@ -33,7 +33,7 @@ async function createProviderDiagnostic(input: {
     phase: 1,
     memberPosition: input.memberPosition,
     requestModelId: `provider/model-${input.memberPosition}`,
-    requestMaxOutputTokens: 16_384,
+    requestMaxOutputTokens: 32_768,
     requestSystemChars: 1,
     requestUserChars: 2,
     requestTotalChars: 3,
