@@ -42,6 +42,7 @@ vi.mock("../adapters/openrouter", async (importOriginal) => {
 });
 
 import { buildClaimedLease } from "@the-seven/db";
+import { OpenRouterRequestFailedError } from "../adapters/openrouter";
 import { OpenRouterUnsupportedParameterError, runOpenRouterPhaseCall } from "./openrouterRun";
 
 function testLease(sessionId: number) {
@@ -288,6 +289,74 @@ describe("runOpenRouterPhaseCall", () => {
         sentProviderRequireParameters: true,
         sentProviderIgnoredProvidersJson: ["amazon-bedrock", "azure"],
         deniedParametersJson: [],
+      }),
+    );
+  });
+
+  test("retries explicit OpenRouter credit-limit max_tokens errors with a conservative affordable cap", async () => {
+    modelMocks.getModelCapability.mockResolvedValue({
+      modelId: "provider/model",
+      supportedParameters: ["max_tokens"],
+      maxCompletionTokens: 64_000,
+      expirationDate: null,
+      refreshedAt: new Date("2026-05-09T10:00:00.000Z"),
+    });
+    adapterMocks.callOpenRouter
+      .mockRejectedValueOnce(
+        new OpenRouterRequestFailedError({
+          status: 402,
+          code: 402,
+          message:
+            "OpenRouter request failed (status 402): This request requires more credits, or fewer max_tokens. You requested up to 64000 tokens, but can only afford 26442. To increase, visit https://openrouter.ai/workspaces/default/keys/4f48acaa3121b1438f827d94ecac1cb49eafc5279af4ef46aad0cebc4d29a1e0",
+        }),
+      )
+      .mockResolvedValueOnce({
+        id: "generation-retry",
+        model: "provider/model",
+        choices: [{ message: { role: "assistant", content: "synthesis" } }],
+      });
+
+    const result = await runOpenRouterPhaseCall({
+      sessionId: 24,
+      phase: 3,
+      memberPosition: 7,
+      apiKey: "sk-or-secret",
+      modelId: "provider/model",
+      messages: [{ role: "user", content: "user" }],
+      tuning: null,
+      claimedLease: testLease(24),
+    });
+
+    expect(result).toEqual({ ok: true, content: "synthesis" });
+    expect(adapterMocks.callOpenRouter).toHaveBeenNthCalledWith(
+      1,
+      "sk-or-secret",
+      expect.objectContaining({ max_tokens: 64_000 }),
+      { signal: undefined },
+    );
+    expect(adapterMocks.callOpenRouter).toHaveBeenNthCalledWith(
+      2,
+      "sk-or-secret",
+      expect.objectContaining({ max_tokens: 25_119 }),
+      { signal: undefined },
+    );
+    expect(dbMocks.createProviderCall).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        requestMaxOutputTokens: 64_000,
+        errorStatus: 402,
+        errorCode: "402",
+        billingLookupStatus: "not_requested",
+        errorMessage: expect.stringContaining("visit [redacted]"),
+      }),
+    );
+    expect(dbMocks.createProviderCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        requestMaxOutputTokens: 25_119,
+        responseId: "generation-retry",
+        billingLookupStatus: "pending",
+        errorMessage: null,
       }),
     );
   });

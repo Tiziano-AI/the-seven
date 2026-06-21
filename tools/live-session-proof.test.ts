@@ -20,6 +20,32 @@ describe("live session proof helper", () => {
     ).not.toThrow();
   });
 
+  it("accepts a successful lower-cap provider retry after a same-member credit-limit attempt", () => {
+    const calls = completeProviderCalls();
+    const failedPhaseThreeAttempt = {
+      ...calls[12],
+      responseId: null,
+      responseModel: null,
+      errorMessage: "OpenRouter request failed (status 402): credit limit exceeded",
+      errorStatus: 402,
+      billingLookupStatus: "not_requested",
+    };
+    calls[12] = {
+      ...calls[12],
+      requestMaxOutputTokens: 18_063,
+    };
+
+    expect(() =>
+      assertLiveSessionProof({
+        artifacts: completeArtifacts(),
+        providerCalls: [...calls.slice(0, 12), failedPhaseThreeAttempt, calls[12]],
+        snapshotMembers: completeMembers(),
+        expectedMembers: completeMembers(),
+        label: "session 10",
+      }),
+    ).not.toThrow();
+  });
+
   it("rejects snapshot rosters that do not match the selected built-in council", () => {
     const snapshotMembers = completeMembers();
     snapshotMembers[0] = {
@@ -330,7 +356,7 @@ describe("live session proof helper", () => {
         expectedMembers: completeMembers(),
         label: "session 10",
       }),
-    ).toThrow("session 10: expected 6 phase-1 provider calls");
+    ).toThrow("session 10: expected 6 successful phase-1 provider calls");
   });
 
   it("rejects phase-1 provider errors", () => {
@@ -359,7 +385,7 @@ describe("live session proof helper", () => {
         expectedMembers: completeMembers(),
         label: "session 10",
       }),
-    ).toThrow("session 10: expected 1 phase-3 provider calls");
+    ).toThrow("session 10: expected 1 successful phase-3 provider calls");
   });
 
   it("rejects phase-3 provider calls from a non-synthesizer position", () => {
@@ -374,7 +400,7 @@ describe("live session proof helper", () => {
         expectedMembers: completeMembers(),
         label: "session 10",
       }),
-    ).toThrow("Expected 7, received 6");
+    ).toThrow("session 10: phase-3 provider calls included unexpected member positions.");
   });
 
   it("rejects denied phase-2 parameters", () => {

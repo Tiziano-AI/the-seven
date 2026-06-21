@@ -69,7 +69,7 @@ current OpenRouter Anthropic routing accepts the portable schema but rejects
 richer JSON-schema grammar constraints.
 The OpenRouter
 adapter requests a bounded `max_tokens` output on every provider call: phase 1
-uses 8192 tokens, and phases 2 and 3 use 16384 tokens. Chat completions use
+uses 16,384 tokens, and phases 2 and 3 use 64,000 tokens. Chat completions use
 OpenRouter's streaming transport internally so long-running structured-output
 calls receive incremental server events instead of depending on one full
 non-streaming response body. The workflow still persists artifacts only after
@@ -674,7 +674,7 @@ These enums are contract-owned so HTTP writes, UI controls, built-ins, session
 snapshots, and provider request materialization cannot drift into ad hoc string
 values.
 
-The server caps provider output at 8192 tokens for phase 1 and 16384 tokens for
+The server caps provider output at 16,384 tokens for phase 1 and 64,000 tokens for
 phases 2 and 3. A catalog row that cannot accept the phase-owned cap is denied
 before provider execution instead of silently lowering the request. Phase 1
 answers stay bounded for prompt fan-in. Phase 2 needs the larger finite cap for
@@ -686,15 +686,22 @@ contributes its ranking, final-answer input bullets, major disagreements, and
 per-candidate score plus `verdict_input`. The synthesizer does not receive the
 full six-by-six review object with `strengths`, `weaknesses`,
 `critical_errors`, and `missing_evidence`; those remain persisted phase-2
-diagnostics. Phase 2 still persists only bounded review strings: `strengths`
+diagnostics. If OpenRouter explicitly returns a credit-limit error saying the
+current key can afford fewer `max_tokens`, the workflow records the failed
+capped request and performs one lower-cap retry at the provider-stated
+affordable value; this does not change the phase-owned default cap or catalog
+capability denial. Phase 2 still persists only bounded review strings: `strengths`
 and `weaknesses` are required non-empty per-candidate lists, while
 `critical_errors`, `missing_evidence`, and `major_disagreements` may be empty
 when no material item exists. Regular list entries, `best_final_answer_inputs`,
 and `major_disagreements` require material prose
 with at least 12 characters and at least two distinct words and are each capped
 at 1200 characters. `verdict_input` uses the same material-prose rule and is
-capped at 2000 characters. Per-candidate review lists are capped at 5 items, and
-phase-level summary lists are capped at 8 items.
+capped at 2000 characters. Per-candidate review lists are capped at 8 items, and
+phase-level summary lists are capped at 8 items. A provider-success phase-2
+response that fails the canonical parse gets one repair prompt to the same
+reviewer before the session fails; the stored artifact is created only from a
+valid canonical evaluation.
 
 The built-in roster policy is positive and tier-owned:
 

@@ -35,6 +35,7 @@ import {
 } from "./orchestrateSessionState";
 import {
   buildReviewPrompt,
+  buildReviewRepairPrompt,
   buildSynthesisPrompt,
   formatPhaseTwoEvaluationContent,
   parsePhaseTwoEvaluationResponse,
@@ -242,34 +243,56 @@ export async function orchestrateClaimedJob(input: {
       (position) => !phaseTwoExistingPositions.has(position),
     ).map((memberPosition) => async (signal: AbortSignal) => {
       const member = getSnapshotMember(snapshot, memberPosition);
-      const result = await runOpenRouterPhaseCall({
-        sessionId: session.id,
-        phase: 2,
-        memberPosition,
-        apiKey,
-        modelId: member.model.modelId,
-        messages: [
-          { role: "system", content: buildSystemPromptForPhase(snapshot, memberPosition, 2) },
-          {
-            role: "user",
-            content: buildReviewPrompt({
-              userMessage: snapshot.userMessage,
-              responses: phaseOneArtifacts,
-            }),
-          },
-        ],
-        tuning: member.tuning,
-        signal,
-        claimedLease,
+      const runPhaseTwoReview = (content: string) =>
+        runOpenRouterPhaseCall({
+          sessionId: session.id,
+          phase: 2,
+          memberPosition,
+          apiKey,
+          modelId: member.model.modelId,
+          messages: [
+            { role: "system", content: buildSystemPromptForPhase(snapshot, memberPosition, 2) },
+            {
+              role: "user",
+              content,
+            },
+          ],
+          tuning: member.tuning,
+          signal,
+          claimedLease,
+        });
+
+      const reviewPrompt = buildReviewPrompt({
+        userMessage: snapshot.userMessage,
+        responses: phaseOneArtifacts,
       });
+      const result = await runPhaseTwoReview(reviewPrompt);
 
       if (!result.ok) {
         throw result.error;
       }
 
-      const parsedEvaluation = parsePhaseTwoEvaluationResponse({
+      let parsedEvaluation = parsePhaseTwoEvaluationResponse({
         content: result.content,
       });
+      if (!parsedEvaluation.ok) {
+        const repairResult = await runPhaseTwoReview(
+          buildReviewRepairPrompt({
+            userMessage: snapshot.userMessage,
+            responses: phaseOneArtifacts,
+            validationError: parsedEvaluation.error.message,
+          }),
+        );
+
+        if (!repairResult.ok) {
+          throw repairResult.error;
+        }
+
+        parsedEvaluation = parsePhaseTwoEvaluationResponse({
+          content: repairResult.content,
+        });
+      }
+
       if (!parsedEvaluation.ok) {
         throw parsedEvaluation.error;
       }

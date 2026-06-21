@@ -221,20 +221,6 @@ describe("phase-two evaluation contract", () => {
         ...payload,
         reviews: payload.reviews.map((row) =>
           row.candidate_id === "A"
-            ? {
-                ...row,
-                strengths: Array.from(
-                  { length: PHASE_TWO_REVIEW_LIST_MAX_ITEMS + 1 },
-                  (_, index) => `Candidate A strength item ${index} has concrete evidence.`,
-                ),
-              }
-            : row,
-        ),
-      },
-      {
-        ...payload,
-        reviews: payload.reviews.map((row) =>
-          row.candidate_id === "A"
             ? { ...row, verdict_input: "x".repeat(PHASE_TWO_VERDICT_INPUT_MAX_CHARS + 1) }
             : row,
         ),
@@ -248,24 +234,89 @@ describe("phase-two evaluation contract", () => {
       },
       { ...payload, best_final_answer_inputs: ["   "] },
       { ...payload, best_final_answer_inputs: ["x".repeat(PHASE_TWO_TEXT_MAX_CHARS + 1)] },
-      {
-        ...payload,
-        best_final_answer_inputs: Array.from(
-          { length: PHASE_TWO_SUMMARY_LIST_MAX_ITEMS + 1 },
-          (_, index) => `Final answer input item ${index} keeps concrete launch evidence.`,
-        ),
-      },
-      { ...payload, major_disagreements: ["\n"] },
-      {
-        ...payload,
-        major_disagreements: Array.from(
-          { length: PHASE_TWO_SUMMARY_LIST_MAX_ITEMS + 1 },
-          (_, index) => `Major disagreement item ${index} names a concrete tradeoff.`,
-        ),
-      },
     ]) {
       expect(() => phaseTwoEvaluationResponseSchema.parse(invalidPayload)).toThrow();
     }
+  });
+
+  test("normalizes live provider review-list surplus and filler into the canonical cap", () => {
+    const materialStrengths = Array.from(
+      { length: PHASE_TWO_REVIEW_LIST_MAX_ITEMS + 2 },
+      (_, index) => `Candidate A strength item ${index} names concrete supporting evidence.`,
+    );
+    const materialWeakness = "Candidate A weakness names a concrete unresolved caveat.";
+    const payload = {
+      reviews: [
+        {
+          ...reviewRow("A", 10),
+          strengths: ["filler", "   ", ...materialStrengths],
+          weaknesses: [materialWeakness, "n/a", "1", "..."],
+          critical_errors: ["none", "Candidate A critical error names a concrete contradiction."],
+          missing_evidence: ["-", "Candidate A missing evidence names a concrete source gap."],
+        },
+        reviewRow("B", 60),
+        reviewRow("C", 80),
+        reviewRow("D", 30),
+        reviewRow("E", 70),
+        reviewRow("F", 50),
+      ],
+      best_final_answer_inputs: [
+        "ok",
+        "Keep the strongest factual basis from candidate C.",
+        ...Array.from(
+          { length: PHASE_TWO_SUMMARY_LIST_MAX_ITEMS + 1 },
+          (_, index) => `Summary item ${index} names concrete final-answer material.`,
+        ),
+      ],
+      major_disagreements: [
+        "n/a",
+        "Reviewers disagree about a concrete cost and latency tradeoff.",
+      ],
+    };
+
+    const parsed = phaseTwoEvaluationResponseSchema.parse(payload);
+
+    expect(parsed.reviews[0]?.strengths).toEqual(
+      materialStrengths.slice(0, PHASE_TWO_REVIEW_LIST_MAX_ITEMS),
+    );
+    expect(parsed.reviews[0]?.weaknesses).toEqual([materialWeakness]);
+    expect(parsed.reviews[0]?.critical_errors).toEqual([
+      "Candidate A critical error names a concrete contradiction.",
+    ]);
+    expect(parsed.reviews[0]?.missing_evidence).toEqual([
+      "Candidate A missing evidence names a concrete source gap.",
+    ]);
+    expect(parsed.best_final_answer_inputs).toEqual([
+      "Keep the strongest factual basis from candidate C.",
+      ...Array.from(
+        { length: PHASE_TWO_SUMMARY_LIST_MAX_ITEMS - 1 },
+        (_, index) => `Summary item ${index} names concrete final-answer material.`,
+      ),
+    ]);
+    expect(parsed.major_disagreements).toEqual([
+      "Reviewers disagree about a concrete cost and latency tradeoff.",
+    ]);
+  });
+
+  test("accepts live reviewer rows with six material review-list bullets", () => {
+    const liveSizedWeaknesses = Array.from(
+      { length: 6 },
+      (_, index) => `Candidate D weakness item ${index} names a concrete caveat.`,
+    );
+    const payload = {
+      reviews: [
+        reviewRow("C", 80),
+        reviewRow("A", 10),
+        reviewRow("F", 50),
+        reviewRow("B", 60),
+        { ...reviewRow("D", 30), weaknesses: liveSizedWeaknesses },
+        reviewRow("E", 70),
+      ],
+      best_final_answer_inputs: ["Keep the strongest factual basis."],
+      major_disagreements: [],
+    };
+
+    expect(phaseTwoEvaluationResponseSchema.parse(payload)).toEqual(payload);
   });
 });
 

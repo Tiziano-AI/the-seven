@@ -23,6 +23,7 @@ export type ProofProviderCall = Readonly<{
   responseModel: string | null;
   errorMessage: string | null;
   choiceErrorMessage: string | null;
+  errorStatus: number | null;
   billingLookupStatus: string;
 }>;
 
@@ -125,6 +126,7 @@ export function completeProviderCalls(): ProofProviderCall[] {
     responseModel: `provider/model-${memberPosition}`,
     errorMessage: null,
     choiceErrorMessage: null,
+    errorStatus: null,
     billingLookupStatus: "succeeded",
   }));
   const phaseTwo: ProofProviderCall[] = REVIEWER_POSITIONS.map((memberPosition) => ({
@@ -143,6 +145,7 @@ export function completeProviderCalls(): ProofProviderCall[] {
     responseModel: `provider/model-${memberPosition}`,
     errorMessage: null,
     choiceErrorMessage: null,
+    errorStatus: null,
     billingLookupStatus: "succeeded",
   }));
   const phaseThree: ProofProviderCall[] = [
@@ -162,6 +165,7 @@ export function completeProviderCalls(): ProofProviderCall[] {
       responseModel: "provider/model-7",
       errorMessage: null,
       choiceErrorMessage: null,
+      errorStatus: null,
       billingLookupStatus: "succeeded",
     },
   ];

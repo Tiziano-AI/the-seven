@@ -18,11 +18,17 @@ import { sleep } from "./process-utils";
 
 const LIVE_SESSION_TIMEOUT_MS = 1_800_000;
 const LIVE_BILLING_TIMEOUT_MS = 150_000;
+const LIVE_API_POLL_TIMEOUT_MS = 60_000;
+const LIVE_APP_REACHABILITY_TIMEOUT_MS = 10_000;
+const LIVE_REACHABILITY_CHECK_AFTER_TRANSIENT_ERRORS = 3;
 const BUILT_IN_REASONING_EFFORTS = {
   commons: "low",
   lantern: "medium",
   founding: "xhigh",
 } as const;
+
+type SessionDetail = Awaited<ReturnType<typeof fetchSession>>;
+type SessionDiagnostics = Awaited<ReturnType<typeof fetchSessionDiagnostics>>;
 
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) {
@@ -33,7 +39,10 @@ function assert(condition: boolean, message: string): asserts condition {
 async function assertAppReachable(baseUrl: string) {
   let reachabilityError: string | null = null;
   try {
-    const response = await fetch(baseUrl, { redirect: "manual" });
+    const response = await fetch(baseUrl, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(LIVE_APP_REACHABILITY_TIMEOUT_MS),
+    });
     if (response.status >= 200 && response.status < 500) {
       return;
     }
@@ -47,62 +56,182 @@ async function assertAppReachable(baseUrl: string) {
   );
 }
 
-async function waitForTerminalSession(authHeader: string, sessionId: number, label: string) {
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isTransientLiveApiError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  const name = error.name.toLowerCase();
+  return (
+    name.includes("abort") ||
+    name.includes("timeout") ||
+    message.includes("fetch failed") ||
+    message.includes("terminated") ||
+    message.includes("socket") ||
+    message.includes("econnreset") ||
+    message.includes("econnrefused") ||
+    message.includes("operation was aborted") ||
+    message.includes("timed out")
+  );
+}
+
+async function fetchLiveApi<T>(input: {
+  authHeader: string;
+  baseUrl: string;
+  sessionId: number;
+  label: string;
+  operation: string;
+  deadline: number;
+  fetcher: (signal: AbortSignal) => Promise<T>;
+}): Promise<T> {
+  let consecutiveTransientErrors = 0;
+  let lastTransientError: string | null = null;
+
+  while (Date.now() < input.deadline) {
+    try {
+      const timeoutMs = Math.min(
+        LIVE_API_POLL_TIMEOUT_MS,
+        Math.max(1, input.deadline - Date.now()),
+      );
+      const result = await input.fetcher(AbortSignal.timeout(timeoutMs));
+      consecutiveTransientErrors = 0;
+      return result;
+    } catch (error) {
+      if (!isTransientLiveApiError(error)) {
+        throw error;
+      }
+
+      consecutiveTransientErrors += 1;
+      lastTransientError = formatErrorMessage(error);
+      console.warn(
+        `${input.label}: transient ${input.operation} poll error for session ${input.sessionId}: ${lastTransientError}; retrying.`,
+      );
+      if (consecutiveTransientErrors >= LIVE_REACHABILITY_CHECK_AFTER_TRANSIENT_ERRORS) {
+        await assertAppReachable(input.baseUrl);
+        consecutiveTransientErrors = 0;
+      }
+      await sleep(2_000);
+    }
+  }
+
+  throw new Error(
+    `${input.label}: ${input.operation} polling exceeded the live timeout for session ${input.sessionId}. Last transient error: ${lastTransientError ?? "none"}`,
+  );
+}
+
+async function fetchLiveSession(input: {
+  authHeader: string;
+  baseUrl: string;
+  sessionId: number;
+  label: string;
+  deadline: number;
+}): Promise<SessionDetail> {
+  return fetchLiveApi({
+    ...input,
+    operation: "session detail",
+    fetcher: (signal) => fetchSession(input.authHeader, input.sessionId, { signal }),
+  });
+}
+
+async function fetchLiveSessionDiagnostics(input: {
+  authHeader: string;
+  baseUrl: string;
+  sessionId: number;
+  label: string;
+  deadline: number;
+}): Promise<SessionDiagnostics> {
+  return fetchLiveApi({
+    ...input,
+    operation: "session diagnostics",
+    fetcher: (signal) => fetchSessionDiagnostics(input.authHeader, input.sessionId, { signal }),
+  });
+}
+
+async function waitForTerminalSession(input: {
+  authHeader: string;
+  baseUrl: string;
+  sessionId: number;
+  label: string;
+}) {
   const deadline = Date.now() + LIVE_SESSION_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    const detail = await fetchSession(authHeader, sessionId);
+    const detail = await fetchLiveSession({ ...input, deadline });
     if (detail.session.status === "completed") {
-      console.log(`${label}: completed`);
+      console.log(`${input.label}: completed`);
       return detail;
     }
     if (detail.session.status === "failed") {
-      return describeTerminalSessionFailure(authHeader, sessionId, label, "failed");
+      return describeTerminalSessionFailure({ ...input, reason: "failed" });
     }
     await sleep(2_000);
   }
 
-  return describeTerminalSessionFailure(authHeader, sessionId, label, "timed out");
+  return describeTerminalSessionFailure({ ...input, reason: "timed out" });
 }
 
-async function waitForBillingDiagnostics(authHeader: string, sessionId: number, label: string) {
+async function waitForBillingDiagnostics(input: {
+  authHeader: string;
+  baseUrl: string;
+  sessionId: number;
+  label: string;
+}) {
   const deadline = Date.now() + LIVE_BILLING_TIMEOUT_MS;
-  let diagnostics = await fetchSessionDiagnostics(authHeader, sessionId);
+  let diagnostics = await fetchLiveSessionDiagnostics({ ...input, deadline });
   while (diagnostics.providerCalls.some((call) => call.billingLookupStatus === "pending")) {
     if (Date.now() >= deadline) {
       assertNoPendingBillingLookups({
         providerCalls: diagnostics.providerCalls,
-        label,
+        label: input.label,
       });
     }
     await sleep(5_000);
-    diagnostics = await fetchSessionDiagnostics(authHeader, sessionId);
+    diagnostics = await fetchLiveSessionDiagnostics({ ...input, deadline });
   }
   return diagnostics;
 }
 
-async function waitForFailureBillingDiagnostics(authHeader: string, sessionId: number) {
+async function waitForFailureBillingDiagnostics(input: {
+  authHeader: string;
+  baseUrl: string;
+  sessionId: number;
+  label: string;
+}) {
   const deadline = Date.now() + LIVE_BILLING_TIMEOUT_MS;
-  let diagnostics = await fetchSessionDiagnostics(authHeader, sessionId);
+  let diagnostics = await fetchLiveSessionDiagnostics({ ...input, deadline });
   while (
     diagnostics.providerCalls.some((call) => call.billingLookupStatus === "pending") &&
     Date.now() < deadline
   ) {
     await sleep(5_000);
-    diagnostics = await fetchSessionDiagnostics(authHeader, sessionId);
+    diagnostics = await fetchLiveSessionDiagnostics({ ...input, deadline });
   }
   return diagnostics;
 }
 
-async function describeTerminalSessionFailure(
-  authHeader: string,
-  sessionId: number,
-  label: string,
-  reason: string,
-): Promise<never> {
-  const detail = await fetchSession(authHeader, sessionId);
-  const diagnostics = await waitForFailureBillingDiagnostics(authHeader, sessionId);
+async function describeTerminalSessionFailure(input: {
+  authHeader: string;
+  baseUrl: string;
+  sessionId: number;
+  label: string;
+  reason: string;
+}): Promise<never> {
+  const deadline = Date.now() + LIVE_API_POLL_TIMEOUT_MS;
+  const detail = await fetchLiveSession({ ...input, deadline });
+  const diagnostics = await waitForFailureBillingDiagnostics(input);
 
-  throw new Error(formatTerminalSessionFailure({ label, reason, detail, diagnostics }));
+  throw new Error(
+    formatTerminalSessionFailure({
+      label: input.label,
+      reason: input.reason,
+      detail,
+      diagnostics,
+    }),
+  );
 }
 
 async function selectByokCouncils(authHeader: string) {
@@ -271,16 +400,18 @@ async function main() {
       query: byokQuestion,
       councilRef: byokCouncilRef,
     });
-    const byokDetail = await waitForTerminalSession(
+    const byokDetail = await waitForTerminalSession({
       authHeader,
-      byokSession.sessionId,
-      `BYOK ${byokCouncilRef.slug} session`,
-    );
-    const byokDiagnostics = await waitForBillingDiagnostics(
+      baseUrl: cliEnv.baseUrl,
+      sessionId: byokSession.sessionId,
+      label: `BYOK ${byokCouncilRef.slug} session`,
+    });
+    const byokDiagnostics = await waitForBillingDiagnostics({
       authHeader,
-      byokSession.sessionId,
-      `BYOK ${byokCouncilRef.slug} session`,
-    );
+      baseUrl: cliEnv.baseUrl,
+      sessionId: byokSession.sessionId,
+      label: `BYOK ${byokCouncilRef.slug} session`,
+    });
     assertSessionArtifacts(byokDetail, byokDiagnostics, byokCouncilRef.slug);
   }
 }

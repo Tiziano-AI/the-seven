@@ -86,6 +86,7 @@ export async function apiRequest<Contract extends RouteContract>(input: {
   params?: RoutePathParams;
   body?: unknown;
   authHeader?: string | null;
+  signal?: AbortSignal;
 }): Promise<RouteSuccessPayload<Contract>> {
   const headers: Record<string, string> = {
     "X-Seven-Ingress": "web",
@@ -111,6 +112,7 @@ export async function apiRequest<Contract extends RouteContract>(input: {
     headers,
     body,
     credentials: "same-origin",
+    signal: input.signal,
   });
 
   assertJsonApiResponseCache(response, input.route);

@@ -262,4 +262,93 @@ describe("orchestrateClaimedJob phase-two artifacts", () => {
       leaseOwner: "worker:4",
     });
   });
+
+  test("repairs one invalid provider phase-two response before failing siblings", async () => {
+    const artifacts: StoredArtifact[] = [];
+    const phaseTwoAttempts = new Map<number, number>();
+
+    dbMocks.getSessionById.mockResolvedValue(buildSession());
+    dbMocks.getSessionArtifact.mockResolvedValue(null);
+    dbMocks.listSessionArtifacts.mockImplementation(async () =>
+      artifacts.map((artifact, index) => ({
+        ...artifact,
+        id: index + 1,
+        createdAt: new Date("2026-04-02T12:00:00.000Z"),
+      })),
+    );
+    dbMocks.createSessionArtifact.mockImplementation(async (input) => {
+      artifacts.push({
+        sessionId: input.sessionId,
+        phase: input.phase,
+        artifactKind: input.artifactKind,
+        memberPosition: input.memberPosition,
+        modelId: input.modelId,
+        content: input.content,
+      });
+    });
+    runMocks.runOpenRouterPhaseCall.mockImplementation(
+      async ({ phase, memberPosition }: { phase: number; memberPosition: number }) => {
+        if (phase !== 2) {
+          return {
+            ok: true as const,
+            content: `phase-${phase}-${memberPosition}`,
+          };
+        }
+
+        const attempts = (phaseTwoAttempts.get(memberPosition) ?? 0) + 1;
+        phaseTwoAttempts.set(memberPosition, attempts);
+        if (memberPosition === 1 && attempts === 1) {
+          return {
+            ok: true as const,
+            content: JSON.stringify({
+              reviews: [
+                {
+                  candidate_id: "A",
+                  score: 50,
+                  strengths: ["n/a"],
+                  weaknesses: ["none"],
+                  critical_errors: [],
+                  missing_evidence: [],
+                  verdict_input: "... ... ... ...",
+                },
+              ],
+              best_final_answer_inputs: ["n/a"],
+              major_disagreements: [],
+            }),
+          };
+        }
+
+        return {
+          ok: true as const,
+          content: phaseTwoProviderResponse(memberPosition),
+        };
+      },
+    );
+
+    const { orchestrateClaimedJob } = await import("./orchestrateSession");
+    await orchestrateClaimedJob({
+      jobId: 9,
+      leaseOwner: "worker:repair",
+      sessionId: 41,
+      credentialCiphertext: "ciphertext",
+    });
+
+    expect(phaseTwoAttempts.get(1)).toBe(2);
+    const repairCall = runMocks.runOpenRouterPhaseCall.mock.calls.find(
+      ([input]) =>
+        input.phase === 2 &&
+        input.memberPosition === 1 &&
+        input.messages[1]?.content.includes(
+          "Your previous phase-2 evaluation did not match the required JSON contract.",
+        ),
+    );
+    expect(repairCall).toBeDefined();
+    expect(artifacts.filter((artifact) => artifact.artifactKind === "review")).toHaveLength(6);
+    expect(dbMocks.markClaimedSessionFailed).not.toHaveBeenCalled();
+    expect(dbMocks.markClaimedSessionCompleted).toHaveBeenCalledWith({
+      sessionId: 41,
+      jobId: 9,
+      leaseOwner: "worker:repair",
+    });
+  });
 });

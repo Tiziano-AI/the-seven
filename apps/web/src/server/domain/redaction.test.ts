@@ -22,6 +22,14 @@ describe("redaction", () => {
     );
   });
 
+  test("redacts provider key-management URLs from upstream errors", () => {
+    expect(
+      redactText(
+        "adjust the limit at https://openrouter.ai/workspaces/default/keys/4f48acaa3121b1438f827d94ecac1cb49eafc5279af4ef46aad0cebc4d29a1e0",
+      ),
+    ).toBe("adjust the limit at [redacted]");
+  });
+
   test("redacts exact configured provider secrets without broad long-string matching", () => {
     const previous = process.env.SEVEN_DEMO_RESEND_API_KEY;
     process.env.SEVEN_DEMO_RESEND_API_KEY = "re_secret_resend_key_abcdefghijklmnopqrstuvwxyz";

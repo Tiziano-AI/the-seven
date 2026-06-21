@@ -11,6 +11,10 @@ export interface NextDevCommand {
 }
 
 const nextDistPattern = /^\.next-local\/[1-9]\d*$/;
+const demoConsumeTokenPattern =
+  /((?:https?:\/\/[^\s"'<>]+)?\/api\/v1\/demo\/consume\?token=)[^\s"'<>]+/g;
+const demoSessionCookiePattern = /(seven_demo_session=)[^;\s]+/g;
+const bearerCredentialPattern = /(authorization:\s*bearer\s+)[^\s]+/gi;
 
 function repoWebRoot(repoRoot: string): string {
   return path.join(repoRoot, "apps", "web");
@@ -59,6 +63,30 @@ export function requireProjectedNextDistDir(env: NodeJS.ProcessEnv): string {
 
 function readTextIfPresent(filePath: string): string | null {
   return existsSync(filePath) ? readFileSync(filePath, "utf8") : null;
+}
+
+/** Redacts credential-bearing request material from launch-owned Next logs. */
+export function redactNextDevLogChunk(value: string): string {
+  return value
+    .replace(demoConsumeTokenPattern, "$1[redacted]")
+    .replace(demoSessionCookiePattern, "$1[redacted]")
+    .replace(bearerCredentialPattern, "$1[redacted]");
+}
+
+function writeSanitizedChildOutput(input: {
+  chunk: string | Buffer;
+  stream: NodeJS.WriteStream;
+}): void {
+  input.stream.write(redactNextDevLogChunk(input.chunk.toString()));
+}
+
+function forwardSanitizedChildOutput(child: ChildProcess): void {
+  child.stdout?.on("data", (chunk: string | Buffer) => {
+    writeSanitizedChildOutput({ chunk, stream: process.stdout });
+  });
+  child.stderr?.on("data", (chunk: string | Buffer) => {
+    writeSanitizedChildOutput({ chunk, stream: process.stderr });
+  });
 }
 
 /** Restores Next's generated type reference file when the isolated distDir changed it. */
@@ -166,9 +194,10 @@ export async function runProjectedNextDevServer(input: {
       cwd: input.repoRoot,
       detached: process.platform !== "win32",
       env: input.env,
-      stdio: "inherit",
+      stdio: ["inherit", "pipe", "pipe"],
     },
   );
+  forwardSanitizedChildOutput(child);
 
   const stop = () => {
     signalChildTree(child, "SIGTERM");

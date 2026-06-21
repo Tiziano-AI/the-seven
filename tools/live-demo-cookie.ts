@@ -5,6 +5,7 @@ import { deleteRateLimitBucketsForScopes } from "@the-seven/db";
 import { requestDemoLink } from "../apps/web/src/lib/api";
 import { demoApiRequest } from "./live-demo-api";
 import { resolveProofOrigin } from "./live-demo-origin";
+import { formatTerminalSessionFailure } from "./live-session-diagnostics";
 import { assertLiveSessionProof, assertNoPendingBillingLookups } from "./live-session-proof";
 import { runCommandOrThrow, sleep } from "./process-utils";
 import { assertResendInboundAccess, waitForReceivedDemoEmail } from "./resend-live-proof";
@@ -12,6 +13,7 @@ import { assertResendInboundAccess, waitForReceivedDemoEmail } from "./resend-li
 const sessionTerminalStates = new Set(["completed", "failed"]);
 const demoSessionCookieName = "seven_demo_session";
 const demoConsumeRoute = routeContract("demo.consume");
+const LIVE_SESSION_TIMEOUT_MS = 1_800_000;
 const LIVE_BILLING_TIMEOUT_MS = 150_000;
 
 function assert(condition: boolean, message: string): asserts condition {
@@ -325,7 +327,7 @@ async function waitForTerminalDemoSession(input: {
   sessionId: number;
   label: string;
 }) {
-  const deadline = Date.now() + 600_000;
+  const deadline = Date.now() + LIVE_SESSION_TIMEOUT_MS;
   while (Date.now() < deadline) {
     const detail = await fetchDemoSession(input);
     if (sessionTerminalStates.has(detail.session.status)) {
@@ -335,7 +337,16 @@ async function waitForTerminalDemoSession(input: {
     await sleep(2_000);
   }
 
-  throw new Error(`${input.label} did not reach a terminal state in time.`);
+  const detail = await fetchDemoSession(input);
+  const diagnostics = await fetchDemoSessionDiagnostics(input);
+  throw new Error(
+    formatTerminalSessionFailure({
+      label: input.label,
+      reason: "timed out",
+      detail,
+      diagnostics,
+    }),
+  );
 }
 async function runPlaywrightSmoke(input: {
   demoCookie: string;
@@ -363,10 +374,16 @@ function assertSessionArtifacts(
 ) {
   assert(diagnostics.session.id === detail.session.id, "Diagnostics session id mismatch.");
   assert(diagnostics.providerCalls.length > 0, "Expected provider calls in session diagnostics.");
-  assert(
-    detail.session.status === "completed",
-    `Expected completed demo session, received ${detail.session.status}.`,
-  );
+  if (detail.session.status !== "completed") {
+    throw new Error(
+      formatTerminalSessionFailure({
+        label: `demo session ${detail.session.id}`,
+        reason: "failed",
+        detail,
+        diagnostics,
+      }),
+    );
+  }
   assert(detail.artifacts.length > 0, "Expected artifacts for a completed session.");
   assertLiveSessionProof({
     artifacts: detail.artifacts,

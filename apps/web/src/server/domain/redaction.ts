@@ -6,6 +6,7 @@ const SECRET_PATTERNS = [
   /Bearer\s+[A-Za-z0-9._~+/=-]+/gi,
   /sk-or-[A-Za-z0-9_-]+/g,
   /sk-[A-Za-z0-9_-]+/g,
+  /https:\/\/openrouter\.ai\/workspaces\/[^/\s"'<>]+\/keys\/[A-Za-z0-9_-]+/gi,
 ] as const;
 const CONFIGURED_SECRET_ENV_KEYS = [
   "SEVEN_BYOK_KEY",

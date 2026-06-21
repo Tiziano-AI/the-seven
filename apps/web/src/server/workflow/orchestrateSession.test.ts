@@ -48,6 +48,7 @@ const runMocks = vi.hoisted(() => {
 
 const promptMocks = vi.hoisted(() => ({
   buildReviewPrompt: vi.fn(),
+  buildReviewRepairPrompt: vi.fn(),
   buildSynthesisPrompt: vi.fn(),
   formatPhaseTwoEvaluationContent: vi.fn(),
   parsePhaseTwoEvaluationArtifact: vi.fn(),
@@ -132,6 +133,7 @@ describe("orchestrateClaimedJob", () => {
       runMocks.scheduleSessionCostBackfill,
       runMocks.runOpenRouterPhaseCall,
       promptMocks.buildReviewPrompt,
+      promptMocks.buildReviewRepairPrompt,
       promptMocks.buildSynthesisPrompt,
       promptMocks.formatPhaseTwoEvaluationContent,
       promptMocks.parsePhaseTwoEvaluationArtifact,
@@ -158,6 +160,7 @@ describe("orchestrateClaimedJob", () => {
     );
     credentialMocks.decryptJobCredential.mockReturnValue("api-key");
     promptMocks.buildReviewPrompt.mockReturnValue("review-prompt");
+    promptMocks.buildReviewRepairPrompt.mockReturnValue("repair-prompt");
     promptMocks.buildSynthesisPrompt.mockReturnValue("synthesis-prompt");
     const evaluation = {
       ranking: ["A", "B", "C", "D", "E", "F"],

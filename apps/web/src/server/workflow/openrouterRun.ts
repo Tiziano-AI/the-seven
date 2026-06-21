@@ -19,28 +19,13 @@ import {
 } from "../adapters/openrouter";
 import { getModelCapability } from "../services/models";
 import { recordOpenRouterProviderCall } from "./openrouterRunDiagnostics";
+import {
+  extractAssistantContent,
+  OpenRouterPhaseRateLimitError,
+  OpenRouterUnsupportedParameterError,
+} from "./openrouterRunResponse";
 
-export class OpenRouterPhaseRateLimitError extends Error {
-  readonly status: number | null;
-
-  constructor(input: { message: string; status: number | null }) {
-    super(input.message);
-    this.name = "OpenRouterPhaseRateLimitError";
-    this.status = input.status;
-  }
-}
-
-export class OpenRouterUnsupportedParameterError extends Error {
-  readonly deniedParameters: ReadonlyArray<string>;
-
-  constructor(input: { modelId: string; deniedParameters: ReadonlyArray<string> }) {
-    super(
-      `Unsupported OpenRouter parameter(s) for ${input.modelId}: ${input.deniedParameters.join(", ")}`,
-    );
-    this.name = "OpenRouterUnsupportedParameterError";
-    this.deniedParameters = input.deniedParameters;
-  }
-}
+export { OpenRouterPhaseRateLimitError, OpenRouterUnsupportedParameterError };
 
 type PhaseResponseFormat = Readonly<{
   options: Readonly<{
@@ -89,42 +74,6 @@ function materializeOpenRouterProviderOptions(input: {
   };
 }
 
-function extractAssistantContent(input: {
-  phase: 1 | 2 | 3;
-  memberPosition: MemberPosition;
-  modelId: string;
-  response: OpenRouterResponse;
-}) {
-  const firstChoice = input.response.choices[0];
-  if (!firstChoice) {
-    throw new Error(
-      `OpenRouter returned 0 choices for phase ${input.phase}, member ${input.memberPosition}, model ${input.modelId}`,
-    );
-  }
-
-  if (firstChoice.error?.code === 429) {
-    throw new OpenRouterPhaseRateLimitError({
-      message: "OpenRouter rate limit exceeded",
-      status: firstChoice.error.code,
-    });
-  }
-
-  if (firstChoice.error) {
-    throw new Error(
-      `OpenRouter choice error ${firstChoice.error.code}: ${firstChoice.error.message}`,
-    );
-  }
-
-  const content = firstChoice.message.content;
-  if (content === null || content.trim().length === 0) {
-    throw new Error(
-      `OpenRouter returned empty content for phase ${input.phase}, member ${input.memberPosition}, model ${input.modelId}`,
-    );
-  }
-
-  return content;
-}
-
 function materializePhaseResponseFormat(input: {
   phase: 1 | 2 | 3;
   supportedParameters: ReadonlyArray<string>;
@@ -159,6 +108,45 @@ function phaseOutputLimit(phase: 1 | 2 | 3): number {
   if (phase === 1) return PROVIDER_OUTPUT_TOKEN_LIMITS.phase1;
   if (phase === 2) return PROVIDER_OUTPUT_TOKEN_LIMITS.phase2;
   return PROVIDER_OUTPUT_TOKEN_LIMITS.phase3;
+}
+
+const CREDIT_LIMIT_AFFORDABLE_MAX_TOKENS_PATTERN = /can only afford\s+([1-9]\d*)\b/i;
+const MIN_CREDIT_LIMIT_RETRY_MAX_TOKENS = 1024;
+const CREDIT_LIMIT_RETRY_HEADROOM_TOKENS = 512;
+const CREDIT_LIMIT_RETRY_HEADROOM_RATIO = 0.05;
+
+function creditLimitedRetryMaxTokens(input: {
+  error: OpenRouterRequestFailedError;
+  requestedMaxTokens: number | null;
+}): number | null {
+  if (input.error.status !== 402 || input.requestedMaxTokens === null) {
+    return null;
+  }
+
+  const match = CREDIT_LIMIT_AFFORDABLE_MAX_TOKENS_PATTERN.exec(input.error.message);
+  if (!match) {
+    return null;
+  }
+
+  const affordableMaxTokens = Number.parseInt(match[1], 10);
+  if (
+    !Number.isSafeInteger(affordableMaxTokens) ||
+    affordableMaxTokens < MIN_CREDIT_LIMIT_RETRY_MAX_TOKENS ||
+    affordableMaxTokens >= input.requestedMaxTokens
+  ) {
+    return null;
+  }
+
+  const retryHeadroom = Math.max(
+    CREDIT_LIMIT_RETRY_HEADROOM_TOKENS,
+    Math.ceil(affordableMaxTokens * CREDIT_LIMIT_RETRY_HEADROOM_RATIO),
+  );
+  const retryMaxTokens = affordableMaxTokens - retryHeadroom;
+  if (retryMaxTokens < MIN_CREDIT_LIMIT_RETRY_MAX_TOKENS) {
+    return null;
+  }
+
+  return retryMaxTokens;
 }
 
 function materializeOutputTokenCap(input: {
@@ -320,6 +308,43 @@ export async function runOpenRouterPhaseCall(input: {
     return { ok: false as const, error };
   }
 
+  const activeCapability = capability;
+
+  async function recordProviderAttempt(attempt: {
+    requestStartedAt: Date;
+    requestMaxOutputTokens: number | null;
+    responseCompletedAt: Date;
+    response: OpenRouterResponse | null;
+    billingLookupStatus: "not_requested" | "pending";
+    error: Error | null;
+    errorStatus: number | null;
+    errorCode: string | null;
+  }) {
+    await recordOpenRouterProviderCall({
+      sessionId: input.sessionId,
+      phase: input.phase,
+      memberPosition: input.memberPosition,
+      modelId: input.modelId,
+      messages: input.messages,
+      catalogRefreshedAt: activeCapability.refreshedAt,
+      supportedParameters,
+      sentParameters,
+      sentReasoningEffort,
+      sentProviderRequireParameters,
+      sentProviderIgnoredProviders,
+      deniedParameters,
+      requestStartedAt: attempt.requestStartedAt,
+      requestMaxOutputTokens: attempt.requestMaxOutputTokens,
+      responseCompletedAt: attempt.responseCompletedAt,
+      response: attempt.response,
+      billingLookupStatus: attempt.billingLookupStatus,
+      error: attempt.error,
+      errorStatus: attempt.errorStatus,
+      errorCode: attempt.errorCode,
+      claimedLease: input.claimedLease,
+    });
+  }
+
   try {
     await verifyProviderEgressLease(input);
     response = await callOpenRouter(input.apiKey, request, { signal: input.signal });
@@ -332,19 +357,7 @@ export async function runOpenRouterPhaseCall(input: {
     });
     const responseCompletedAt = new Date();
 
-    await recordOpenRouterProviderCall({
-      sessionId: input.sessionId,
-      phase: input.phase,
-      memberPosition: input.memberPosition,
-      modelId: input.modelId,
-      messages: input.messages,
-      catalogRefreshedAt: capability.refreshedAt,
-      supportedParameters,
-      sentParameters,
-      sentReasoningEffort,
-      sentProviderRequireParameters,
-      sentProviderIgnoredProviders,
-      deniedParameters,
+    await recordProviderAttempt({
       requestStartedAt,
       requestMaxOutputTokens: outputTokenCap.maxTokens,
       responseCompletedAt,
@@ -353,7 +366,6 @@ export async function runOpenRouterPhaseCall(input: {
       error: null,
       errorStatus: null,
       errorCode: null,
-      claimedLease: input.claimedLease,
     });
 
     return { ok: true as const, content };
@@ -375,19 +387,7 @@ export async function runOpenRouterPhaseCall(input: {
         : null;
     const normalizedError = error instanceof Error ? error : new Error("OpenRouter request failed");
 
-    await recordOpenRouterProviderCall({
-      sessionId: input.sessionId,
-      phase: input.phase,
-      memberPosition: input.memberPosition,
-      modelId: input.modelId,
-      messages: input.messages,
-      catalogRefreshedAt: capability.refreshedAt,
-      supportedParameters,
-      sentParameters,
-      sentReasoningEffort,
-      sentProviderRequireParameters,
-      sentProviderIgnoredProviders,
-      deniedParameters,
+    await recordProviderAttempt({
       requestStartedAt,
       requestMaxOutputTokens: outputTokenCap.maxTokens,
       responseCompletedAt,
@@ -402,16 +402,96 @@ export async function runOpenRouterPhaseCall(input: {
             : null,
       errorCode:
         normalizedError instanceof OpenRouterRequestFailedError ? normalizedError.code : null,
-      claimedLease: input.claimedLease,
     });
+
+    const retryMaxTokens =
+      normalizedError instanceof OpenRouterRequestFailedError
+        ? creditLimitedRetryMaxTokens({
+            error: normalizedError,
+            requestedMaxTokens: outputTokenCap.maxTokens,
+          })
+        : null;
+    if (retryMaxTokens !== null) {
+      const retryRequestStartedAt = new Date();
+      let retryResponse: OpenRouterResponse | null = null;
+      try {
+        await verifyProviderEgressLease(input);
+        retryResponse = await callOpenRouter(
+          input.apiKey,
+          { ...request, max_tokens: retryMaxTokens },
+          { signal: input.signal },
+        );
+        throwLeaseAbort(input);
+        const content = extractAssistantContent({
+          phase: input.phase,
+          memberPosition: input.memberPosition,
+          modelId: input.modelId,
+          response: retryResponse,
+        });
+        const retryResponseCompletedAt = new Date();
+
+        await recordProviderAttempt({
+          requestStartedAt: retryRequestStartedAt,
+          requestMaxOutputTokens: retryMaxTokens,
+          responseCompletedAt: retryResponseCompletedAt,
+          response: retryResponse,
+          billingLookupStatus: retryResponse.id ? "pending" : "not_requested",
+          error: null,
+          errorStatus: null,
+          errorCode: null,
+        });
+
+        return { ok: true as const, content };
+      } catch (retryError) {
+        if (retryError instanceof ClaimedJobLeaseLostError) {
+          throw retryError;
+        }
+        throwLeaseAbort(input);
+        const retryResponseCompletedAt = new Date();
+        if (retryError instanceof OpenRouterRequestFailedError && retryError.response) {
+          retryResponse = retryError.response;
+        }
+        const retryRateLimitError =
+          retryError instanceof OpenRouterRequestFailedError && retryError.status === 429
+            ? new OpenRouterPhaseRateLimitError({
+                message: "OpenRouter rate limit exceeded",
+                status: retryError.status,
+              })
+            : null;
+        const normalizedRetryError =
+          retryError instanceof Error ? retryError : new Error("OpenRouter request failed");
+
+        await recordProviderAttempt({
+          requestStartedAt: retryRequestStartedAt,
+          requestMaxOutputTokens: retryMaxTokens,
+          responseCompletedAt: retryResponseCompletedAt,
+          response: retryResponse,
+          billingLookupStatus: retryResponse?.id ? "pending" : "not_requested",
+          error: normalizedRetryError,
+          errorStatus:
+            normalizedRetryError instanceof OpenRouterRequestFailedError
+              ? normalizedRetryError.status
+              : normalizedRetryError instanceof OpenRouterPhaseRateLimitError
+                ? normalizedRetryError.status
+                : null,
+          errorCode:
+            normalizedRetryError instanceof OpenRouterRequestFailedError
+              ? normalizedRetryError.code
+              : null,
+        });
+
+        if (retryRateLimitError) {
+          return { ok: false as const, error: retryRateLimitError };
+        }
+
+        return { ok: false as const, error: normalizedRetryError };
+      }
+    }
 
     if (phaseRateLimitError) {
       return { ok: false as const, error: phaseRateLimitError };
     }
 
-    return {
-      ok: false as const,
-      error: normalizedError,
-    };
+    return { ok: false as const, error: normalizedError };
   }
 }

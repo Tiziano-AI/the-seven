@@ -14,7 +14,7 @@ export const PHASE_TWO_TEXT_MAX_CHARS = 1200;
 export const PHASE_TWO_VERDICT_INPUT_MAX_CHARS = 2000;
 
 /** Maximum items in each per-candidate phase-2 review list. */
-export const PHASE_TWO_REVIEW_LIST_MAX_ITEMS = 5;
+export const PHASE_TWO_REVIEW_LIST_MAX_ITEMS = 8;
 
 /** Maximum items in each phase-level phase-2 summary list. */
 export const PHASE_TWO_SUMMARY_LIST_MAX_ITEMS = 8;
@@ -55,6 +55,68 @@ function materialStringSchemaWithMax(maxCharacters: number) {
 
 const materialStringSchema = materialStringSchemaWithMax(PHASE_TWO_TEXT_MAX_CHARS);
 const materialVerdictStringSchema = materialStringSchemaWithMax(PHASE_TWO_VERDICT_INPUT_MAX_CHARS);
+
+const phaseTwoReviewListKeys = [
+  "strengths",
+  "weaknesses",
+  "critical_errors",
+  "missing_evidence",
+] as const;
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeMaterialList(value: unknown, maxItems: number): unknown {
+  if (!Array.isArray(value) || !value.every((item): item is string => typeof item === "string")) {
+    return value;
+  }
+
+  const materialItems: string[] = [];
+  for (const item of value) {
+    const parsed = materialStringSchema.safeParse(item);
+    if (parsed.success) {
+      materialItems.push(parsed.data);
+    }
+    if (materialItems.length >= maxItems) {
+      break;
+    }
+  }
+  return materialItems;
+}
+
+function normalizePhaseTwoReviewRow(value: unknown): unknown {
+  if (!isObjectRecord(value)) {
+    return value;
+  }
+
+  const normalized = { ...value };
+  for (const key of phaseTwoReviewListKeys) {
+    normalized[key] = normalizeMaterialList(value[key], PHASE_TWO_REVIEW_LIST_MAX_ITEMS);
+  }
+  return normalized;
+}
+
+function normalizePhaseTwoEvaluationResponseInput(value: unknown): unknown {
+  if (!isObjectRecord(value)) {
+    return value;
+  }
+
+  return {
+    ...value,
+    reviews: Array.isArray(value.reviews)
+      ? value.reviews.map((row) => normalizePhaseTwoReviewRow(row))
+      : value.reviews,
+    best_final_answer_inputs: normalizeMaterialList(
+      value.best_final_answer_inputs,
+      PHASE_TWO_SUMMARY_LIST_MAX_ITEMS,
+    ),
+    major_disagreements: normalizeMaterialList(
+      value.major_disagreements,
+      PHASE_TWO_SUMMARY_LIST_MAX_ITEMS,
+    ),
+  };
+}
 
 export const phaseCandidateEvaluationSchema = z
   .object({
@@ -111,7 +173,7 @@ export const phaseCandidateEvaluationRowsSchema = z
     }
   });
 
-export const phaseTwoEvaluationResponseSchema = z
+const phaseTwoEvaluationResponseStrictSchema = z
   .object({
     reviews: phaseCandidateEvaluationRowsSchema,
     best_final_answer_inputs: z
@@ -121,6 +183,11 @@ export const phaseTwoEvaluationResponseSchema = z
     major_disagreements: z.array(materialStringSchema).max(PHASE_TWO_SUMMARY_LIST_MAX_ITEMS),
   })
   .strict();
+
+export const phaseTwoEvaluationResponseSchema = z.preprocess(
+  normalizePhaseTwoEvaluationResponseInput,
+  phaseTwoEvaluationResponseStrictSchema,
+);
 
 const phaseCandidateRankingSchema = z
   .array(candidateIdSchema)

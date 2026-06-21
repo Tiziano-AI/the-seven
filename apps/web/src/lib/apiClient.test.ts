@@ -50,6 +50,30 @@ describe("apiRequest", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  test("passes optional abort signals through to fetch", async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      expect(init?.signal).toBe(controller.signal);
+      return Response.json(
+        buildSuccessEnvelope({
+          traceId: "trace",
+          now: new Date("2026-05-09T00:00:00.000Z"),
+          resource: "demo.logout",
+          payload: { success: true },
+        }),
+        { headers: jsonApiHeaders("trace") },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiRequest({
+      route: routeContract("demo.logout"),
+      signal: controller.signal,
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   test("rejects resource mismatches in successful envelopes", async () => {
     vi.stubGlobal(
       "fetch",

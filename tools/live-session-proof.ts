@@ -32,6 +32,7 @@ type LiveProviderCall = Readonly<{
   responseModel: string | null;
   errorMessage: string | null;
   choiceErrorMessage: string | null;
+  errorStatus: number | null;
   billingLookupStatus: string;
 }>;
 
@@ -100,14 +101,46 @@ function expectedPhaseOutputCap(phase: number): number {
   throw new Error(`Unexpected provider-call phase ${phase}.`);
 }
 
-function assertSuccessfulProviderCap(call: LiveProviderCall, label: string): void {
+function isSuccessfulProviderCall(call: LiveProviderCall): boolean {
+  return (
+    call.responseId !== null &&
+    call.responseModel !== null &&
+    call.errorMessage === null &&
+    call.choiceErrorMessage === null
+  );
+}
+
+function assertSuccessfulProviderCap(input: {
+  call: LiveProviderCall;
+  phaseCalls: ReadonlyArray<LiveProviderCall>;
+  label: string;
+}): void {
+  const expectedCap = expectedPhaseOutputCap(input.call.phase);
   assert(
-    call.sentParameters.includes("max_tokens"),
-    `${label}: ${call.requestModelId} did not send max_tokens in phase ${call.phase}.`,
+    input.call.sentParameters.includes("max_tokens"),
+    `${input.label}: ${input.call.requestModelId} did not send max_tokens in phase ${input.call.phase}.`,
+  );
+
+  if (input.call.requestMaxOutputTokens === expectedCap) {
+    return;
+  }
+
+  const priorCreditLimitAttempt = input.phaseCalls.some(
+    (attempt) =>
+      attempt !== input.call &&
+      attempt.phase === input.call.phase &&
+      attempt.memberPosition === input.call.memberPosition &&
+      attempt.requestModelId === input.call.requestModelId &&
+      attempt.requestMaxOutputTokens === expectedCap &&
+      attempt.errorStatus === 402 &&
+      !isSuccessfulProviderCall(attempt),
   );
   assert(
-    call.requestMaxOutputTokens === expectedPhaseOutputCap(call.phase),
-    `${label}: ${call.requestModelId} requested ${call.requestMaxOutputTokens ?? "null"} output tokens in phase ${call.phase}; expected ${expectedPhaseOutputCap(call.phase)}.`,
+    priorCreditLimitAttempt &&
+      input.call.requestMaxOutputTokens !== null &&
+      input.call.requestMaxOutputTokens > 0 &&
+      input.call.requestMaxOutputTokens < expectedCap,
+    `${input.label}: ${input.call.requestModelId} requested ${input.call.requestMaxOutputTokens ?? "null"} output tokens in phase ${input.call.phase}; expected ${expectedCap} or a lower successful retry after a ${expectedCap}-token 402 attempt.`,
   );
 }
 
@@ -153,12 +186,41 @@ function successfulProviderCalls(input: {
   expectedMembers: CouncilMembers;
   label: string;
 }) {
-  const calls = input.providerCalls
+  const phaseCalls = input.providerCalls
     .filter((call) => call.phase === input.phase)
     .sort((left, right) => left.memberPosition - right.memberPosition);
   assert(
+    phaseCalls.every((call) => input.expectedPositions.includes(String(call.memberPosition))),
+    `${input.label}: phase-${input.phase} provider calls included unexpected member positions.`,
+  );
+  for (const call of phaseCalls) {
+    const expected = memberByPosition(input.expectedMembers, call.memberPosition, input.label);
+    assert(
+      call.requestModelId === expected.model.modelId,
+      `${input.label}: phase-${input.phase} member ${call.memberPosition} requested ${call.requestModelId}; expected ${expected.model.modelId}.`,
+    );
+  }
+
+  const calls = phaseCalls.filter(isSuccessfulProviderCall);
+  const successfulMemberPositions = new Set(calls.map((call) => call.memberPosition));
+  for (const call of phaseCalls.filter((candidate) => !isSuccessfulProviderCall(candidate))) {
+    if (successfulMemberPositions.has(call.memberPosition)) {
+      continue;
+    }
+    assert(call.responseId !== null, `${input.label}: ${call.requestModelId} missing response id.`);
+    assert(
+      call.responseModel !== null,
+      `${input.label}: ${call.requestModelId} missing response model.`,
+    );
+    assert(call.errorMessage === null, `${input.label}: ${call.requestModelId} recorded an error.`);
+    assert(
+      call.choiceErrorMessage === null,
+      `${input.label}: ${call.requestModelId} recorded a choice error.`,
+    );
+  }
+  assert(
     calls.length === input.expectedPositions.length,
-    `${input.label}: expected ${input.expectedPositions.length} phase-${input.phase} provider calls.`,
+    `${input.label}: expected ${input.expectedPositions.length} successful phase-${input.phase} provider calls.`,
   );
   expectArraysEqual(
     calls.map((call) => String(call.memberPosition)),
@@ -204,17 +266,7 @@ function successfulProviderCalls(input: {
         call.sentProviderIgnoredProviders.includes("azure"),
       `${input.label}: ${call.requestModelId} did not send the OpenRouter provider ignore list.`,
     );
-    assert(call.responseId !== null, `${input.label}: ${call.requestModelId} missing response id.`);
-    assert(
-      call.responseModel !== null,
-      `${input.label}: ${call.requestModelId} missing response model.`,
-    );
-    assert(call.errorMessage === null, `${input.label}: ${call.requestModelId} recorded an error.`);
-    assert(
-      call.choiceErrorMessage === null,
-      `${input.label}: ${call.requestModelId} recorded a choice error.`,
-    );
-    assertSuccessfulProviderCap(call, input.label);
+    assertSuccessfulProviderCap({ call, phaseCalls, label: input.label });
   }
 
   return calls;
@@ -241,9 +293,10 @@ export function assertNoPendingBillingLookups(input: {
 /**
  * Proves a live completed session reached the surviving phase-2 contract:
  * six stored canonical review artifacts, one nonblank phase-3 synthesis
- * artifact, successful provider calls in every phase with exact server-owned
- * output caps, and six phase-2 provider calls with structured output and no
- * denied provider parameters.
+ * artifact, successful provider calls in every phase with server-owned output
+ * caps, a bounded lower successful retry only after a recorded same-member
+ * credit-limit attempt, and six phase-2 provider calls with structured output
+ * and no denied provider parameters.
  */
 export function assertLiveSessionProof(input: {
   artifacts: ReadonlyArray<LiveArtifact>;

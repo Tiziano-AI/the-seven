@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import {
+  redactNextDevLogChunk,
   removeLocalDistDir,
   requireProjectedNextDevPort,
   requireProjectedNextDistDir,
@@ -84,5 +85,19 @@ describe("launch-owned Next dev helpers", () => {
     writeFileSync(path.join(repoRoot, "pnpm-workspace.yaml"), "packages: []\n", "utf8");
 
     expect(resolveNextDevRepoRoot(path.join(repoRoot, "apps", "web"))).toBe(repoRoot);
+  });
+
+  test("redacts credential-bearing values from forwarded Next logs", () => {
+    expect(
+      redactNextDevLogChunk(
+        "GET /api/v1/demo/consume?token=abc_123-Z 302\n" +
+          "set-cookie: seven_demo_session=session-token; Path=/\n" +
+          "authorization: Bearer sk-or-secret-token-abcdefghijklmnopqrstuvwxyz123456\n",
+      ),
+    ).toBe(
+      "GET /api/v1/demo/consume?token=[redacted] 302\n" +
+        "set-cookie: seven_demo_session=[redacted]; Path=/\n" +
+        "authorization: Bearer [redacted]\n",
+    );
   });
 });

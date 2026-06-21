@@ -221,7 +221,7 @@ test.describe("authenticated smoke", () => {
     await page.goto("/councils");
     await expect(
       page.getByText(
-        "Demo mode is locked to the Commons Council. Council authoring is available only in BYOK mode.",
+        "Demo mode is locked to the Commons Council. Council editing is available only when you use your OpenRouter key.",
       ),
     ).toBeVisible();
   });

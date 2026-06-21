@@ -7,6 +7,10 @@ import {
 } from "@the-seven/contracts";
 import { apiRequest } from "./apiClient";
 
+type ApiRequestOptions = Readonly<{
+  signal?: AbortSignal;
+}>;
+
 export function readCouncilRef(encoded: string | null) {
   return encoded ? decodeCouncilRef(encoded) : null;
 }
@@ -138,11 +142,16 @@ export async function fetchSessions(authHeader: string | null) {
   });
 }
 
-export async function fetchSession(authHeader: string | null, sessionId: number) {
+export async function fetchSession(
+  authHeader: string | null,
+  sessionId: number,
+  options: ApiRequestOptions = {},
+) {
   return apiRequest({
     route: routeContract("sessions.get"),
     params: { sessionId },
     authHeader,
+    signal: options.signal,
   });
 }
 
@@ -171,11 +180,16 @@ export async function rerunSession(input: {
   });
 }
 
-export async function fetchSessionDiagnostics(authHeader: string | null, sessionId: number) {
+export async function fetchSessionDiagnostics(
+  authHeader: string | null,
+  sessionId: number,
+  options: ApiRequestOptions = {},
+) {
   return apiRequest({
     route: routeContract("sessions.diagnostics"),
     params: { sessionId },
     authHeader,
+    signal: options.signal,
   });
 }
 
